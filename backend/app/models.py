@@ -147,6 +147,55 @@ class AddressMapping(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ExtractionPattern(BaseModel):
+    id: str = Field(default_factory=gen_id)
+    name: str
+    bill_type: BillType
+    vendor_hint: Optional[str] = None
+    iban_pattern: Optional[str] = None
+    amount_pattern: Optional[str] = None
+    address_pattern: Optional[str] = None
+    bill_number_pattern: Optional[str] = None
+    priority: int = 0
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ExtractionPatternCreate(BaseModel):
+    name: str
+    bill_type: BillType
+    vendor_hint: Optional[str] = None
+    iban_pattern: Optional[str] = None
+    amount_pattern: Optional[str] = None
+    address_pattern: Optional[str] = None
+    bill_number_pattern: Optional[str] = None
+    priority: int = 0
+
+
+class ExtractionPatternUpdate(BaseModel):
+    name: Optional[str] = None
+    bill_type: Optional[BillType] = None
+    vendor_hint: Optional[str] = None
+    iban_pattern: Optional[str] = None
+    amount_pattern: Optional[str] = None
+    address_pattern: Optional[str] = None
+    bill_number_pattern: Optional[str] = None
+    priority: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+class ExtractionResult(BaseModel):
+    iban: Optional[str] = None
+    bill_number: Optional[str] = None
+    amount: Optional[float] = None
+    address: Optional[str] = None
+    consumption_location: Optional[str] = None
+    all_addresses: list[str] = Field(default_factory=list)
+    matched_pattern_id: Optional[str] = None
+    matched_pattern_name: Optional[str] = None
+    raw_text: Optional[str] = None
+
+
 class UserCreate(BaseModel):
     email: str
     name: str

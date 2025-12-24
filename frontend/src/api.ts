@@ -104,6 +104,34 @@ export const api = {
   payments: {
     list: (token: string) => request<Payment[]>('/payments', { token }),
   },
+
+  billParser: {
+    parse: async (token: string, file: File): Promise<ExtractionResult> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/admin/bills/parse`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || 'Request failed');
+      }
+      return response.json();
+    },
+  },
+
+  extractionPatterns: {
+    list: (token: string) => request<ExtractionPattern[]>('/admin/extraction-patterns', { token }),
+    create: (token: string, data: ExtractionPatternCreate) =>
+      request<ExtractionPattern>('/admin/extraction-patterns', { method: 'POST', body: data, token }),
+    get: (token: string, id: string) => request<ExtractionPattern>(`/admin/extraction-patterns/${id}`, { token }),
+    update: (token: string, id: string, data: ExtractionPatternUpdate) =>
+      request<ExtractionPattern>(`/admin/extraction-patterns/${id}`, { method: 'PUT', body: data, token }),
+    delete: (token: string, id: string) =>
+      request<{ status: string }>(`/admin/extraction-patterns/${id}`, { method: 'DELETE', token }),
+  },
 };
 
 export type User = {
@@ -275,4 +303,53 @@ export type SubscriptionStatus = {
   property_count: number;
   needs_subscription: boolean;
   can_add_property: boolean;
+};
+
+export type ExtractionPattern = {
+  id: string;
+  name: string;
+  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  vendor_hint?: string;
+  iban_pattern?: string;
+  amount_pattern?: string;
+  address_pattern?: string;
+  bill_number_pattern?: string;
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+};
+
+export type ExtractionPatternCreate = {
+  name: string;
+  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  vendor_hint?: string;
+  iban_pattern?: string;
+  amount_pattern?: string;
+  address_pattern?: string;
+  bill_number_pattern?: string;
+  priority?: number;
+};
+
+export type ExtractionPatternUpdate = {
+  name?: string;
+  bill_type?: 'rent' | 'utilities' | 'ebloc' | 'other';
+  vendor_hint?: string;
+  iban_pattern?: string;
+  amount_pattern?: string;
+  address_pattern?: string;
+  bill_number_pattern?: string;
+  priority?: number;
+  enabled?: boolean;
+};
+
+export type ExtractionResult = {
+  iban?: string;
+  bill_number?: string;
+  amount?: number;
+  address?: string;
+  consumption_location?: string;
+  all_addresses: string[];
+  matched_pattern_id?: string;
+  matched_pattern_name?: string;
+  raw_text?: string;
 };
