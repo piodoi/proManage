@@ -134,6 +134,16 @@ class EblocConfig(BaseModel):
     property_id: str
     username: str
     password_hash: str
+    ebloc_page_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AddressMapping(BaseModel):
+    id: str = Field(default_factory=gen_id)
+    landlord_id: str
+    property_id: str
+    extracted_address: str
+    normalized_address: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -213,6 +223,12 @@ class EblocConfigCreate(BaseModel):
     property_id: str
     username: str
     password: str
+    ebloc_page_id: Optional[str] = None
+
+
+class AddressMappingCreate(BaseModel):
+    property_id: str
+    extracted_address: str
 
 
 class TokenData(BaseModel):

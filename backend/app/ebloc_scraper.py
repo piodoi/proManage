@@ -15,37 +15,91 @@ class EblocBill:
     bill_number: Optional[str] = None
 
 
+@dataclass
+class EblocProperty:
+    page_id: str
+    name: str
+    url: str
+
+
 class EblocScraper:
-    BASE_URL = "https://e-bloc.ro"
-    LOGIN_URL = f"{BASE_URL}/login"
-    DASHBOARD_URL = f"{BASE_URL}/dashboard"
+    BASE_URL = "https://www.e-bloc.ro"
+    LOGIN_URL = f"{BASE_URL}/index.php"
 
     def __init__(self):
         self.client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
         self.logged_in = False
+        self.available_properties: list[EblocProperty] = []
 
     async def login(self, username: str, password: str) -> bool:
         try:
             login_page = await self.client.get(self.LOGIN_URL)
             soup = BeautifulSoup(login_page.text, "html.parser")
-            csrf_input = soup.find("input", {"name": "_token"})
-            csrf_token = csrf_input.get("value") if csrf_input else ""
-            login_data = {
-                "_token": csrf_token,
-                "email": username,
-                "password": password,
-            }
-            response = await self.client.post(self.LOGIN_URL, data=login_data)
-            self.logged_in = response.status_code == 200 and "dashboard" in str(response.url)
+            form = soup.find("form")
+            form_data = {}
+            if form:
+                for inp in form.find_all("input"):
+                    name = inp.get("name")
+                    if name:
+                        form_data[name] = inp.get("value", "")
+            form_data["user"] = username
+            form_data["pass"] = password
+            if "email" in form_data:
+                form_data["email"] = username
+            if "password" in form_data:
+                form_data["password"] = password
+            response = await self.client.post(self.LOGIN_URL, data=form_data)
+            self.logged_in = response.status_code == 200 and "index.php" in str(response.url)
+            if self.logged_in:
+                await self._parse_property_selector(response.text)
             return self.logged_in
         except Exception:
             return False
 
-    async def get_bills(self) -> list[EblocBill]:
+    async def _parse_property_selector(self, html: str) -> None:
+        soup = BeautifulSoup(html, "html.parser")
+        self.available_properties = []
+        select = soup.find("select") or soup.find("select", {"id": "property"})
+        if select:
+            for option in select.find_all("option"):
+                value = option.get("value", "")
+                name = option.get_text(strip=True)
+                if value and name:
+                    url = f"{self.LOGIN_URL}?page={value}&t={int(datetime.now().timestamp())}"
+                    self.available_properties.append(EblocProperty(page_id=value, name=name, url=url))
+        links = soup.find_all("a", href=True)
+        for link in links:
+            href = link.get("href", "")
+            if "page=" in href:
+                import re
+                match = re.search(r'page=(\d+)', href)
+                if match:
+                    page_id = match.group(1)
+                    name = link.get_text(strip=True) or f"Property {page_id}"
+                    if not any(p.page_id == page_id for p in self.available_properties):
+                        url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
+                        self.available_properties.append(EblocProperty(page_id=page_id, name=name, url=url))
+
+    async def get_available_properties(self) -> list[EblocProperty]:
+        return self.available_properties
+
+    async def select_property(self, page_id: str) -> bool:
+        try:
+            url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
+            response = await self.client.get(url)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    async def get_bills(self, page_id: Optional[str] = None) -> list[EblocBill]:
         if not self.logged_in:
             return []
         try:
-            response = await self.client.get(self.DASHBOARD_URL)
+            if page_id:
+                url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
+            else:
+                url = self.LOGIN_URL
+            response = await self.client.get(url)
             soup = BeautifulSoup(response.text, "html.parser")
             bills = []
             bill_rows = soup.find_all("tr", class_="bill-row") or soup.find_all(

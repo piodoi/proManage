@@ -1,5 +1,5 @@
 from app.models import (
-    User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig, UserRole
+    User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig, AddressMapping, UserRole
 )
 
 users: dict[str, User] = {}
@@ -10,6 +10,7 @@ bills: dict[str, Bill] = {}
 payments: dict[str, Payment] = {}
 email_configs: dict[str, EmailConfig] = {}
 ebloc_configs: dict[str, EblocConfig] = {}
+address_mappings: dict[str, AddressMapping] = {}
 
 renter_tokens: dict[str, str] = {}
 

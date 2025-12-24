@@ -7,12 +7,12 @@ from passlib.context import CryptContext
 from dotenv import load_dotenv
 
 from app.models import (
-    User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig,
+    User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig, AddressMapping,
     UserRole, OAuthProvider, BillStatus, BillType, PaymentMethod, PaymentStatus,
     SubscriptionStatus,
     UserCreate, UserUpdate, PropertyCreate, PropertyUpdate, UnitCreate, UnitUpdate,
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
-    EmailConfigCreate, EblocConfigCreate, TokenData,
+    EmailConfigCreate, EblocConfigCreate, AddressMappingCreate, TokenData,
 )
 from app.auth import (
     create_access_token, require_auth, require_admin, require_landlord,
@@ -758,3 +758,82 @@ async def subscription_status(current_user: TokenData = Depends(require_auth)):
         "needs_subscription": needs_subscription,
         "can_add_property": not needs_subscription or user.subscription_status == SubscriptionStatus.ACTIVE,
     }
+
+
+@app.get("/address-mappings")
+async def list_address_mappings(current_user: TokenData = Depends(require_landlord)):
+    if current_user.role == UserRole.ADMIN:
+        return list(db.address_mappings.values())
+    return [m for m in db.address_mappings.values() if m.landlord_id == current_user.user_id]
+
+
+@app.post("/address-mappings", status_code=status.HTTP_201_CREATED)
+async def create_address_mapping(
+    data: AddressMappingCreate, current_user: TokenData = Depends(require_landlord)
+):
+    prop = db.properties.get(data.property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    normalized = data.extracted_address.lower().strip()
+    normalized = " ".join(normalized.split())
+    existing = next(
+        (m for m in db.address_mappings.values()
+         if m.landlord_id == current_user.user_id and m.normalized_address == normalized),
+        None,
+    )
+    if existing:
+        existing.property_id = data.property_id
+        db.address_mappings[existing.id] = existing
+        return existing
+    mapping = AddressMapping(
+        landlord_id=current_user.user_id,
+        property_id=data.property_id,
+        extracted_address=data.extracted_address,
+        normalized_address=normalized,
+    )
+    db.address_mappings[mapping.id] = mapping
+    return mapping
+
+
+@app.delete("/address-mappings/{mapping_id}")
+async def delete_address_mapping(mapping_id: str, current_user: TokenData = Depends(require_landlord)):
+    mapping = db.address_mappings.get(mapping_id)
+    if not mapping:
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    if current_user.role != UserRole.ADMIN and mapping.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    del db.address_mappings[mapping_id]
+    return {"status": "deleted"}
+
+
+@app.get("/address-mappings/lookup")
+async def lookup_address_mapping(
+    address: str, current_user: TokenData = Depends(require_landlord)
+):
+    normalized = address.lower().strip()
+    normalized = " ".join(normalized.split())
+    for mapping in db.address_mappings.values():
+        if mapping.landlord_id == current_user.user_id:
+            if mapping.normalized_address in normalized or normalized in mapping.normalized_address:
+                prop = db.properties.get(mapping.property_id)
+                return {"property_id": mapping.property_id, "property": prop, "mapping": mapping}
+    return {"property_id": None, "property": None, "mapping": None}
+
+
+@app.post("/auth/demo")
+async def auth_demo(email: str, name: str):
+    user = next(
+        (u for u in db.users.values() if u.email == email),
+        None,
+    )
+    if not user:
+        user = User(
+            email=email,
+            name=name,
+            role=UserRole.LANDLORD,
+        )
+        db.users[user.id] = user
+    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
+    return {"access_token": access_token, "token_type": "bearer", "user": user}

@@ -35,31 +35,18 @@ export default function Login() {
       return;
     }
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/google?token=demo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) {
-        const mockToken = btoa(JSON.stringify({ sub: 'demo-user', email: demoEmail, role: 'landlord' }));
-        login(mockToken, {
-          id: 'demo-user',
-          email: demoEmail,
-          name: demoName,
-          role: 'landlord',
-          subscription_status: 'none',
-          created_at: new Date().toISOString(),
-        });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/demo?email=${encodeURIComponent(demoEmail)}&name=${encodeURIComponent(demoName)}`,
+        { method: 'POST' }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        login(data.access_token, data.user);
+      } else {
+        setError('Demo login failed. Is the backend running?');
       }
-    } catch {
-      const mockToken = btoa(JSON.stringify({ sub: 'demo-user', email: demoEmail, role: 'landlord' }));
-      login(mockToken, {
-        id: 'demo-user',
-        email: demoEmail,
-        name: demoName,
-        role: 'landlord',
-        subscription_status: 'none',
-        created_at: new Date().toISOString(),
-      });
+    } catch (err) {
+      setError('Could not connect to backend. Make sure it is running on port 8000.');
     }
   };
 
