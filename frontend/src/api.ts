@@ -1,0 +1,278 @@
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+type RequestOptions = {
+  method?: string;
+  body?: unknown;
+  token?: string | null;
+};
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, token } = options;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || 'Request failed');
+  }
+  return response.json();
+}
+
+export const api = {
+  health: () => request<{ status: string }>('/health'),
+
+  auth: {
+    google: (token: string) => request<AuthResponse>(`/auth/google?token=${token}`, { method: 'POST' }),
+    facebook: (token: string) => request<AuthResponse>(`/auth/facebook?token=${token}`, { method: 'POST' }),
+    me: (token: string) => request<User>('/auth/me', { token }),
+  },
+
+  admin: {
+    listUsers: (token: string) => request<User[]>('/admin/users', { token }),
+    createUser: (token: string, data: UserCreate) => request<User>('/admin/users', { method: 'POST', body: data, token }),
+    getUser: (token: string, id: string) => request<User>(`/admin/users/${id}`, { token }),
+    updateUser: (token: string, id: string, data: UserUpdate) => request<User>(`/admin/users/${id}`, { method: 'PUT', body: data, token }),
+    deleteUser: (token: string, id: string) => request<{ status: string }>(`/admin/users/${id}`, { method: 'DELETE', token }),
+    updateSubscription: (token: string, id: string, status: string, expires?: string) =>
+      request<User>(`/admin/users/${id}/subscription?status=${status}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
+  },
+
+  properties: {
+    list: (token: string) => request<Property[]>('/properties', { token }),
+    create: (token: string, data: PropertyCreate) => request<Property>('/properties', { method: 'POST', body: data, token }),
+    get: (token: string, id: string) => request<Property>(`/properties/${id}`, { token }),
+    update: (token: string, id: string, data: PropertyUpdate) => request<Property>(`/properties/${id}`, { method: 'PUT', body: data, token }),
+    delete: (token: string, id: string) => request<{ status: string }>(`/properties/${id}`, { method: 'DELETE', token }),
+  },
+
+  units: {
+    list: (token: string, propertyId: string) => request<Unit[]>(`/properties/${propertyId}/units`, { token }),
+    create: (token: string, propertyId: string, data: UnitCreate) => request<Unit>(`/properties/${propertyId}/units`, { method: 'POST', body: data, token }),
+    get: (token: string, id: string) => request<Unit>(`/units/${id}`, { token }),
+    update: (token: string, id: string, data: UnitUpdate) => request<Unit>(`/units/${id}`, { method: 'PUT', body: data, token }),
+    delete: (token: string, id: string) => request<{ status: string }>(`/units/${id}`, { method: 'DELETE', token }),
+  },
+
+  renters: {
+    list: (token: string, unitId: string) => request<Renter[]>(`/units/${unitId}/renters`, { token }),
+    create: (token: string, unitId: string, data: RenterCreate) => request<Renter>(`/units/${unitId}/renters`, { method: 'POST', body: data, token }),
+    get: (token: string, id: string) => request<Renter>(`/renters/${id}`, { token }),
+    update: (token: string, id: string, data: RenterUpdate) => request<Renter>(`/renters/${id}`, { method: 'PUT', body: data, token }),
+    delete: (token: string, id: string) => request<{ status: string }>(`/renters/${id}`, { method: 'DELETE', token }),
+    getLink: (token: string, id: string) => request<{ access_token: string; link: string }>(`/renters/${id}/link`, { token }),
+  },
+
+  bills: {
+    list: (token: string) => request<Bill[]>('/bills', { token }),
+    create: (token: string, data: BillCreate) => request<Bill>('/bills', { method: 'POST', body: data, token }),
+    get: (token: string, id: string) => request<Bill>(`/bills/${id}`, { token }),
+    update: (token: string, id: string, data: BillUpdate) => request<Bill>(`/bills/${id}`, { method: 'PUT', body: data, token }),
+    delete: (token: string, id: string) => request<{ status: string }>(`/bills/${id}`, { method: 'DELETE', token }),
+  },
+
+  renter: {
+    info: (token: string) => request<RenterInfo>(`/renter/${token}`),
+    bills: (token: string) => request<RenterBill[]>(`/renter/${token}/bills`),
+    balance: (token: string) => request<RenterBalance>(`/renter/${token}/balance`),
+    pay: (token: string, data: PaymentCreate) => request<PaymentResponse>(`/renter/${token}/pay`, { method: 'POST', body: data }),
+  },
+
+  email: {
+    configure: (token: string, data: EmailConfigCreate) => request<EmailConfig>('/email/configure', { method: 'POST', body: data, token }),
+    getConfig: (token: string) => request<EmailConfig>('/email/config', { token }),
+    process: (token: string, subject: string, body: string, sender: string) =>
+      request<EmailProcessResult>(`/email/process?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&sender=${encodeURIComponent(sender)}`, { method: 'POST', token }),
+  },
+
+  ebloc: {
+    configure: (token: string, data: EblocConfigCreate) => request<{ status: string; config_id: string }>('/ebloc/configure', { method: 'POST', body: data, token }),
+    sync: (token: string, propertyId: string) => request<{ status: string; message: string }>(`/ebloc/sync/${propertyId}`, { method: 'POST', token }),
+  },
+
+  subscription: {
+    status: (token: string) => request<SubscriptionStatus>('/subscription/status', { token }),
+  },
+
+  payments: {
+    list: (token: string) => request<Payment[]>('/payments', { token }),
+  },
+};
+
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'landlord';
+  oauth_provider?: 'google' | 'facebook';
+  subscription_status: 'active' | 'expired' | 'none';
+  subscription_expires?: string;
+  created_at: string;
+};
+
+export type UserCreate = { email: string; name: string; role: 'admin' | 'landlord' };
+export type UserUpdate = { email?: string; name?: string; role?: 'admin' | 'landlord' };
+
+export type Property = {
+  id: string;
+  landlord_id: string;
+  address: string;
+  name: string;
+  created_at: string;
+};
+
+export type PropertyCreate = { address: string; name: string };
+export type PropertyUpdate = { address?: string; name?: string };
+
+export type Unit = {
+  id: string;
+  property_id: string;
+  unit_number: string;
+  created_at: string;
+};
+
+export type UnitCreate = { unit_number: string };
+export type UnitUpdate = { unit_number?: string };
+
+export type Renter = {
+  id: string;
+  unit_id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  access_token: string;
+  created_at: string;
+};
+
+export type RenterCreate = { name: string; email?: string; phone?: string };
+export type RenterUpdate = { name?: string; email?: string; phone?: string };
+
+export type Bill = {
+  id: string;
+  unit_id: string;
+  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  description: string;
+  amount: number;
+  due_date: string;
+  iban?: string;
+  bill_number?: string;
+  status: 'pending' | 'paid' | 'overdue';
+  created_at: string;
+};
+
+export type BillCreate = {
+  unit_id: string;
+  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  description: string;
+  amount: number;
+  due_date: string;
+  iban?: string;
+  bill_number?: string;
+};
+
+export type BillUpdate = {
+  description?: string;
+  amount?: number;
+  due_date?: string;
+  iban?: string;
+  bill_number?: string;
+  status?: 'pending' | 'paid' | 'overdue';
+};
+
+export type Payment = {
+  id: string;
+  bill_id: string;
+  amount: number;
+  method: 'bank_transfer' | 'payment_service';
+  status: 'pending' | 'completed' | 'failed';
+  commission: number;
+  created_at: string;
+};
+
+export type PaymentCreate = {
+  bill_id: string;
+  amount: number;
+  method: 'bank_transfer' | 'payment_service';
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: User;
+};
+
+export type RenterInfo = {
+  renter: { id: string; name: string };
+  unit: { id: string; unit_number: string } | null;
+  property: { id: string; name: string; address: string } | null;
+};
+
+export type RenterBill = {
+  bill: Bill;
+  paid_amount: number;
+  remaining: number;
+};
+
+export type RenterBalance = {
+  total_due: number;
+  total_paid: number;
+  balance: number;
+};
+
+export type PaymentResponse = {
+  payment: Payment;
+  commission: number;
+  total_with_commission: number;
+  bank_transfer_info?: {
+    iban: string;
+    bill_number: string;
+    amount: number;
+    reference: string;
+  };
+};
+
+export type EmailConfig = {
+  id: string;
+  landlord_id: string;
+  config_type: 'direct' | 'forwarding';
+  forwarding_email?: string;
+  created_at: string;
+};
+
+export type EmailConfigCreate = {
+  config_type: 'direct' | 'forwarding';
+  forwarding_email?: string;
+};
+
+export type EmailProcessResult = {
+  status: string;
+  bill?: Bill;
+  extracted?: {
+    iban?: string;
+    bill_number?: string;
+    amount?: number;
+    address?: string;
+  };
+  message?: string;
+};
+
+export type EblocConfigCreate = {
+  property_id: string;
+  username: string;
+  password: string;
+};
+
+export type SubscriptionStatus = {
+  status: 'active' | 'expired' | 'none';
+  expires?: string;
+  property_count: number;
+  needs_subscription: boolean;
+  can_add_property: boolean;
+};
