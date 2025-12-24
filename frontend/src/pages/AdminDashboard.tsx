@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText } from 'lucide-react';
+import BillParserPage from './BillParserPage';
 
 export default function AdminDashboard() {
   const { token, logout } = useAuth();
@@ -18,6 +19,7 @@ export default function AdminDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord' });
+  const [showBillParser, setShowBillParser] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -85,6 +87,28 @@ export default function AdminDashboard() {
     setFormData({ email: user.email, name: user.name, role: user.role });
   };
 
+  if (showBillParser) {
+    return (
+      <div className="min-h-screen bg-slate-900">
+        <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileText className="w-6 h-6 text-emerald-500" />
+              <h1 className="text-xl font-semibold text-slate-100">Admin Dashboard</h1>
+            </div>
+            <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        </header>
+        <main className="p-6">
+          <BillParserPage onBack={() => setShowBillParser(false)} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900">
       <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
@@ -93,10 +117,16 @@ export default function AdminDashboard() {
             <Users className="w-6 h-6 text-emerald-500" />
             <h1 className="text-xl font-semibold text-slate-100">Admin Dashboard</h1>
           </div>
-          <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setShowBillParser(true)} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+              <FileText className="w-4 h-4 mr-2" />
+              Bill Parser
+            </Button>
+            <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 

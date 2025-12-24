@@ -45,7 +45,7 @@ export default function Login() {
       } else {
         setError('Demo login failed. Is the backend running?');
       }
-    } catch (err) {
+    } catch {
       setError('Could not connect to backend. Make sure it is running on port 8000.');
     }
   };
