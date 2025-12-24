@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models import TokenData, UserRole
-from app import database as db
+from app.database import db
 
 SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
@@ -46,7 +46,7 @@ async def get_current_user(
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if token_data.user_id not in db.users:
+    if db.get_user(token_data.user_id) is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
@@ -70,7 +70,7 @@ async def require_auth(
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if token_data.user_id not in db.users:
+    if db.get_user(token_data.user_id) is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
