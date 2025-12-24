@@ -9,18 +9,16 @@ from dotenv import load_dotenv
 from app.models import (
     User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig,
     UserRole, OAuthProvider, BillStatus, BillType, PaymentMethod, PaymentStatus,
-    EmailConfigType, SubscriptionStatus,
+    SubscriptionStatus,
     UserCreate, UserUpdate, PropertyCreate, PropertyUpdate, UnitCreate, UnitUpdate,
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
     EmailConfigCreate, EblocConfigCreate, TokenData,
 )
 from app.auth import (
     create_access_token, require_auth, require_admin, require_landlord,
-    get_current_user,
 )
 from app import database as db
 from app.email_scraper import extract_bill_info, match_address_to_property
-from app.ebloc_scraper import EblocScraper
 
 load_dotenv()
 
@@ -53,7 +51,7 @@ async def auth_google(token: str):
     import httpx
     async with httpx.AsyncClient() as client:
         resp = await client.get(
-            f"https://www.googleapis.com/oauth2/v3/userinfo",
+            "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {token}"},
         )
         if resp.status_code != 200:
