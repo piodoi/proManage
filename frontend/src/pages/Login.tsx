@@ -35,7 +35,7 @@ declare global {
   }
 }
 
-type AuthMode = 'main' | 'demo' | 'register' | 'login';
+type AuthMode = 'main' | 'demo' | 'register' | 'login' | 'confirm';
 
 export default function Login() {
   const { login } = useAuth();
@@ -48,7 +48,9 @@ export default function Login() {
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formName, setFormName] = useState('');
-  const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [confirmationToken, setConfirmationToken] = useState('');
+    const [emailSent, setEmailSent] = useState(false);
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     try {
@@ -170,22 +172,6 @@ export default function Login() {
     setError('Facebook OAuth requires configuration. Use demo mode for testing.');
   };
 
-  const handleAdminLogin = async () => {
-    try {
-      const mockToken = btoa(JSON.stringify({ sub: 'admin-1', email: 'admin@promanage.local', role: 'admin' }));
-      login(mockToken, {
-        id: 'admin-1',
-        email: 'admin@promanage.local',
-        name: 'System Admin',
-        role: 'admin',
-        subscription_status: 'none',
-        created_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
-    }
-  };
-
   const handleEmailRegister = async () => {
     if (!formEmail || !formPassword || !formName) {
       setError('Please fill in all fields');
@@ -194,16 +180,49 @@ export default function Login() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(
-        `${API_URL}/auth/register?email=${encodeURIComponent(formEmail)}&password=${encodeURIComponent(formPassword)}&name=${encodeURIComponent(formName)}`,
-        { method: 'POST' }
-      );
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formEmail, password: formPassword, name: formName }),
+      });
+            if (response.ok) {
+              const data = await response.json();
+              setAuthMode('confirm');
+              setEmailSent(data.email_sent || false);
+              if (data.confirmation_token) {
+                setConfirmationToken(data.confirmation_token);
+              }
+              setError('');
+            }else {
+        const err = await response.json();
+        setError(err.detail || 'Registration failed');
+      }
+    } catch {
+      setError('Could not connect to backend. Make sure it is running.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmEmail = async () => {
+    if (!confirmationToken) {
+      setError('No confirmation token');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/auth/confirm-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: confirmationToken }),
+      });
       if (response.ok) {
         const data = await response.json();
         login(data.access_token, data.user);
       } else {
         const err = await response.json();
-        setError(err.detail || 'Registration failed');
+        setError(err.detail || 'Confirmation failed');
       }
     } catch {
       setError('Could not connect to backend. Make sure it is running.');
@@ -220,10 +239,11 @@ export default function Login() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(
-        `${API_URL}/auth/login?email=${encodeURIComponent(formEmail)}&password=${encodeURIComponent(formPassword)}`,
-        { method: 'POST' }
-      );
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formEmail, password: formPassword }),
+      });
       if (response.ok) {
         const data = await response.json();
         login(data.access_token, data.user);
@@ -430,6 +450,57 @@ export default function Login() {
               </p>
             </>
           )}
+
+                    {authMode === 'confirm' && (
+                      <>
+                        {emailSent ? (
+                          <div className="p-4 bg-emerald-900/30 border border-emerald-700 rounded text-emerald-200 text-sm">
+                            <p className="font-medium mb-2">Check your email</p>
+                            <p className="text-xs text-emerald-300">
+                              We sent a confirmation link to your email address.
+                              Click the link in the email to complete your registration.
+                            </p>
+                            <p className="text-xs text-emerald-300 mt-2">
+                              The link will expire in 1 hour.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="p-4 bg-amber-900/30 border border-amber-700 rounded text-amber-200 text-sm">
+                              <p className="font-medium mb-2">Email not configured (Dev Mode)</p>
+                              <p className="text-xs text-amber-300">
+                                Email sending is not configured on the server.
+                                Use the token below to confirm your account manually.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="confirm-token" className="text-slate-300">Confirmation Token</Label>
+                              <Input
+                                id="confirm-token"
+                                value={confirmationToken}
+                                onChange={(e) => setConfirmationToken(e.target.value)}
+                                placeholder="Paste your confirmation token"
+                                className="bg-slate-700 border-slate-600 text-slate-100 font-mono text-xs"
+                              />
+                            </div>
+                            <Button
+                              onClick={handleConfirmEmail}
+                              disabled={loading || !confirmationToken}
+                              className="w-full bg-emerald-600 hover:bg-emerald-700"
+                            >
+                              {loading ? 'Confirming...' : 'Confirm Email'}
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          onClick={() => { setAuthMode('main'); setError(''); setConfirmationToken(''); setEmailSent(false); }}
+                          variant="outline"
+                          className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                        >
+                          {emailSent ? 'Back to Login' : 'Cancel'}
+                        </Button>
+                      </>
+                    )}
 
           {authMode === 'demo' && (
             <>
