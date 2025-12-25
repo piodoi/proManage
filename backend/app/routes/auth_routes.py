@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from app.models import User, UserRole, OAuthProvider
 from app.auth import create_access_token, require_auth
 from app.database import db, has_any_admin
+from app.email_sender import send_confirmation_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -113,12 +114,22 @@ async def auth_register(data: RegisterRequest, request: Request):
     }
     
     logger.info(f"[Auth] Email confirmation token generated for: {data.email}")
-    logger.info(f"[Auth] Confirmation token (dev mode): {confirmation_token}")
     
-    return {
-        "message": "Please check your email to confirm your account",
-        "confirmation_token": confirmation_token,
-    }
+    email_sent = await send_confirmation_email(data.email, data.name, confirmation_token)
+    
+    if email_sent:
+        logger.info(f"[Auth] Confirmation email sent to: {data.email}")
+        return {
+            "message": "Please check your email to confirm your account",
+            "email_sent": True,
+        }
+    else:
+        logger.info(f"[Auth] Email not configured, returning token for dev mode: {data.email}")
+        return {
+            "message": "Email not configured. Use the token below to confirm (dev mode only).",
+            "confirmation_token": confirmation_token,
+            "email_sent": False,
+        }
 
 
 @router.post("/confirm-email")
