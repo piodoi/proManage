@@ -63,6 +63,7 @@ class User(BaseModel):
     email: str
     name: str
     role: UserRole
+    password_hash: Optional[str] = None
     oauth_provider: Optional[OAuthProvider] = None
     oauth_id: Optional[str] = None
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE

@@ -55,25 +55,76 @@ async def check_has_admin():
     return {"has_admin": has_any_admin()}
 
 
+@app.post("/auth/register")
+async def auth_register(email: str, password: str, name: str):
+    """Register a new user with email and password."""
+    import logging
+    logging.info(f"[Auth] Registration attempt for email: {email}")
+    existing = next((u for u in db.list_users() if u.email == email), None)
+    if existing:
+        logging.warning(f"[Auth] Registration failed - email already exists: {email}")
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    hashed = pwd_context.hash(password)
+    role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
+    user = User(
+        email=email,
+        name=name,
+        role=role,
+        password_hash=hashed,
+    )
+    db.save_user(user)
+    logging.info(f"[Auth] User registered successfully: {email}, role: {role.value}")
+    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
+    return {"access_token": access_token, "token_type": "bearer", "user": user}
+
+
+@app.post("/auth/login")
+async def auth_login(email: str, password: str):
+    """Login with email and password."""
+    import logging
+    logging.info(f"[Auth] Login attempt for email: {email}")
+    user = next((u for u in db.list_users() if u.email == email), None)
+    if not user:
+        logging.warning(f"[Auth] Login failed - user not found: {email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.password_hash:
+        logging.warning(f"[Auth] Login failed - no password set (OAuth user): {email}")
+        raise HTTPException(status_code=401, detail="This account uses OAuth login (Google/Facebook)")
+    if not pwd_context.verify(password, user.password_hash):
+        logging.warning(f"[Auth] Login failed - invalid password: {email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    logging.info(f"[Auth] Login successful: {email}")
+    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
+    return {"access_token": access_token, "token_type": "bearer", "user": user}
+
+
 @app.post("/auth/google")
 async def auth_google(id_token: str):
     import httpx
     import os
+    import logging
+    logging.info("[Auth] Google OAuth attempt")
     google_client_id = os.getenv("GOOGLE_CLIENT_ID")
     if not google_client_id:
+        logging.error("[Auth] Google OAuth not configured - GOOGLE_CLIENT_ID missing")
         raise HTTPException(status_code=500, detail="Google OAuth not configured on server")
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}",
         )
         if resp.status_code != 200:
+            logging.error(f"[Auth] Google token validation failed: {resp.status_code}")
             raise HTTPException(status_code=401, detail="Invalid Google token")
         data = resp.json()
     if data.get("aud") != google_client_id:
+        logging.error(f"[Auth] Google token audience mismatch: {data.get('aud')} != {google_client_id}")
         raise HTTPException(status_code=401, detail="Token not issued for this application")
     email = data.get("email")
     name = data.get("name", email)
     oauth_id = data.get("sub")
+    logging.info(f"[Auth] Google OAuth validated for email: {email}")
     user = next(
         (u for u in db.list_users() if u.oauth_id == oauth_id and u.oauth_provider == OAuthProvider.GOOGLE),
         None,
