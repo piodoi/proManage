@@ -56,16 +56,21 @@ async def check_has_admin():
 
 
 @app.post("/auth/google")
-async def auth_google(token: str):
+async def auth_google(id_token: str):
     import httpx
+    import os
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not google_client_id:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured on server")
     async with httpx.AsyncClient() as client:
         resp = await client.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {token}"},
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}",
         )
         if resp.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid Google token")
         data = resp.json()
+    if data.get("aud") != google_client_id:
+        raise HTTPException(status_code=401, detail="Token not issued for this application")
     email = data.get("email")
     name = data.get("name", email)
     oauth_id = data.get("sub")
