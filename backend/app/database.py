@@ -596,12 +596,8 @@ class Database:
 
 db = Database()
 
-admin = db.get_user("admin-1")
-if not admin:
-    admin = User(
-        id="admin-1",
-        email="admin@promanage.local",
-        name="System Admin",
-        role=UserRole.ADMIN,
-    )
-    db.save_user(admin)
+
+def has_any_admin() -> bool:
+    """Check if any admin user exists in the database."""
+    users = db.list_users()
+    return any(u.role == UserRole.ADMIN for u in users)

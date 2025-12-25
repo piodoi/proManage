@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 declare global {
   interface Window {
@@ -28,6 +30,14 @@ export default function Login() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoEmail, setDemoEmail] = useState('');
   const [demoName, setDemoName] = useState('');
+  const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/auth/has-admin`)
+      .then(res => res.json())
+      .then(data => setHasAdmin(data.has_admin))
+      .catch(() => setHasAdmin(false));
+  }, []);
 
   const handleDemoLogin = async () => {
     if (!demoEmail || !demoName) {
@@ -115,30 +125,40 @@ export default function Login() {
                 Continue with Facebook
               </Button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-slate-600" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-slate-800 px-2 text-slate-400">Or</span>
-                </div>
-              </div>
+              {!hasAdmin && (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-slate-600" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-slate-800 px-2 text-slate-400">Or</span>
+                    </div>
+                  </div>
 
-              <Button
-                onClick={() => setDemoMode(true)}
-                variant="outline"
-                className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                Demo Mode (Landlord)
-              </Button>
+                  <Button
+                    onClick={() => setDemoMode(true)}
+                    variant="outline"
+                    className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    Demo Mode (Landlord)
+                  </Button>
 
-              <Button
-                onClick={handleAdminLogin}
-                variant="outline"
-                className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                Admin Login
-              </Button>
+                  <Button
+                    onClick={handleAdminLogin}
+                    variant="outline"
+                    className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    Admin Login
+                  </Button>
+                </>
+              )}
+
+              {hasAdmin && (
+                <p className="text-xs text-slate-500 text-center">
+                  First user to login via Google/Facebook becomes admin
+                </p>
+              )}
             </>
           ) : (
             <>

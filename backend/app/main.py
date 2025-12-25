@@ -19,7 +19,7 @@ from app.models import (
 from app.auth import (
     create_access_token, require_auth, require_admin, require_landlord,
 )
-from app.database import db
+from app.database import db, has_any_admin
 from app.email_scraper import extract_bill_info, match_address_to_property
 from app.pdf_parser import parse_pdf_with_patterns
 
@@ -49,6 +49,12 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/auth/has-admin")
+async def check_has_admin():
+    """Check if any admin user exists. Used by frontend to hide demo mode."""
+    return {"has_admin": has_any_admin()}
+
+
 @app.post("/auth/google")
 async def auth_google(token: str):
     import httpx
@@ -68,10 +74,11 @@ async def auth_google(token: str):
         None,
     )
     if not user:
+        role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
         user = User(
             email=email,
             name=name,
-            role=UserRole.LANDLORD,
+            role=role,
             oauth_provider=OAuthProvider.GOOGLE,
             oauth_id=oauth_id,
         )
@@ -98,10 +105,11 @@ async def auth_facebook(token: str):
         None,
     )
     if not user:
+        role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
         user = User(
             email=email,
             name=name,
-            role=UserRole.LANDLORD,
+            role=role,
             oauth_provider=OAuthProvider.FACEBOOK,
             oauth_id=oauth_id,
         )
@@ -210,6 +218,8 @@ async def create_property(data: PropertyCreate, current_user: TokenData = Depend
         )
     prop = Property(landlord_id=current_user.user_id, address=data.address, name=data.name)
     db.save_property(prop)
+    default_unit = Unit(property_id=prop.id, unit_number="Main")
+    db.save_unit(default_unit)
     return prop
 
 
