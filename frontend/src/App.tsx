@@ -5,6 +5,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import LandlordDashboard from './pages/LandlordDashboard';
 import RenterView from './pages/RenterView';
 import Login from './pages/Login';
+import ConfirmEmail from './pages/ConfirmEmail';
 import './App.css';
 
 type AuthContextType = {
@@ -66,8 +67,9 @@ function App() {
     <AuthContext.Provider value={{ user, token, login, logout }}>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-          <Route path="/renter/:token" element={<RenterView />} />
+                    <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+                    <Route path="/confirm-email" element={<ConfirmEmail />} />
+                    <Route path="/renter/:token" element={<RenterView />} />
           <Route
             path="/admin/*"
             element={
