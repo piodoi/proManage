@@ -3,13 +3,14 @@ from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from passlib.context import CryptContext
 from dotenv import load_dotenv
+
+import bcrypt
 
 from app.models import (
     User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig, AddressMapping,
     ExtractionPattern,
-    UserRole, OAuthProvider, BillStatus, BillType, PaymentMethod, PaymentStatus,
+    UserRole, BillStatus, BillType, PaymentMethod, PaymentStatus,
     SubscriptionStatus,
     UserCreate, UserUpdate, PropertyCreate, PropertyUpdate, UnitCreate, UnitUpdate,
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
@@ -17,11 +18,12 @@ from app.models import (
     ExtractionPatternCreate, ExtractionPatternUpdate,
 )
 from app.auth import (
-    create_access_token, require_auth, require_admin, require_landlord,
+    require_auth, require_admin, require_landlord,
 )
-from app.database import db, has_any_admin
+from app.database import db
 from app.email_scraper import extract_bill_info, match_address_to_property
 from app.pdf_parser import parse_pdf_with_patterns
+from app.routes import auth_router
 
 load_dotenv()
 
@@ -35,151 +37,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+app.include_router(auth_router)
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID", "")
-FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET", "")
 PAYMENT_SERVICE_COMMISSION = float(os.getenv("PAYMENT_SERVICE_COMMISSION", "0.02"))
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.get("/auth/has-admin")
-async def check_has_admin():
-    """Check if any admin user exists. Used by frontend to hide demo mode."""
-    return {"has_admin": has_any_admin()}
-
-
-@app.post("/auth/register")
-async def auth_register(email: str, password: str, name: str):
-    """Register a new user with email and password."""
-    import logging
-    logging.info(f"[Auth] Registration attempt for email: {email}")
-    existing = next((u for u in db.list_users() if u.email == email), None)
-    if existing:
-        logging.warning(f"[Auth] Registration failed - email already exists: {email}")
-        raise HTTPException(status_code=400, detail="Email already registered")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    hashed = pwd_context.hash(password)
-    role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
-    user = User(
-        email=email,
-        name=name,
-        role=role,
-        password_hash=hashed,
-    )
-    db.save_user(user)
-    logging.info(f"[Auth] User registered successfully: {email}, role: {role.value}")
-    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
-
-
-@app.post("/auth/login")
-async def auth_login(email: str, password: str):
-    """Login with email and password."""
-    import logging
-    logging.info(f"[Auth] Login attempt for email: {email}")
-    user = next((u for u in db.list_users() if u.email == email), None)
-    if not user:
-        logging.warning(f"[Auth] Login failed - user not found: {email}")
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    if not user.password_hash:
-        logging.warning(f"[Auth] Login failed - no password set (OAuth user): {email}")
-        raise HTTPException(status_code=401, detail="This account uses OAuth login (Google/Facebook)")
-    if not pwd_context.verify(password, user.password_hash):
-        logging.warning(f"[Auth] Login failed - invalid password: {email}")
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    logging.info(f"[Auth] Login successful: {email}")
-    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
-
-
-@app.post("/auth/google")
-async def auth_google(id_token: str):
-    import httpx
-    import os
-    import logging
-    logging.info("[Auth] Google OAuth attempt")
-    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
-    if not google_client_id:
-        logging.error("[Auth] Google OAuth not configured - GOOGLE_CLIENT_ID missing")
-        raise HTTPException(status_code=500, detail="Google OAuth not configured on server")
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}",
-        )
-        if resp.status_code != 200:
-            logging.error(f"[Auth] Google token validation failed: {resp.status_code}")
-            raise HTTPException(status_code=401, detail="Invalid Google token")
-        data = resp.json()
-    if data.get("aud") != google_client_id:
-        logging.error(f"[Auth] Google token audience mismatch: {data.get('aud')} != {google_client_id}")
-        raise HTTPException(status_code=401, detail="Token not issued for this application")
-    email = data.get("email")
-    name = data.get("name", email)
-    oauth_id = data.get("sub")
-    logging.info(f"[Auth] Google OAuth validated for email: {email}")
-    user = next(
-        (u for u in db.list_users() if u.oauth_id == oauth_id and u.oauth_provider == OAuthProvider.GOOGLE),
-        None,
-    )
-    if not user:
-        role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
-        user = User(
-            email=email,
-            name=name,
-            role=role,
-            oauth_provider=OAuthProvider.GOOGLE,
-            oauth_id=oauth_id,
-        )
-        db.save_user(user)
-    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
-
-
-@app.post("/auth/facebook")
-async def auth_facebook(token: str):
-    import httpx
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://graph.facebook.com/me?fields=id,name,email&access_token={token}"
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid Facebook token")
-        data = resp.json()
-    email = data.get("email", f"{data.get('id')}@facebook.local")
-    name = data.get("name", email)
-    oauth_id = data.get("id")
-    user = next(
-        (u for u in db.list_users() if u.oauth_id == oauth_id and u.oauth_provider == OAuthProvider.FACEBOOK),
-        None,
-    )
-    if not user:
-        role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
-        user = User(
-            email=email,
-            name=name,
-            role=role,
-            oauth_provider=OAuthProvider.FACEBOOK,
-            oauth_id=oauth_id,
-        )
-        db.save_user(user)
-    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
-
-
-@app.get("/auth/me")
-async def get_me(current_user: TokenData = Depends(require_auth)):
-    user = db.get_user(current_user.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
 
 
 @app.get("/admin/users")
@@ -735,7 +600,7 @@ async def configure_ebloc(
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    password_hash = pwd_context.hash(data.password)
+    password_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
     existing = db.get_ebloc_config(current_user.user_id, data.property_id)
     if existing:
         existing.username = data.username
@@ -933,17 +798,3 @@ async def delete_extraction_pattern(pattern_id: str, _: TokenData = Depends(requ
         raise HTTPException(status_code=404, detail="Pattern not found")
     db.delete_extraction_pattern(pattern_id)
     return {"status": "deleted"}
-
-
-@app.post("/auth/demo")
-async def auth_demo(email: str, name: str):
-    user = db.get_user_by_email(email)
-    if not user:
-        user = User(
-            email=email,
-            name=name,
-            role=UserRole.LANDLORD,
-        )
-        db.save_user(user)
-    access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
