@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../App';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 declare global {
   interface Window {
@@ -31,6 +32,24 @@ export default function Login() {
   const [demoEmail, setDemoEmail] = useState('');
   const [demoName, setDemoName] = useState('');
   const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
+  const [googleLoaded, setGoogleLoaded] = useState(false);
+
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    try {
+      const response = await fetch(`${API_URL}/auth/google?id_token=${encodeURIComponent(credential)}`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        login(data.access_token, data.user);
+      } else {
+        const err = await response.json();
+        setError(err.detail || 'Google login failed');
+      }
+    } catch {
+      setError('Could not connect to backend. Make sure it is running.');
+    }
+  }, [login]);
 
   useEffect(() => {
     fetch(`${API_URL}/auth/has-admin`)
@@ -38,6 +57,29 @@ export default function Login() {
       .then(data => setHasAdmin(data.has_admin))
       .catch(() => setHasAdmin(false));
   }, []);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (response: { credential: string }) => {
+            handleGoogleCredential(response.credential);
+          },
+        });
+        setGoogleLoaded(true);
+      }
+    };
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, [handleGoogleCredential]);
 
   const handleDemoLogin = async () => {
     if (!demoEmail || !demoName) {
@@ -61,7 +103,15 @@ export default function Login() {
   };
 
   const handleGoogleLogin = async () => {
-    setError('Google OAuth requires configuration. Use demo mode for testing.');
+    if (!GOOGLE_CLIENT_ID) {
+      setError('Google OAuth not configured. Set VITE_GOOGLE_CLIENT_ID in frontend/.env');
+      return;
+    }
+    if (!googleLoaded || !window.google) {
+      setError('Google Sign-In is loading, please try again.');
+      return;
+    }
+    window.google.accounts.id.prompt();
   };
 
   const handleFacebookLogin = async () => {
