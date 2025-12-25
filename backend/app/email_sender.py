@@ -8,40 +8,53 @@ from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
 _executor = ThreadPoolExecutor(max_workers=2)
+
+
+def get_smtp_config():
+    """Get SMTP configuration from environment variables at call time.
+    
+    This is called at runtime (not import time) to ensure load_dotenv() has been called first.
+    """
+    return {
+        "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+        "port": int(os.getenv("SMTP_PORT", "587")),
+        "user": os.getenv("SMTP_USER", ""),
+        "password": os.getenv("SMTP_PASSWORD", ""),
+        "from_email": os.getenv("SMTP_FROM_EMAIL", ""),
+        "frontend_url": os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    }
 
 
 def is_email_configured() -> bool:
     """Check if email sending is configured."""
-    return bool(SMTP_USER and SMTP_PASSWORD)
+    config = get_smtp_config()
+    return bool(config["user"] and config["password"])
 
 
 def _send_email_sync(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
     """Synchronous email sending (runs in threadpool)."""
-    if not is_email_configured():
+    config = get_smtp_config()
+    
+    if not config["user"] or not config["password"]:
         logger.warning("[Email] SMTP not configured, skipping email send")
         return False
     
     try:
+        from_email = config["from_email"] or config["user"]
+        
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = SMTP_FROM_EMAIL or SMTP_USER
+        msg["From"] = from_email
         msg["To"] = to_email
         
         msg.attach(MIMEText(text_body, "plain"))
         msg.attach(MIMEText(html_body, "html"))
         
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(config["host"], config["port"]) as server:
             server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(msg["From"], to_email, msg.as_string())
+            server.login(config["user"], config["password"])
+            server.sendmail(from_email, to_email, msg.as_string())
         
         logger.info(f"[Email] Sent email to {to_email}")
         return True
@@ -58,7 +71,8 @@ async def send_email(to_email: str, subject: str, html_body: str, text_body: str
 
 async def send_confirmation_email(to_email: str, name: str, confirmation_token: str) -> bool:
     """Send email confirmation link."""
-    confirmation_url = f"{FRONTEND_URL}/confirm-email?token={confirmation_token}"
+    config = get_smtp_config()
+    confirmation_url = f"{config['frontend_url']}/confirm-email?token={confirmation_token}"
     
     subject = "Confirm your ProManage account"
     
