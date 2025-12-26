@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Receipt, Settings } from 'lucide-react';
+import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -27,10 +27,12 @@ export default function PropertyBillsView({
   onBillsChange 
 }: PropertyBillsViewProps) {
   const [showBillForm, setShowBillForm] = useState(false);
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [billForm, setBillForm] = useState({
     renter_id: 'all',  // 'all' means "all/property", specific renter ID otherwise
     bill_type: 'other' as 'rent' | 'utilities' | 'ebloc' | 'other',
     amount: '',
+    due_date: new Date().toISOString().split('T')[0], // Default to today
   });
 
   const handleError = (err: unknown) => {
@@ -40,23 +42,69 @@ export default function PropertyBillsView({
     }
   };
 
-  const handleCreateBill = async () => {
+  const handleSaveBill = async () => {
     if (!token) return;
     if (!billForm.amount) {
       handleError(new Error('Please fill in amount'));
       return;
     }
     try {
-      await api.bills.create(token, {
+      const billData = {
         property_id: propertyId,
         renter_id: billForm.renter_id === 'all' ? undefined : billForm.renter_id,  // 'all' becomes undefined (all renters)
         bill_type: billForm.bill_type,
         description: billForm.bill_type === 'rent' ? 'Rent' : billForm.bill_type === 'utilities' ? 'Utilities' : billForm.bill_type === 'ebloc' ? 'E-Bloc' : 'Other',
         amount: parseFloat(billForm.amount),
-        due_date: new Date().toISOString(), // Default to today
-      });
+        due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
+      };
+
+      if (editingBill) {
+        await api.bills.update(token, editingBill.id, billData);
+      } else {
+        await api.bills.create(token, billData);
+      }
+      
       setShowBillForm(false);
-      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '' });
+      setEditingBill(null);
+      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', due_date: new Date().toISOString().split('T')[0] });
+      if (onBillsChange) {
+        onBillsChange();
+      }
+    } catch (err) {
+      handleError(err);
+    }
+  };
+
+  const handleEditBill = (bill: Bill) => {
+    setEditingBill(bill);
+    // Format due_date for date input (YYYY-MM-DD)
+    let formattedDueDate = '';
+    if (bill.due_date) {
+      try {
+        const date = new Date(bill.due_date);
+        if (!isNaN(date.getTime())) {
+          formattedDueDate = date.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.error('[PropertyBillsView] Error formatting due_date:', e);
+      }
+    }
+    setBillForm({
+      renter_id: bill.renter_id || 'all',
+      bill_type: bill.bill_type,
+      amount: bill.amount.toString(),
+      due_date: formattedDueDate || new Date().toISOString().split('T')[0],
+    });
+    setShowBillForm(true);
+  };
+
+  const handleDeleteBill = async (billId: string) => {
+    if (!token) return;
+    if (!confirm('Are you sure you want to delete this bill?')) {
+      return;
+    }
+    try {
+      await api.bills.delete(token, billId);
       if (onBillsChange) {
         onBillsChange();
       }
@@ -123,7 +171,13 @@ export default function PropertyBillsView({
               <Settings className="w-4 h-4 mr-1" />
               Sync Utilities
             </Button>
-            <Dialog open={showBillForm} onOpenChange={setShowBillForm}>
+            <Dialog open={showBillForm} onOpenChange={(open) => {
+              setShowBillForm(open);
+              if (!open) {
+                setEditingBill(null);
+                setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', due_date: new Date().toISOString().split('T')[0] });
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
                   <Plus className="w-4 h-4 mr-1" />
@@ -132,7 +186,7 @@ export default function PropertyBillsView({
               </DialogTrigger>
               <DialogContent className="bg-slate-800 border-slate-700">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-100">Add Bill</DialogTitle>
+                  <DialogTitle className="text-slate-100">{editingBill ? 'Edit Bill' : 'Add Bill'}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -178,8 +232,17 @@ export default function PropertyBillsView({
                       required
                     />
                   </div>
-                  <Button onClick={handleCreateBill} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!billForm.amount}>
-                    Create Bill
+                  <div>
+                    <Label className="text-slate-300">Due Date</Label>
+                    <Input
+                      type="date"
+                      value={billForm.due_date}
+                      onChange={(e) => setBillForm({ ...billForm, due_date: e.target.value })}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                    />
+                  </div>
+                  <Button onClick={handleSaveBill} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!billForm.amount}>
+                    {editingBill ? 'Update Bill' : 'Create Bill'}
                   </Button>
                 </div>
               </DialogContent>
@@ -197,12 +260,13 @@ export default function PropertyBillsView({
               <TableHead className="text-slate-400">Amount</TableHead>
               <TableHead className="text-slate-400">Due Date</TableHead>
               <TableHead className="text-slate-400">Status</TableHead>
+              <TableHead className="text-slate-400">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {propertyBills.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-slate-500 text-center py-4">
+                <TableCell colSpan={7} className="text-slate-500 text-center py-4">
                   No bills yet for this property
                 </TableCell>
               </TableRow>
@@ -224,6 +288,28 @@ export default function PropertyBillsView({
                       }`}>
                         {bill.status}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEditBill(bill)}
+                          className="text-slate-400 hover:text-slate-200 h-6 px-2"
+                          title="Edit bill"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteBill(bill.id)}
+                          className="text-red-400 hover:text-red-200 h-6 px-2"
+                          title="Delete bill"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
