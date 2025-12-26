@@ -1,10 +1,14 @@
+import { useState } from 'react';
 import { useAuth } from '../App';
 import { Button } from '@/components/ui/button';
-import { LogOut, Building2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LogOut, Building2, Settings } from 'lucide-react';
 import LandlordView from '../components/LandlordView';
+import SettingsView from '../components/SettingsView';
 
 export default function LandlordDashboard() {
   const { user, token, logout } = useAuth();
+  const [error, setError] = useState('');
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -27,7 +31,33 @@ export default function LandlordDashboard() {
       </header>
 
       <main className="p-6">
-        <LandlordView token={token} />
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
+            {error}
+            <button onClick={() => setError('')} className="ml-2 text-red-400 hover:text-red-200">x</button>
+          </div>
+        )}
+
+        <Tabs defaultValue="property" className="space-y-4">
+          <TabsList className="bg-slate-800 border border-slate-700">
+            <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
+              <Building2 className="w-4 h-4 mr-2" />
+              Property
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="property" className="space-y-4">
+            <LandlordView token={token} onError={setError} hideSettings />
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4">
+            <SettingsView token={token} onError={setError} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

@@ -293,7 +293,14 @@ async def create_renter(
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    renter = Renter(unit_id=unit_id, name=data.name, email=data.email, phone=data.phone)
+    renter = Renter(
+        unit_id=unit_id, 
+        name=data.name, 
+        email=data.email, 
+        phone=data.phone,
+        rent_date=data.rent_date,
+        rent_amount_eur=data.rent_amount_eur
+    )
     db.save_renter(renter)
     return renter
 
@@ -335,6 +342,10 @@ async def update_renter(
         renter.email = data.email
     if data.phone is not None:
         renter.phone = data.phone
+    if data.rent_date is not None:
+        renter.rent_date = data.rent_date
+    if data.rent_amount_eur is not None:
+        renter.rent_amount_eur = data.rent_amount_eur
     db.save_renter(renter)
     return renter
 

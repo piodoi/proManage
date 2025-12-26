@@ -177,12 +177,26 @@ export type Renter = {
   name: string;
   email?: string;
   phone?: string;
+  rent_date?: string;
+  rent_amount_eur?: number;
   access_token: string;
   created_at: string;
 };
 
-export type RenterCreate = { name: string; email?: string; phone?: string };
-export type RenterUpdate = { name?: string; email?: string; phone?: string };
+export type RenterCreate = { 
+  name: string; 
+  email?: string; 
+  phone?: string;
+  rent_date?: string;
+  rent_amount_eur?: number;
+};
+export type RenterUpdate = { 
+  name?: string; 
+  email?: string; 
+  phone?: string;
+  rent_date?: string;
+  rent_amount_eur?: number;
+};
 
 export type Bill = {
   id: string;

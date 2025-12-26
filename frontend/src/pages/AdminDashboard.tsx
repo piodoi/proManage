@@ -9,9 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2 } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings } from 'lucide-react';
 import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
+import SettingsView from '../components/SettingsView';
 
 export default function AdminDashboard() {
   const { user, token, logout } = useAuth();
@@ -123,10 +124,6 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={() => setShowBillParser(true)} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-              <FileText className="w-4 h-4 mr-2" />
-              Bill Parser
-            </Button>
             <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
               <LogOut className="w-4 h-4 mr-2" />
               Logout
@@ -143,19 +140,44 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <Tabs defaultValue="admin" className="space-y-4">
+        <Tabs defaultValue="property" className="space-y-4">
           <TabsList className="bg-slate-800 border border-slate-700">
+            <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
+              <Building2 className="w-4 h-4 mr-2" />
+              Property
+            </TabsTrigger>
             <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700">
               <Users className="w-4 h-4 mr-2" />
               Admin
             </TabsTrigger>
-            <TabsTrigger value="landlord" className="data-[state=active]:bg-slate-700">
-              <Building2 className="w-4 h-4 mr-2" />
-              Landlord
+            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="property" className="space-y-4">
+            <LandlordView token={token} onError={setError} hideSettings />
+          </TabsContent>
+
           <TabsContent value="admin" className="space-y-4">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-slate-100 flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Bill Parser
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-slate-400 text-sm mb-4">
+                  Parse and extract bill information from PDF documents.
+                </p>
+                <Button onClick={() => setShowBillParser(true)} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Open Bill Parser
+                </Button>
+              </CardContent>
+            </Card>
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-slate-100">User Management</CardTitle>
@@ -317,8 +339,8 @@ export default function AdminDashboard() {
             </Dialog>
           </TabsContent>
 
-          <TabsContent value="landlord" className="space-y-4">
-            <LandlordView token={token} onError={setError} />
+          <TabsContent value="settings" className="space-y-4">
+            <SettingsView token={token} onError={setError} />
           </TabsContent>
         </Tabs>
       </main>

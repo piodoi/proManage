@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 import uuid
 
@@ -92,6 +92,8 @@ class Renter(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    rent_date: Optional[date] = None
+    rent_amount_eur: Optional[float] = None
     access_token: str = Field(default_factory=gen_token)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -232,12 +234,16 @@ class RenterCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    rent_date: Optional[date] = None
+    rent_amount_eur: Optional[float] = None
 
 
 class RenterUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    rent_date: Optional[date] = None
+    rent_amount_eur: Optional[float] = None
 
 
 class BillCreate(BaseModel):
