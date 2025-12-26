@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../App';
 import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,6 +16,7 @@ type LandlordViewProps = {
 };
 
 export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
+  const { user } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
@@ -24,6 +26,10 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
+  
+  // Admins can always add properties, regardless of subscription
+  const isAdmin = user?.role === 'admin';
+  const canAddProperty = isAdmin || (subscription ? subscription.can_add_property : false);
 
   useEffect(() => {
     loadData();
@@ -120,7 +126,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 onOpenChange={setShowPropertyForm}
                 onSuccess={loadData}
                 onError={setError}
-                canAddProperty={subscription ? subscription.can_add_property : false}
+                canAddProperty={canAddProperty}
               />
             </div>
           </div>
@@ -179,7 +185,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   onOpenChange={setShowPropertyForm}
                   onSuccess={loadData}
                   onError={setError}
-                  canAddProperty={subscription ? subscription.can_add_property : false}
+                  canAddProperty={canAddProperty}
                 />
               </div>
             </div>

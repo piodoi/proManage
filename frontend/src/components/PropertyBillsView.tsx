@@ -274,7 +274,7 @@ export default function PropertyBillsView({
               propertyBills.map((bill) => {
                 const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
                 return (
-                  <TableRow key={bill.id} className="border-slate-700">
+                  <TableRow key={bill.id} className="border-slate-700 hover:bg-slate-900/50">
                     <TableCell className="text-slate-300">{renter ? renter.name : 'All / Property'}</TableCell>
                     <TableCell className="text-slate-200">{bill.description}</TableCell>
                     <TableCell className="text-slate-300">{bill.bill_type}</TableCell>
@@ -290,21 +290,19 @@ export default function PropertyBillsView({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
                         <Button
                           size="sm"
-                          variant="ghost"
                           onClick={() => handleEditBill(bill)}
-                          className="text-slate-400 hover:text-slate-200 h-6 px-2"
+                          className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
                           title="Edit bill"
                         >
                           <Pencil className="w-3 h-3" />
                         </Button>
                         <Button
                           size="sm"
-                          variant="ghost"
                           onClick={() => handleDeleteBill(bill.id)}
-                          className="text-red-400 hover:text-red-200 h-6 px-2"
+                          className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600 h-6 px-2 w-6"
                           title="Delete bill"
                         >
                           <Trash2 className="w-3 h-3" />

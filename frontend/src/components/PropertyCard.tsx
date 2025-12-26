@@ -95,10 +95,9 @@ export default function PropertyCard({
               onError={onError}
             />
             <Button
-              variant="ghost"
               size="sm"
               onClick={() => onDelete(property.id)}
-              className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
+              className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -142,27 +141,24 @@ export default function PropertyCard({
                     <div className="flex gap-1">
                       <Button
                         size="sm"
-                        variant="ghost"
                         onClick={() => openEditRenter(renter)}
-                        className="text-slate-400 hover:text-slate-200 h-6 px-2"
+                        className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
                         title="Edit renter"
                       >
                         <Pencil className="w-3 h-3" />
                       </Button>
                       <Button
                         size="sm"
-                        variant="ghost"
                         onClick={() => handleGetRenterLink(renter.id)}
-                        className="text-emerald-400 hover:text-emerald-300 h-6 px-2"
+                        className="bg-slate-700 text-emerald-400 hover:bg-slate-600 hover:text-emerald-300 border border-slate-600 h-6 px-2 w-6"
                         title="Get renter link"
                       >
                         <ExternalLink className="w-3 h-3" />
                       </Button>
                       <Button
                         size="sm"
-                        variant="ghost"
                         onClick={() => handleDeleteRenter(renter.id)}
-                        className="text-red-400 hover:text-red-200 h-6 px-2"
+                        className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600 h-6 px-2 w-6"
                         title="Delete renter"
                       >
                         <Trash2 className="w-3 h-3" />
