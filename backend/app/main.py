@@ -803,29 +803,36 @@ async def sync_ebloc(property_id: str, association_id: Optional[str] = Query(Non
         
         # Create/update E-Bloc bill from outstanding balance
         # There can only be one E-Bloc bill per property
+        # Always create a bill, even if balance is 0 (with PAID status)
         bills_created = []
-        if balance and balance.outstanding_debt > 0:
-            # Find and delete any existing E-Bloc bills for this property
-            existing_bills = db.list_bills(property_id=property_id)
-            existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.renter_id is None]
-            
-            for existing_bill in existing_ebloc_bills:
-                db.delete_bill(existing_bill.id)
-                logger.info(f"[E-Bloc] Deleted existing E-Bloc bill {existing_bill.id} for property {property_id}")
-            
-            # Create a new E-Bloc bill with current outstanding debt
-            bill = Bill(
-                property_id=property_id,
-                renter_id=None,  # Applies to all renters in the property
-                bill_type=BillType.EBLOC,
-                description="E-Bloc",  # Simple description as requested
-                amount=balance.outstanding_debt,
-                due_date=balance.last_payment_date or datetime.utcnow(),
-                status=BillStatus.OVERDUE if balance.outstanding_debt > 0 else BillStatus.PENDING
-            )
-            db.save_bill(bill)
-            bills_created.append(bill.id)
-            logger.info(f"[E-Bloc] Created E-Bloc bill {bill.id} for property {property_id} with amount {balance.outstanding_debt} Lei")
+        # Find and delete any existing E-Bloc bills for this property
+        existing_bills = db.list_bills(property_id=property_id)
+        existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.renter_id is None]
+        
+        for existing_bill in existing_ebloc_bills:
+            db.delete_bill(existing_bill.id)
+            logger.info(f"[E-Bloc] Deleted existing E-Bloc bill {existing_bill.id} for property {property_id}")
+        
+        # Determine amount and status
+        outstanding_debt = balance.outstanding_debt if balance else 0.0
+        if outstanding_debt > 0:
+            bill_status = BillStatus.OVERDUE
+        else:
+            bill_status = BillStatus.PAID  # Green "paid" status for 0 balance
+        
+        # Create a new E-Bloc bill (always create, even if 0)
+        bill = Bill(
+            property_id=property_id,
+            renter_id=None,  # Applies to all renters in the property
+            bill_type=BillType.EBLOC,
+            description="E-Bloc",  # Simple description as requested
+            amount=outstanding_debt,
+            due_date=balance.last_payment_date if balance and balance.last_payment_date else datetime.utcnow(),
+            status=bill_status
+        )
+        db.save_bill(bill)
+        bills_created.append(bill.id)
+        logger.info(f"[E-Bloc] Created E-Bloc bill {bill.id} for property {property_id} with amount {outstanding_debt} Lei, status: {bill_status}")
         
         # Create payment records from receipts
         payments_created = []

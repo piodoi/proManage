@@ -69,9 +69,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
               // Single match or success - sync completed automatically
               setShowEblocConfig(null);
               loadData();
-              if (result.bills_created > 0 || result.payments_created > 0) {
-                alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
-              }
+              // No alert - just return to page, bills will be visible
             }
           })
           .catch((err) => {
@@ -702,6 +700,110 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                     <p className="text-sm text-slate-400">{property.address}</p>
                   </div>
                   <div className="flex gap-2">
+                    <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => {
+                      setShowEblocConfig(open ? property.id : null);
+                      if (!open) {
+                        setEblocMatches(null);
+                        setSelectedEblocMatch('');
+                        setEblocSyncing(false);
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
+                          Sync E-Bloc
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-slate-800 border-slate-700">
+                        <DialogHeader>
+                          <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-sm text-slate-300 font-medium mb-1">Syncing from Property:</p>
+                            <p className="text-sm text-slate-100 font-semibold">{property.name}</p>
+                            {property.address && (
+                              <p className="text-xs text-slate-400 mt-1">{property.address}</p>
+                            )}
+                          </div>
+                          
+                          {error && error.includes('E-bloc') && (
+                            <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+                              {error}
+                            </div>
+                          )}
+
+                          {/* Loading state - searching for matches */}
+                          {eblocSyncing && !eblocMatches && (
+                            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                              <Spinner className="w-8 h-8 text-slate-400" />
+                              <p className="text-sm text-slate-400">Searching for matching E-bloc association...</p>
+                            </div>
+                          )}
+
+                          {/* Matches found - show selection */}
+                          {!eblocSyncing && eblocMatches && eblocMatches.length > 0 && (
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-slate-300">
+                                  {eblocMatches[0]?.score === 0 
+                                    ? 'No exact match found. Please select the correct association:' 
+                                    : 'Multiple matches found. Please select the correct association:'}
+                                </Label>
+                                <Select
+                                  value={selectedEblocMatch}
+                                  onValueChange={setSelectedEblocMatch}
+                                >
+                                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                                    <SelectValue placeholder="Select association" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-slate-700 border-slate-600">
+                                    {eblocMatches.map((match) => (
+                                      <SelectItem key={match.id} value={match.id}>
+                                        {match.nume} - {match.address}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {/* Show Sync Now button when an association is selected */}
+                              {selectedEblocMatch && (
+                                <Button
+                                  onClick={async () => {
+                                    if (!token || !selectedEblocMatch) return;
+                                    setError('');
+                                    setEblocSyncing(true);
+                                    try {
+                                      await api.ebloc.sync(token, property.id, selectedEblocMatch);
+                                      setEblocMatches(null);
+                                      setSelectedEblocMatch('');
+                                      setEblocSyncing(false);
+                                      setShowEblocConfig(null);
+                                      loadData();
+                                      // No alert - bills will appear in the page after reload
+                                    } catch (err) {
+                                      setEblocSyncing(false);
+                                      const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
+                                      setError(errorMessage);
+                                    }
+                                  }}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                  disabled={!selectedEblocMatch || eblocSyncing}
+                                >
+                                  {eblocSyncing ? (
+                                    <>
+                                      <Spinner className="w-4 h-4 mr-2" />
+                                      Syncing...
+                                    </>
+                                  ) : (
+                                    'Sync Debts'
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                     <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
                       if (!open) {
                         setShowRenterForm(null);
@@ -826,112 +928,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                           >
                             {editingRenter ? 'Update Renter' : 'Add Renter'}
                           </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                    <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => {
-                      setShowEblocConfig(open ? property.id : null);
-                      if (!open) {
-                        setEblocMatches(null);
-                        setSelectedEblocMatch('');
-                        setEblocSyncing(false);
-                      }
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
-                          Sync E-Bloc
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="bg-slate-800 border-slate-700">
-                        <DialogHeader>
-                          <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-sm text-slate-300 font-medium mb-1">Syncing from Property:</p>
-                            <p className="text-sm text-slate-100 font-semibold">{property.name}</p>
-                            {property.address && (
-                              <p className="text-xs text-slate-400 mt-1">{property.address}</p>
-                            )}
-                          </div>
-                          
-                          {error && error.includes('E-bloc') && (
-                            <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
-                              {error}
-                            </div>
-                          )}
-
-                          {/* Loading state - searching for matches */}
-                          {eblocSyncing && !eblocMatches && (
-                            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                              <Spinner className="w-8 h-8 text-slate-400" />
-                              <p className="text-sm text-slate-400">Searching for matching E-bloc association...</p>
-                            </div>
-                          )}
-
-                          {/* Matches found - show selection */}
-                          {!eblocSyncing && eblocMatches && eblocMatches.length > 0 && (
-                            <div className="space-y-4">
-                              <div>
-                                <Label className="text-slate-300">
-                                  {eblocMatches[0]?.score === 0 
-                                    ? 'No exact match found. Please select the correct association:' 
-                                    : 'Multiple matches found. Please select the correct association:'}
-                                </Label>
-                                <Select
-                                  value={selectedEblocMatch}
-                                  onValueChange={setSelectedEblocMatch}
-                                >
-                                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                                    <SelectValue placeholder="Select association" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-slate-700 border-slate-600">
-                                    {eblocMatches.map((match) => (
-                                      <SelectItem key={match.id} value={match.id}>
-                                        {match.nume} - {match.address} {match.score > 0 && `(score: ${match.score})`}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {/* Show Sync Debts button when an association is selected */}
-                              {selectedEblocMatch && (
-                                <Button
-                                  onClick={async () => {
-                                    if (!token || !selectedEblocMatch) return;
-                                    setError('');
-                                    setEblocSyncing(true);
-                                    try {
-                                      const result = await api.ebloc.sync(token, property.id, selectedEblocMatch);
-                                      setEblocMatches(null);
-                                      setSelectedEblocMatch('');
-                                      setEblocSyncing(false);
-                                      setShowEblocConfig(null);
-                                      loadData();
-                                      if (result.bills_created > 0 || result.payments_created > 0) {
-                                        alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
-                                      }
-                                    } catch (err) {
-                                      setEblocSyncing(false);
-                                      const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
-                                      setError(errorMessage);
-                                    }
-                                  }}
-                                  className="w-full bg-emerald-600 hover:bg-emerald-700"
-                                  disabled={!selectedEblocMatch || eblocSyncing}
-                                >
-                                  {eblocSyncing ? (
-                                    <>
-                                      <Spinner className="w-4 h-4 mr-2" />
-                                      Syncing...
-                                    </>
-                                  ) : (
-                                    'Sync Debts'
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </DialogContent>
                     </Dialog>
@@ -1224,6 +1220,110 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                       <p className="text-sm text-slate-400">{property.address}</p>
                     </div>
                     <div className="flex gap-2">
+                      <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => {
+                        setShowEblocConfig(open ? property.id : null);
+                        if (!open) {
+                          setEblocMatches(null);
+                          setSelectedEblocMatch('');
+                          setEblocSyncing(false);
+                        }
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
+                            Sync E-Bloc
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="bg-slate-800 border-slate-700">
+                          <DialogHeader>
+                            <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-sm text-slate-300 font-medium mb-1">Syncing from Property:</p>
+                              <p className="text-sm text-slate-100 font-semibold">{property.name}</p>
+                              {property.address && (
+                                <p className="text-xs text-slate-400 mt-1">{property.address}</p>
+                              )}
+                            </div>
+                            
+                            {error && error.includes('E-bloc') && (
+                              <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+                                {error}
+                              </div>
+                            )}
+
+                            {/* Loading state - searching for matches */}
+                            {eblocSyncing && !eblocMatches && (
+                              <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                                <Spinner className="w-8 h-8 text-slate-400" />
+                                <p className="text-sm text-slate-400">Searching for matching E-bloc association...</p>
+                              </div>
+                            )}
+
+                            {/* Matches found - show selection */}
+                            {!eblocSyncing && eblocMatches && eblocMatches.length > 0 && (
+                              <div className="space-y-4">
+                                <div>
+                                  <Label className="text-slate-300">
+                                    {eblocMatches[0]?.score === 0 
+                                      ? 'No exact match found. Please select the correct association:' 
+                                      : 'Multiple matches found. Please select the correct association:'}
+                                  </Label>
+                                  <Select
+                                    value={selectedEblocMatch}
+                                    onValueChange={setSelectedEblocMatch}
+                                  >
+                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                                      <SelectValue placeholder="Select association" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-700 border-slate-600">
+                                      {eblocMatches.map((match) => (
+                                        <SelectItem key={match.id} value={match.id}>
+                                          {match.nume} - {match.address}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {/* Show Sync Debts button when an association is selected */}
+                                {selectedEblocMatch && (
+                                  <Button
+                                    onClick={async () => {
+                                      if (!token || !selectedEblocMatch) return;
+                                      setError('');
+                                      setEblocSyncing(true);
+                                      try {
+                                        await api.ebloc.sync(token, property.id, selectedEblocMatch);
+                                        setEblocMatches(null);
+                                        setSelectedEblocMatch('');
+                                        setEblocSyncing(false);
+                                        setShowEblocConfig(null);
+                                        loadData();
+                                        // No alert - bills will appear in the page after reload
+                                      } catch (err) {
+                                        setEblocSyncing(false);
+                                        const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
+                                        setError(errorMessage);
+                                      }
+                                    }}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                    disabled={!selectedEblocMatch || eblocSyncing}
+                                  >
+                                    {eblocSyncing ? (
+                                      <>
+                                        <Spinner className="w-4 h-4 mr-2" />
+                                        Syncing...
+                                      </>
+                                    ) : (
+                                      'Sync Debts'
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                       <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
                       if (!open) {
                         setShowRenterForm(null);
@@ -1410,7 +1510,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                                     <SelectContent className="bg-slate-700 border-slate-600">
                                       {eblocMatches.map((match) => (
                                         <SelectItem key={match.id} value={match.id}>
-                                          {match.nume} - {match.address} {match.score > 0 && `(score: ${match.score})`}
+                                          {match.nume} - {match.address}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
@@ -1424,15 +1524,13 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                                       setError('');
                                       setEblocSyncing(true);
                                       try {
-                                        const result = await api.ebloc.sync(token, property.id, selectedEblocMatch);
+                                        await api.ebloc.sync(token, property.id, selectedEblocMatch);
                                         setEblocMatches(null);
                                         setSelectedEblocMatch('');
                                         setEblocSyncing(false);
                                         setShowEblocConfig(null);
                                         loadData();
-                                        if (result.bills_created > 0 || result.payments_created > 0) {
-                                          alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
-                                        }
+                                        // No alert - bills will appear in the page after reload
                                       } catch (err) {
                                         setEblocSyncing(false);
                                         const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
