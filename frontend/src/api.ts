@@ -93,8 +93,9 @@ export const api = {
   },
 
   ebloc: {
-    configure: (token: string, data: EblocConfigCreate) => request<{ status: string; config_id: string }>('/ebloc/configure', { method: 'POST', body: data, token }),
-    sync: (token: string, propertyId: string) => request<{ status: string; message: string }>(`/ebloc/sync/${propertyId}`, { method: 'POST', token }),
+    discover: (token: string, data: { username: string; password: string }) => request<{ status: string; properties: Array<{ page_id: string; name: string; address: string }> }>('/ebloc/discover', { method: 'POST', body: data, token }),
+    configure: (token: string, data: EblocConfigCreate) => request<{ status: string; config_id: string; property_id?: string }>('/ebloc/configure', { method: 'POST', body: data, token }),
+    sync: (token: string, propertyId: string) => request<{ status: string; balance?: { outstanding_debt: number; last_payment_date?: string; oldest_debt_month?: string }; bills_created: number; payments_created: number }>(`/ebloc/sync/${propertyId}`, { method: 'POST', token }),
   },
 
   subscription: {
@@ -292,9 +293,10 @@ export type EmailProcessResult = {
 };
 
 export type EblocConfigCreate = {
-  property_id: string;
+  property_id?: string;
   username: string;
   password: string;
+  ebloc_page_id?: string;
 };
 
 export type SubscriptionStatus = {

@@ -4,6 +4,8 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
+import base64
 
 import bcrypt
 
@@ -26,6 +28,23 @@ from app.pdf_parser import parse_pdf_with_patterns
 from app.routes import auth_router
 
 load_dotenv()
+
+# Encryption key for e-bloc passwords (in production, use a secure key from env)
+EBLOC_ENCRYPTION_KEY = os.getenv("EBLOC_ENCRYPTION_KEY", Fernet.generate_key().decode())
+try:
+    fernet = Fernet(EBLOC_ENCRYPTION_KEY.encode() if isinstance(EBLOC_ENCRYPTION_KEY, str) else EBLOC_ENCRYPTION_KEY)
+except Exception:
+    # If key is invalid, generate a new one
+    EBLOC_ENCRYPTION_KEY = Fernet.generate_key().decode()
+    fernet = Fernet(EBLOC_ENCRYPTION_KEY.encode())
+
+def encrypt_password(password: str) -> str:
+    """Encrypt password for e-bloc (needs to be retrievable)"""
+    return fernet.encrypt(password.encode()).decode()
+
+def decrypt_password(encrypted: str) -> str:
+    """Decrypt password for e-bloc"""
+    return fernet.decrypt(encrypted.encode()).decode()
 
 app = FastAPI(title="ProManage API", version="1.0.0")
 
@@ -591,47 +610,243 @@ async def process_email(
     return {"status": "created", "bill": bill, "extracted": info}
 
 
+@app.post("/ebloc/discover")
+async def discover_ebloc_properties(
+    data: dict, current_user: TokenData = Depends(require_landlord)
+):
+    """Discover properties from e-bloc account"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    username = data.get("username")
+    password = data.get("password")
+    logger.info(f"[E-Bloc] Discovery request from user {current_user.user_id}, username: {username}")
+    
+    if not username or not password:
+        logger.warning("[E-Bloc] Missing username or password")
+        raise HTTPException(status_code=400, detail="Username and password required")
+    
+    from app.ebloc_scraper import EblocScraper, EblocProperty
+    
+    # Enable debug mode to save HTML for inspection
+    scraper = EblocScraper(debug=True)
+    try:
+        logger.info("[E-Bloc] Attempting login...")
+        logged_in = await scraper.login(username, password)
+        if not logged_in:
+            logger.warning("[E-Bloc] Login failed - invalid credentials")
+            raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
+        
+        logger.info("[E-Bloc] Login successful, fetching properties...")
+        properties = await scraper.get_available_properties()
+        logger.info(f"[E-Bloc] Found {len(properties)} properties")
+        
+        result = {
+            "status": "success",
+            "properties": [
+                {
+                    "page_id": p.page_id,
+                    "name": p.name,
+                    "address": p.address or p.name
+                }
+                for p in properties
+            ]
+        }
+        logger.info(f"[E-Bloc] Returning {len(result['properties'])} properties")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[E-Bloc] Error discovering properties: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error discovering properties: {str(e)}")
+    finally:
+        await scraper.close()
+
+
 @app.post("/ebloc/configure")
 async def configure_ebloc(
     data: EblocConfigCreate, current_user: TokenData = Depends(require_landlord)
 ):
-    prop = db.get_property(data.property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    password_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
-    existing = db.get_ebloc_config(current_user.user_id, data.property_id)
-    if existing:
-        existing.username = data.username
-        existing.password_hash = password_hash
-        db.save_ebloc_config(existing)
-        return {"status": "updated", "config_id": existing.id}
-    config = EblocConfig(
-        landlord_id=current_user.user_id,
-        property_id=data.property_id,
-        username=data.username,
-        password_hash=password_hash,
-    )
-    db.save_ebloc_config(config)
-    return {"status": "created", "config_id": config.id}
-
-
-@app.post("/ebloc/sync/{property_id}")
-async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require_landlord)):
+    from app.ebloc_scraper import EblocScraper
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[E-Bloc] Configure request from user {current_user.user_id}, property_id: {data.property_id}, ebloc_page_id: {data.ebloc_page_id}")
+    
+    # If property_id is not provided, we'll create properties from e-bloc
+    if not data.property_id and data.ebloc_page_id:
+        logger.info(f"[E-Bloc] Creating new property from e-bloc page_id: {data.ebloc_page_id}")
+        # Discover and create property
+        scraper = EblocScraper()
+        try:
+            logged_in = await scraper.login(data.username, data.password)
+            if not logged_in:
+                logger.warning("[E-Bloc] Login failed during property creation")
+                raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
+            
+            properties = await scraper.get_available_properties()
+            logger.info(f"[E-Bloc] Found {len(properties)} properties, looking for page_id: {data.ebloc_page_id}")
+            ebloc_prop = next((p for p in properties if p.page_id == data.ebloc_page_id), None)
+            if not ebloc_prop:
+                logger.warning(f"[E-Bloc] Property with page_id {data.ebloc_page_id} not found")
+                raise HTTPException(status_code=404, detail="E-bloc property not found")
+            
+            logger.info(f"[E-Bloc] Creating property: {ebloc_prop.name} at {ebloc_prop.address}")
+            # Create property
+            prop = Property(
+                landlord_id=current_user.user_id,
+                name=ebloc_prop.name,
+                address=ebloc_prop.address or ebloc_prop.name
+            )
+            db.save_property(prop)
+            property_id = prop.id
+            logger.info(f"[E-Bloc] Property created with id: {property_id}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[E-Bloc] Error creating property: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error creating property: {str(e)}")
+        finally:
+            await scraper.close()
+    else:
+        property_id = data.property_id
+        logger.info(f"[E-Bloc] Using existing property_id: {property_id}")
+    
+    if not property_id:
+        raise HTTPException(status_code=400, detail="Property ID or ebloc_page_id required")
+    
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    config = db.get_ebloc_config(current_user.user_id, property_id)
+    # Encrypt password (not hash, since we need to retrieve it for scraping)
+    password_encrypted = encrypt_password(data.password)
+    existing = db.get_ebloc_config_by_property(current_user.user_id, property_id)
+    if existing:
+        existing.username = data.username
+        existing.password_hash = password_encrypted  # Actually encrypted, not hashed
+        existing.ebloc_page_id = data.ebloc_page_id
+        db.save_ebloc_config(existing)
+        return {"status": "updated", "config_id": existing.id, "property_id": property_id}
+    config = EblocConfig(
+        landlord_id=current_user.user_id,
+        property_id=property_id,
+        username=data.username,
+        password_hash=password_encrypted,  # Actually encrypted, not hashed
+        ebloc_page_id=data.ebloc_page_id,
+    )
+    db.save_ebloc_config(config)
+    return {"status": "created", "config_id": config.id, "property_id": property_id}
+
+
+@app.post("/ebloc/sync/{property_id}")
+async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require_landlord)):
+    from app.ebloc_scraper import EblocScraper
+    import bcrypt
+    
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    config = db.get_ebloc_config_by_property(current_user.user_id, property_id)
     if not config:
         raise HTTPException(status_code=404, detail="E-bloc not configured for this property")
-    return {
-        "status": "configured",
-        "message": "E-bloc sync requires valid credentials. Bills will be fetched when credentials are verified.",
-        "property_id": property_id,
-    }
+    
+    # Decrypt password and login
+    password = decrypt_password(config.password_hash)
+    scraper = EblocScraper()
+    try:
+        logged_in = await scraper.login(config.username, password)
+        if not logged_in:
+            raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
+        
+        # Get balance and payments
+        balance = await scraper.get_balance(config.ebloc_page_id)
+        payments = await scraper.get_payments(config.ebloc_page_id)
+        
+        # Get or create a unit for this property (or use first unit)
+        units = db.list_units(property_id=property_id)
+        if not units:
+            # Create a default unit
+            unit = Unit(property_id=property_id, unit_number="Default")
+            db.save_unit(unit)
+            units = [unit]
+        
+        unit = units[0]
+        
+        # Create bills from outstanding balance
+        bills_created = []
+        if balance and balance.outstanding_debt > 0:
+            # Check if bill already exists
+            existing_bills = db.list_bills(unit_id=unit.id)
+            existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.status == BillStatus.PENDING]
+            
+            if not existing_ebloc_bills or sum(b.amount for b in existing_ebloc_bills) < balance.outstanding_debt:
+                bill = Bill(
+                    unit_id=unit.id,
+                    bill_type=BillType.EBLOC,
+                    description=f"E-bloc outstanding balance - {balance.oldest_debt_month or 'Current'}",
+                    amount=balance.outstanding_debt,
+                    due_date=balance.last_payment_date or datetime.utcnow(),
+                    status=BillStatus.OVERDUE if balance.outstanding_debt > 0 else BillStatus.PENDING
+                )
+                db.save_bill(bill)
+                bills_created.append(bill.id)
+        
+        # Create payment records from receipts
+        payments_created = []
+        for payment in payments:
+            # Find matching bill or create one
+            matching_bills = [b for b in db.list_bills(unit_id=unit.id) 
+                            if b.bill_type == BillType.EBLOC and abs(b.amount - payment.amount) < 0.01]
+            
+            if matching_bills:
+                bill = matching_bills[0]
+            else:
+                # Create a bill for this payment
+                bill = Bill(
+                    unit_id=unit.id,
+                    bill_type=BillType.EBLOC,
+                    description=f"E-bloc payment receipt {payment.receipt_number}",
+                    amount=payment.amount,
+                    due_date=payment.payment_date,
+                    status=BillStatus.PAID,
+                    bill_number=payment.receipt_number
+                )
+                db.save_bill(bill)
+            
+            # Create payment record
+            existing_payment = next((p for p in db.list_payments() if p.bill_id == bill.id and abs(p.amount - payment.amount) < 0.01), None)
+            if not existing_payment:
+                payment_record = Payment(
+                    bill_id=bill.id,
+                    amount=payment.amount,
+                    method=PaymentMethod.BANK_TRANSFER,
+                    status=PaymentStatus.COMPLETED,
+                    commission=0.0
+                )
+                db.save_payment(payment_record)
+                payments_created.append(payment_record.id)
+        
+        return {
+            "status": "success",
+            "property_id": property_id,
+            "balance": {
+                "outstanding_debt": balance.outstanding_debt if balance else 0.0,
+                "last_payment_date": balance.last_payment_date.isoformat() if balance and balance.last_payment_date else None,
+                "oldest_debt_month": balance.oldest_debt_month if balance else None
+            } if balance else None,
+            "bills_created": len(bills_created),
+            "payments_created": len(payments_created)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error syncing e-bloc: {str(e)}")
+    finally:
+        await scraper.close()
 
 
 @app.get("/payments")

@@ -454,6 +454,16 @@ class Database:
             ).fetchone()
             return _deserialize(EblocConfig, result.data) if result else None
 
+    def get_ebloc_config_by_property(self, landlord_id: str, property_id: str) -> Optional[EblocConfig]:
+        with engine.connect() as conn:
+            result = conn.execute(
+                ebloc_configs_table.select().where(
+                    (ebloc_configs_table.c.landlord_id == landlord_id) &
+                    (ebloc_configs_table.c.property_id == property_id)
+                )
+            ).fetchone()
+            return _deserialize(EblocConfig, result.data) if result else None
+
     def list_ebloc_configs(self, landlord_id: Optional[str] = None) -> list[EblocConfig]:
         with engine.connect() as conn:
             if landlord_id:

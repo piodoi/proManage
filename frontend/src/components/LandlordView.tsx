@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Building2, Users, Receipt, Mail, Settings, Copy, ExternalLink } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 
 type LandlordViewProps = {
   token: string | null;
@@ -29,6 +30,10 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
   const [showBillForm, setShowBillForm] = useState(false);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [showEblocConfig, setShowEblocConfig] = useState<string | null>(null);
+  const [showEblocDiscover, setShowEblocDiscover] = useState(false);
+  const [eblocDiscoveredProperties, setEblocDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string }>>([]);
+  const [eblocDiscovering, setEblocDiscovering] = useState(false);
+  const [eblocImporting, setEblocImporting] = useState(false);
   const [propertyForm, setPropertyForm] = useState({ name: '', address: '' });
   const [unitForm, setUnitForm] = useState({ unit_number: '' });
   const [renterForm, setRenterForm] = useState({ name: '', email: '', phone: '' });
@@ -42,7 +47,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
     bill_number: '',
   });
   const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
-  const [eblocForm, setEblocForm] = useState({ username: '', password: '' });
+  const [eblocForm, setEblocForm] = useState({ username: '', password: '', selectedPropertyId: '' });
   const [renterLink, setRenterLink] = useState<{ token: string; link: string } | null>(null);
 
   useEffect(() => {
@@ -58,25 +63,42 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
   };
 
   const loadData = async () => {
-    if (!token) return;
+    if (!token) {
+      console.log('[LandlordView] No token, skipping loadData');
+      return;
+    }
+    console.log('[LandlordView] Loading data...');
+    setLoading(true);
     try {
+      console.log('[LandlordView] Fetching properties, bills, and subscription...');
       const [propsData, billsData, subData] = await Promise.all([
         api.properties.list(token),
         api.bills.list(token),
         api.subscription.status(token),
       ]);
+      console.log('[LandlordView] Data fetched:', { 
+        properties: propsData.length, 
+        bills: billsData.length,
+        subscription: subData 
+      });
+      
       setProperties(propsData);
       setBills(billsData);
       setSubscription(subData);
+      
+      console.log('[LandlordView] Loading units and renters...');
       for (const prop of propsData) {
         const unitsData = await api.units.list(token, prop.id);
+        console.log(`[LandlordView] Property ${prop.name}: ${unitsData.length} units`);
         setUnits((prev) => ({ ...prev, [prop.id]: unitsData }));
         for (const unit of unitsData) {
           const rentersData = await api.renters.list(token, unit.id);
           setRenters((prev) => ({ ...prev, [unit.id]: rentersData }));
         }
       }
+      console.log('[LandlordView] Data loaded successfully');
     } catch (err) {
+      console.error('[LandlordView] Error loading data:', err);
       handleError(err);
     } finally {
       setLoading(false);
@@ -146,14 +168,143 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
     }
   };
 
-  const handleConfigureEbloc = async (propertyId: string) => {
-    if (!token) return;
+  const handleDiscoverEbloc = async () => {
+    if (!token) {
+      console.error('[E-Bloc] No token available');
+      return;
+    }
+    if (!eblocForm.username || !eblocForm.password) {
+      console.error('[E-Bloc] Missing username or password');
+      setError('Please enter both username and password');
+      return;
+    }
+    
+    console.log('[E-Bloc] Starting discovery...', { username: eblocForm.username });
+    setEblocDiscovering(true);
+    setError('');
+    setEblocDiscoveredProperties([]);
+    
     try {
-      await api.ebloc.configure(token, { property_id: propertyId, ...eblocForm });
-      setShowEblocConfig(null);
-      setEblocForm({ username: '', password: '' });
+      console.log('[E-Bloc] Calling discover API...');
+      const result = await api.ebloc.discover(token, { username: eblocForm.username, password: eblocForm.password });
+      console.log('[E-Bloc] Discovery result:', JSON.stringify(result, null, 2));
+      
+      if (result && result.properties && Array.isArray(result.properties)) {
+        console.log(`[E-Bloc] Found ${result.properties.length} properties:`, result.properties);
+        if (result.properties.length > 0) {
+          setEblocDiscoveredProperties(result.properties);
+          setEblocForm({ ...eblocForm, selectedPropertyId: result.properties[0].page_id });
+          console.log('[E-Bloc] Selected first property:', result.properties[0].page_id);
+          setError(''); // Clear any previous errors
+        } else {
+          console.warn('[E-Bloc] No properties found in e-bloc account');
+          setError('No properties found in your e-bloc account. Please check your credentials.');
+          setEblocDiscoveredProperties([]);
+        }
+      } else {
+        console.error('[E-Bloc] Unexpected response format:', result);
+        const errorMsg = result?.detail || result?.message || `Unexpected response: ${JSON.stringify(result)}`;
+        setError(errorMsg);
+        setEblocDiscoveredProperties([]);
+      }
     } catch (err) {
+      console.error('[E-Bloc] Discovery error:', err);
+      if (err instanceof Error) {
+        console.error('[E-Bloc] Error message:', err.message);
+        console.error('[E-Bloc] Error stack:', err.stack);
+      }
+      const errorMessage = err instanceof Error ? err.message : 'Failed to discover properties. Please check your credentials and try again.';
+      setError(errorMessage);
+      setEblocDiscoveredProperties([]);
+    } finally {
+      setEblocDiscovering(false);
+    }
+  };
+
+  const handleConfigureEbloc = async (propertyId?: string) => {
+    if (!token) {
+      console.error('[E-Bloc] No token available');
+      return;
+    }
+    
+    const eblocPageId = eblocForm.selectedPropertyId;
+    if (!eblocPageId) {
+      console.error('[E-Bloc] No e-bloc property selected');
+      setError('Please select a property to import');
+      return;
+    }
+    
+    console.log('[E-Bloc] Configuring/importing property...', { propertyId, eblocPageId });
+    setEblocImporting(true);
+    setError('');
+    
+    try {
+      const result = await api.ebloc.configure(token, {
+        property_id: propertyId || undefined,
+        username: eblocForm.username,
+        password: eblocForm.password,
+        ebloc_page_id: eblocPageId
+      });
+      
+      console.log('[E-Bloc] Configure result:', result);
+      
+      setShowEblocConfig(null);
+      setShowEblocDiscover(false);
+      setEblocForm({ username: '', password: '', selectedPropertyId: '' });
+      setEblocDiscoveredProperties([]);
+      
+      // Reload data to show new property if one was created
+      console.log('[E-Bloc] Reloading data...');
+      await loadData();
+      console.log('[E-Bloc] Data reloaded successfully');
+    } catch (err) {
+      console.error('[E-Bloc] Configure error:', err);
       handleError(err);
+    } finally {
+      setEblocImporting(false);
+    }
+  };
+
+  const handleImportEblocProperties = async () => {
+    if (!token) {
+      console.error('[E-Bloc] No token available');
+      return;
+    }
+    if (eblocDiscoveredProperties.length === 0) {
+      console.error('[E-Bloc] No properties to import');
+      return;
+    }
+    
+    console.log(`[E-Bloc] Importing ${eblocDiscoveredProperties.length} properties...`);
+    setEblocImporting(true);
+    setError('');
+    
+    try {
+      // Import all discovered properties
+      for (let i = 0; i < eblocDiscoveredProperties.length; i++) {
+        const eblocProp = eblocDiscoveredProperties[i];
+        console.log(`[E-Bloc] Importing property ${i + 1}/${eblocDiscoveredProperties.length}:`, eblocProp);
+        
+        const result = await api.ebloc.configure(token, {
+          username: eblocForm.username,
+          password: eblocForm.password,
+          ebloc_page_id: eblocProp.page_id
+        });
+        
+        console.log(`[E-Bloc] Property ${i + 1} imported:`, result);
+      }
+      
+      console.log('[E-Bloc] All properties imported, reloading data...');
+      setShowEblocDiscover(false);
+      setEblocForm({ username: '', password: '', selectedPropertyId: '' });
+      setEblocDiscoveredProperties([]);
+      await loadData();
+      console.log('[E-Bloc] Import complete');
+    } catch (err) {
+      console.error('[E-Bloc] Import error:', err);
+      handleError(err);
+    } finally {
+      setEblocImporting(false);
     }
   };
 
@@ -201,16 +352,134 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
         <TabsContent value="properties" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-medium text-slate-100">Properties</h2>
-            <Dialog open={showPropertyForm} onOpenChange={setShowPropertyForm}>
-              <DialogTrigger asChild>
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                  disabled={subscription ? !subscription.can_add_property : false}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Property
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-2">
+              <Dialog open={showEblocDiscover} onOpenChange={setShowEblocDiscover}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Import from E-Bloc
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-slate-100">Import Properties from E-Bloc.ro</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-400">
+                      Connect your e-bloc.ro account to discover and import properties. This will also import outstanding balances and payment receipts.
+                    </p>
+                    {error && eblocDiscoveredProperties.length === 0 && (
+                      <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+                        {error}
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-slate-300">E-Bloc Username</Label>
+                      <Input
+                        value={eblocForm.username}
+                        onChange={(e) => setEblocForm({ ...eblocForm, username: e.target.value })}
+                        className="bg-slate-700 border-slate-600 text-slate-100"
+                        placeholder="your-email@example.com"
+                        disabled={eblocDiscovering || eblocImporting}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-slate-300">E-Bloc Password</Label>
+                      <Input
+                        type="password"
+                        value={eblocForm.password}
+                        onChange={(e) => setEblocForm({ ...eblocForm, password: e.target.value })}
+                        className="bg-slate-700 border-slate-600 text-slate-100"
+                        disabled={eblocDiscovering || eblocImporting}
+                      />
+                    </div>
+                    {eblocDiscoveredProperties.length === 0 ? (
+                      <Button 
+                        onClick={handleDiscoverEbloc} 
+                        className="w-full bg-emerald-600 hover:bg-emerald-700"
+                        disabled={eblocDiscovering || !eblocForm.username || !eblocForm.password}
+                      >
+                        {eblocDiscovering ? (
+                          <>
+                            <Spinner className="w-4 h-4 mr-2" />
+                            Discovering...
+                          </>
+                        ) : (
+                          'Discover Properties'
+                        )}
+                      </Button>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-slate-300">Select Property to Import</Label>
+                          <Select
+                            value={eblocForm.selectedPropertyId}
+                            onValueChange={(v) => {
+                              console.log('[E-Bloc] Property selected:', v);
+                              setEblocForm({ ...eblocForm, selectedPropertyId: v });
+                            }}
+                            disabled={eblocImporting}
+                          >
+                            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                              <SelectValue placeholder="Select property" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-700 border-slate-600">
+                              {eblocDiscoveredProperties.map((prop) => (
+                                <SelectItem key={prop.page_id} value={prop.page_id}>
+                                  {prop.name} - {prop.address}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleConfigureEbloc()}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                            disabled={eblocImporting || !eblocForm.selectedPropertyId}
+                          >
+                            {eblocImporting ? (
+                              <>
+                                <Spinner className="w-4 h-4 mr-2" />
+                                Importing...
+                              </>
+                            ) : (
+                              'Import Selected'
+                            )}
+                          </Button>
+                          {eblocDiscoveredProperties.length > 1 && (
+                            <Button
+                              onClick={handleImportEblocProperties}
+                              variant="outline"
+                              className="flex-1 border-slate-600 text-slate-300"
+                              disabled={eblocImporting}
+                            >
+                              {eblocImporting ? (
+                                <>
+                                  <Spinner className="w-4 h-4 mr-2" />
+                                  Importing...
+                                </>
+                              ) : (
+                                `Import All (${eblocDiscoveredProperties.length})`
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={showPropertyForm} onOpenChange={setShowPropertyForm}>
+                <DialogTrigger asChild>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    disabled={subscription ? !subscription.can_add_property : false}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Property
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="bg-slate-800 border-slate-700">
                 <DialogHeader>
                   <DialogTitle className="text-slate-100">Add Property</DialogTitle>
@@ -240,6 +509,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                 </div>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           {loading ? (
@@ -262,36 +532,36 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                     <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
-                          E-Bloc
+                          Sync E-Bloc
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-slate-800 border-slate-700">
                         <DialogHeader>
-                          <DialogTitle className="text-slate-100">Configure E-Bloc.ro</DialogTitle>
+                          <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
                           <p className="text-sm text-slate-400">
-                            Connect your e-bloc.ro account to automatically import building expense bills.
+                            Sync outstanding balances and payment receipts from your e-bloc.ro account.
                           </p>
-                          <div>
-                            <Label className="text-slate-300">E-Bloc Username</Label>
-                            <Input
-                              value={eblocForm.username}
-                              onChange={(e) => setEblocForm({ ...eblocForm, username: e.target.value })}
-                              className="bg-slate-700 border-slate-600 text-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-slate-300">E-Bloc Password</Label>
-                            <Input
-                              type="password"
-                              value={eblocForm.password}
-                              onChange={(e) => setEblocForm({ ...eblocForm, password: e.target.value })}
-                              className="bg-slate-700 border-slate-600 text-slate-100"
-                            />
-                          </div>
-                          <Button onClick={() => handleConfigureEbloc(property.id)} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                            Connect E-Bloc
+                          <Button
+                            onClick={async () => {
+                              if (!token) return;
+                              try {
+                                const result = await api.ebloc.sync(token, property.id);
+                                setShowEblocConfig(null);
+                                loadData();
+                                if (result.bills_created > 0 || result.payments_created > 0) {
+                                  setError('');
+                                  // Show success message
+                                  alert(`Synced successfully! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
+                                }
+                              } catch (err) {
+                                handleError(err);
+                              }
+                            }}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700"
+                          >
+                            Sync Now
                           </Button>
                         </div>
                       </DialogContent>

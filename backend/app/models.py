@@ -270,7 +270,7 @@ class EmailConfigCreate(BaseModel):
 
 
 class EblocConfigCreate(BaseModel):
-    property_id: str
+    property_id: Optional[str] = None
     username: str
     password: str
     ebloc_page_id: Optional[str] = None
