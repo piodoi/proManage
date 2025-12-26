@@ -799,6 +799,7 @@ class EblocScraper:
         """Navigate to Datorii (Debts) page (page=11). Cookies handle apartment selection.
         Returns (success, url_used, soup) so caller can use the parsed HTML directly."""
         import logging
+        import os
         logger = logging.getLogger(__name__)
         
         try:
@@ -810,6 +811,14 @@ class EblocScraper:
             logger.info(f"[E-Bloc Scraper] Navigated to Datorii page, status: {response.status_code}")
             
             if response.status_code == 200:
+                # Save HTML for debugging (similar to login page)
+                debug_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug_html")
+                os.makedirs(debug_dir, exist_ok=True)
+                debug_file = os.path.join(debug_dir, "datorii_response.html")
+                with open(debug_file, "w", encoding="utf-8") as f:
+                    f.write(response.text)
+                logger.info(f"[E-Bloc Scraper] Saved Datorii page HTML to {debug_file}")
+                
                 soup = BeautifulSoup(response.text, "html.parser")
                 return (True, url, soup)
             else:
@@ -818,18 +827,20 @@ class EblocScraper:
             logger.error(f"[E-Bloc Scraper] Error navigating to Datorii: {e}", exc_info=True)
             return (False, url if 'url' in locals() else "", None)
 
-    async def get_balance(self, property_name: Optional[str] = None, association_id: Optional[str] = None, page_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None) -> Optional[EblocBalance]:
-        """Get outstanding balance information from Datorii page"""
+    async def ensure_cookies_and_navigate(self, property_name: Optional[str] = None, association_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None) -> tuple[Optional[str], Optional[BeautifulSoup]]:
+        """Ensure cookies are set and navigate to Datorii page. Returns (association_id, soup)."""
         import logging
         logger = logging.getLogger(__name__)
         
         if not self.logged_in:
-            return None
+            return None, None
         
         try:
+            matched_asoc_id = None
+            
             # If association_id is provided, use it directly
             if association_id:
-                page_id = association_id
+                matched_asoc_id = association_id
                 # Set cookies if we have apartment_id (only if not already set correctly)
                 if apartment_id:
                     current_asoc = self.client.cookies.get("asoc-cur")
@@ -848,58 +859,66 @@ class EblocScraper:
                 selected_page_id, apt_idx = await self.select_property_by_name(property_name, association_id=association_id, apartment_index=apartment_index, apartment_id=apartment_id)
                 if not selected_page_id:
                     logger.warning(f"[E-Bloc Scraper] Could not select property '{property_name}'")
-                    return None
-                page_id = selected_page_id
+                    return None, None
+                matched_asoc_id = selected_page_id
                 if apartment_index is None:
                     apartment_index = apt_idx
-                logger.info(f"[E-Bloc Scraper] Selected property '{property_name}' with association {page_id}, apartment_index: {apartment_index}")
+                logger.info(f"[E-Bloc Scraper] Selected property '{property_name}' with association {matched_asoc_id}, apartment_index: {apartment_index}")
             
             # Navigate to Datorii page with apartment selection (cookies handle it)
-            success, datorii_url, soup = await self.navigate_to_datorii(page_id or "", apartment_index)
+            success, datorii_url, soup = await self.navigate_to_datorii(matched_asoc_id or "", apartment_index)
             if not success or soup is None:
                 logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page or parse HTML")
-                return None
+                return None, None
             
-            # Look for "Datoria curentă" or "Suma de plată" text
+            return matched_asoc_id, soup
+        except Exception as e:
+            logger.error(f"[E-Bloc Scraper] Error ensuring cookies and navigating: {e}", exc_info=True)
+            return None, None
+
+    async def get_balance(self, property_name: Optional[str] = None, association_id: Optional[str] = None, page_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None, soup: Optional[BeautifulSoup] = None) -> Optional[EblocBalance]:
+        """Get outstanding balance information from Datorii page"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not self.logged_in:
+            return None
+        
+        try:
+            # If soup is not provided, navigate to Datorii page
+            if soup is None:
+                matched_asoc_id, soup = await self.ensure_cookies_and_navigate(property_name, association_id, apartment_index, apartment_id)
+                if soup is None:
+                    return None
+            
+            # Look for outstanding debt using the total_plata attribute on the table
             outstanding_debt = 0.0
-            debt_text = None
             
-            # Search for "Suma de plată" - try multiple approaches
-            # Approach 1: Find text node containing "Suma de plată"
-            suma_text = soup.find(string=re.compile(r'Suma de plată', re.I))
-            if suma_text:
-                # Get parent element and search for amount nearby
-                parent = suma_text.find_parent()
-                if parent:
-                    # Get text from parent and siblings
-                    text = parent.get_text()
-                    # Also check next siblings
-                    next_sibling = parent.find_next_sibling()
-                    if next_sibling:
-                        text += " " + next_sibling.get_text()
-                    
-                    # Extract amount: "Suma de plată 442,38 Lei" or "Suma de plată: 442,38"
-                    amount_match = re.search(r'Suma de plată[:\s]+(\d+[.,]\d+|\d+)\s*(?:Lei|RON)?', text, re.I)
+            # Find the table with class "plateste_tabel_datorii_curente" which has total_plata attribute
+            debt_table = soup.find("table", class_="plateste_tabel_datorii_curente")
+            if debt_table:
+                total_plata = debt_table.get("total_plata")
+                if total_plata:
+                    # total_plata is in bani (cents), so divide by 100 to get Lei
+                    outstanding_debt = float(total_plata) / 100.0
+                    logger.info(f"[E-Bloc Scraper] Found outstanding debt from total_plata: {outstanding_debt} Lei (raw: {total_plata} bani)")
+                else:
+                    logger.warning("[E-Bloc Scraper] Table found but no total_plata attribute")
+            else:
+                # Fallback: try to find the span with class "plateste_suma_datorata_titlu"
+                suma_span = soup.find("span", class_="plateste_suma_datorata_titlu")
+                if suma_span:
+                    text = suma_span.get_text(strip=True)
+                    # Extract amount: "442,38 Lei"
+                    amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:Lei|RON)?', text, re.I)
                     if amount_match:
                         debt_text = amount_match.group(1).replace(',', '.')
                         outstanding_debt = float(debt_text)
-                        logger.info(f"[E-Bloc Scraper] Found outstanding debt: {outstanding_debt}")
+                        logger.info(f"[E-Bloc Scraper] Found outstanding debt from span: {outstanding_debt} Lei")
                     else:
-                        # Try searching in a wider context
-                        logger.debug(f"[E-Bloc Scraper] Could not extract amount from: {text[:200]}")
-            
-            # Approach 2: Search for amount patterns near "Suma de plată" in the entire page
-            if outstanding_debt == 0.0:
-                page_text = soup.get_text()
-                # Look for "Suma de plată" followed by numbers within 50 characters
-                suma_pattern = re.search(r'Suma de plată[:\s]+([^\n]{0,50})', page_text, re.I)
-                if suma_pattern:
-                    context = suma_pattern.group(1)
-                    amount_match = re.search(r'(\d+[.,]\d+|\d+)', context)
-                    if amount_match:
-                        debt_text = amount_match.group(1).replace(',', '.')
-                        outstanding_debt = float(debt_text)
-                        logger.info(f"[E-Bloc Scraper] Found outstanding debt (approach 2): {outstanding_debt}")
+                        logger.warning(f"[E-Bloc Scraper] Could not extract amount from suma span: {text}")
+                else:
+                    logger.warning("[E-Bloc Scraper] Could not find debt table or suma span")
             
             # Look for apartment number in "Datoria curentă - Ap. 53"
             apartment_match = None
@@ -963,7 +982,7 @@ class EblocScraper:
             logger.error(f"[E-Bloc Scraper] Error getting balance: {e}", exc_info=True)
             return None
 
-    async def get_payments(self, property_name: Optional[str] = None, association_id: Optional[str] = None, page_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None) -> List[EblocPayment]:
+    async def get_payments(self, property_name: Optional[str] = None, association_id: Optional[str] = None, page_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None, soup: Optional[BeautifulSoup] = None) -> List[EblocPayment]:
         """Get payment receipts (chitante) from Datorii page"""
         import logging
         logger = logging.getLogger(__name__)
@@ -972,84 +991,87 @@ class EblocScraper:
             return []
         
         try:
-            # If association_id is provided, use it directly
-            if association_id:
-                page_id = association_id
-                # Set cookies if we have apartment_id (only if not already set)
-                if apartment_id:
-                    # Check if cookies are already set (they might have been set by get_balance)
-                    current_asoc = self.client.cookies.get("asoc-cur")
-                    if current_asoc != association_id:
-                        self.set_apartment_cookies(association_id, apartment_id)
-                        # Navigate to association page to ensure cookies are sent
-                        asoc_url = f"{self.LOGIN_URL}?page={association_id}&t={int(datetime.now().timestamp())}"
-                        await self.client.get(asoc_url)
-                        logger.info(f"[E-Bloc Scraper] Set cookies for association {association_id}, apartment_id: {apartment_id}")
-            # If property_name is provided, select it first
-            elif property_name:
-                selected_page_id, apt_idx = await self.select_property_by_name(property_name, association_id=association_id, apartment_index=apartment_index, apartment_id=apartment_id)
-                if not selected_page_id:
-                    logger.warning(f"[E-Bloc Scraper] Could not select property '{property_name}'")
+            # If soup is not provided, navigate to Datorii page
+            if soup is None:
+                matched_asoc_id, soup = await self.ensure_cookies_and_navigate(property_name, association_id, apartment_index, apartment_id)
+                if soup is None:
                     return []
-                page_id = selected_page_id
-                if apartment_index is None:
-                    apartment_index = apt_idx
-                logger.info(f"[E-Bloc Scraper] Selected property '{property_name}' with association {page_id}, apartment_index: {apartment_index}")
-            
-            # Navigate to Datorii page with apartment selection (cookies handle it)
-            success, datorii_url, soup = await self.navigate_to_datorii(page_id or "", apartment_index)
-            if not success or soup is None:
-                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page or parse HTML")
-                return []
             payments = []
             
-            # Look for "Istoricul plăţilor" section
-            payment_history_text = soup.find(string=re.compile(r'Istoricul plăţilor', re.I))
-            if not payment_history_text:
-                logger.warning("[E-Bloc Scraper] Could not find payment history section")
+            # Find the payment history table with class "plateste_tabel_istoric_plati"
+            payment_table = soup.find("table", class_="plateste_tabel_istoric_plati")
+            if not payment_table:
+                logger.warning("[E-Bloc Scraper] Could not find payment history table")
                 return []
             
-            # Get the parent container of the payment history
-            parent = payment_history_text.find_parent()
-            if not parent:
-                return []
+            # Find all payment rows (rows with class "plateste_line_nolink" that contain "Ordin de plată")
+            payment_rows = payment_table.find_all("tr", class_="plateste_line_nolink")
             
-            # Extract all payment entries from the text
-            # Format: "Ordin de plată 312,28 Lei\nNumărul: 1826641348291,24 Întreţinere Oct 25\nData: 15 Decembrie 2025"
-            text = parent.get_text()
-            
-            # Split by "Ordin de plată" to get individual payments
-            payment_blocks = re.split(r'Ordin de plată', text, flags=re.I)
-            
-            for block in payment_blocks[1:]:  # Skip first empty block
-                # Extract amount: "312,28 Lei"
-                amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:Lei|RON)', block, re.I)
+            for row in payment_rows:
+                # Check if this row contains "Ordin de plată" (skip the "Afişează toate chitanţele" row)
+                row_text = row.get_text()
+                if "Ordin de plată" not in row_text:
+                    continue
+                
+                # Extract amount from span with class "plateste_titlu" that has float: right
+                amount_span = row.find("span", class_="plateste_titlu", style=re.compile(r"float:\s*right"))
+                if not amount_span:
+                    continue
+                
+                amount_text = amount_span.get_text(strip=True)
+                amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:Lei|RON)?', amount_text, re.I)
                 if not amount_match:
                     continue
                 
                 amount = float(amount_match.group(1).replace(',', '.'))
                 
-                # Extract receipt number: "Numărul: 1826641348291,24"
-                receipt_match = re.search(r'Numărul:\s*(\d+[.,]?\d*)', block, re.I)
-                receipt_number = receipt_match.group(1).replace(',', '').replace('.', '') if receipt_match else ""
+                # Extract receipt number from span with class "plateste_descriere" containing "Numărul:"
+                receipt_span = row.find("span", class_="plateste_descriere")
+                receipt_number = ""
+                if receipt_span:
+                    # Look for <b> tag inside the span
+                    receipt_b = receipt_span.find("b")
+                    if receipt_b:
+                        receipt_number = receipt_b.get_text(strip=True)
+                    else:
+                        # Fallback: extract from text
+                        receipt_text = receipt_span.get_text()
+                        receipt_match = re.search(r'Numărul:\s*(\d+)', receipt_text, re.I)
+                        if receipt_match:
+                            receipt_number = receipt_match.group(1)
                 
-                # Extract date: "Data: 15 Decembrie 2025"
-                date_match = re.search(r'Data:\s*(\d{1,2})\s+(\w+)\s+(\d{4})', block, re.I)
+                # Extract date from span with class "plateste_data" containing "Data:"
+                # Find the span that contains "Data:" (it should have clear: left style)
+                date_spans = row.find_all("span", class_="plateste_data")
                 payment_date = None
-                if date_match:
-                    day, month_str, year = date_match.groups()
-                    try:
-                        # Convert Romanian month names to numbers
-                        month_map = {
-                            'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
-                            'mai': 5, 'iunie': 6, 'iulie': 7, 'august': 8,
-                            'septembrie': 9, 'octombrie': 10, 'noiembrie': 11, 'decembrie': 12
-                        }
-                        month = month_map.get(month_str.lower(), int(month_str) if month_str.isdigit() else None)
-                        if month:
-                            payment_date = datetime(int(year), month, int(day))
-                    except (ValueError, KeyError):
-                        pass
+                for date_span in date_spans:
+                    date_text = date_span.get_text()
+                    if "Data:" in date_text:
+                        # Look for <b> tag inside the span
+                        date_b = date_span.find("b")
+                        if date_b:
+                            date_text = date_b.get_text(strip=True)
+                        else:
+                            # Extract from full text
+                            date_text = date_text.replace("Data:", "").strip()
+                        
+                        # Parse date: "23 Octombrie 2025"
+                        date_match = re.search(r'(\d{1,2})\s+(\w+)\s+(\d{4})', date_text, re.I)
+                        if date_match:
+                            day, month_str, year = date_match.groups()
+                            try:
+                                # Convert Romanian month names to numbers
+                                month_map = {
+                                    'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
+                                    'mai': 5, 'iunie': 6, 'iulie': 7, 'august': 8,
+                                    'septembrie': 9, 'octombrie': 10, 'noiembrie': 11, 'decembrie': 12
+                                }
+                                month = month_map.get(month_str.lower(), int(month_str) if month_str.isdigit() else None)
+                                if month:
+                                    payment_date = datetime(int(year), month, int(day))
+                                    break
+                            except (ValueError, KeyError) as e:
+                                logger.debug(f"[E-Bloc Scraper] Error parsing date: {e}")
                 
                 if receipt_number and payment_date and amount > 0:
                     payments.append(EblocPayment(
@@ -1057,7 +1079,7 @@ class EblocScraper:
                         payment_date=payment_date,
                         amount=amount
                     ))
-                    logger.info(f"[E-Bloc Scraper] Found payment: {receipt_number}, {payment_date}, {amount} Lei")
+                    logger.info(f"[E-Bloc Scraper] Found payment: {amount} Lei, receipt: {receipt_number}, date: {payment_date}")
             
             logger.info(f"[E-Bloc Scraper] Found {len(payments)} payments")
             return payments

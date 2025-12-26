@@ -30,13 +30,33 @@ from app.routes import auth_router
 load_dotenv()
 
 # Encryption key for e-bloc passwords (in production, use a secure key from env)
-EBLOC_ENCRYPTION_KEY = os.getenv("EBLOC_ENCRYPTION_KEY", Fernet.generate_key().decode())
-try:
-    fernet = Fernet(EBLOC_ENCRYPTION_KEY.encode() if isinstance(EBLOC_ENCRYPTION_KEY, str) else EBLOC_ENCRYPTION_KEY)
-except Exception:
-    # If key is invalid, generate a new one
+# Fernet keys must be 32 bytes when base64-decoded (44 characters when base64-encoded)
+EBLOC_ENCRYPTION_KEY = os.getenv("EBLOC_ENCRYPTION_KEY")
+if EBLOC_ENCRYPTION_KEY:
+    try:
+        # Validate the key format
+        decoded_key = base64.urlsafe_b64decode(EBLOC_ENCRYPTION_KEY)
+        if len(decoded_key) != 32:
+            raise ValueError(f"Invalid key length: {len(decoded_key)} bytes (expected 32)")
+        fernet = Fernet(EBLOC_ENCRYPTION_KEY.encode())
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("[E-Bloc] Using encryption key from environment")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"[E-Bloc] Invalid encryption key in environment: {e}. Generating new key.")
+        # If key is invalid, generate a new one
+        EBLOC_ENCRYPTION_KEY = Fernet.generate_key().decode()
+        fernet = Fernet(EBLOC_ENCRYPTION_KEY.encode())
+        logger.warning(f"[E-Bloc] Generated new encryption key. Save this to .env: EBLOC_ENCRYPTION_KEY={EBLOC_ENCRYPTION_KEY}")
+else:
+    # No key in environment, generate a new one
     EBLOC_ENCRYPTION_KEY = Fernet.generate_key().decode()
     fernet = Fernet(EBLOC_ENCRYPTION_KEY.encode())
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"[E-Bloc] No encryption key in environment. Generated new key. Save this to .env: EBLOC_ENCRYPTION_KEY={EBLOC_ENCRYPTION_KEY}")
 
 def encrypt_password(password: str) -> str:
     """Encrypt password for e-bloc (needs to be retrievable)"""
@@ -786,6 +806,8 @@ async def get_ebloc_config(current_user: TokenData = Depends(require_landlord)):
 @app.post("/ebloc/sync/{property_id}")
 async def sync_ebloc(property_id: str, association_id: Optional[str] = Query(None), current_user: TokenData = Depends(require_landlord)):
     from app.ebloc_scraper import EblocScraper
+    import logging
+    logger = logging.getLogger(__name__)
     
     prop = db.get_property(property_id)
     if not prop:
@@ -805,8 +827,6 @@ async def sync_ebloc(property_id: str, association_id: Optional[str] = Query(Non
     try:
         password = decrypt_password(user.ebloc_password_hash)
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"[E-Bloc] Error decrypting password: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error decrypting E-bloc password. Please reconfigure your credentials.")
     
@@ -846,29 +866,46 @@ async def sync_ebloc(property_id: str, association_id: Optional[str] = Query(Non
         selected_apartment_index = selected_match.get("apartment_index")
         selected_apartment_id = selected_match.get("apartment_id")  # id_ap from gInfoAp for cookie
         
-        balance = await scraper.get_balance(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id)
-        payments = await scraper.get_payments(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id)
+        # Navigate to Datorii page once and get the soup
+        matched_asoc_id, soup = await scraper.ensure_cookies_and_navigate(
+            property_name=prop.name, 
+            association_id=selected_association_id, 
+            apartment_index=selected_apartment_index, 
+            apartment_id=selected_apartment_id
+        )
         
-        # Get or create a unit for this property (or use first unit)
-        # Create bills from outstanding balance
+        if soup is None:
+            raise HTTPException(status_code=500, detail="Could not navigate to Datorii page")
+        
+        # Use the same soup for both balance and payments to avoid duplicate navigation
+        balance = await scraper.get_balance(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id, soup=soup)
+        payments = await scraper.get_payments(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id, soup=soup)
+        
+        # Create/update E-Bloc bill from outstanding balance
+        # There can only be one E-Bloc bill per property
         bills_created = []
         if balance and balance.outstanding_debt > 0:
-            # Check if bill already exists
+            # Find and delete any existing E-Bloc bills for this property
             existing_bills = db.list_bills(property_id=property_id)
-            existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.status == BillStatus.PENDING and b.renter_id is None]
+            existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.renter_id is None]
             
-            if not existing_ebloc_bills or sum(b.amount for b in existing_ebloc_bills) < balance.outstanding_debt:
-                bill = Bill(
-                    property_id=property_id,
-                    renter_id=None,  # Applies to all renters in the property
-                    bill_type=BillType.EBLOC,
-                    description=f"E-bloc outstanding balance - {balance.oldest_debt_month or 'Current'}",
-                    amount=balance.outstanding_debt,
-                    due_date=balance.last_payment_date or datetime.utcnow(),
-                    status=BillStatus.OVERDUE if balance.outstanding_debt > 0 else BillStatus.PENDING
-                )
-                db.save_bill(bill)
-                bills_created.append(bill.id)
+            for existing_bill in existing_ebloc_bills:
+                db.delete_bill(existing_bill.id)
+                logger.info(f"[E-Bloc] Deleted existing E-Bloc bill {existing_bill.id} for property {property_id}")
+            
+            # Create a new E-Bloc bill with current outstanding debt
+            bill = Bill(
+                property_id=property_id,
+                renter_id=None,  # Applies to all renters in the property
+                bill_type=BillType.EBLOC,
+                description="E-Bloc",  # Simple description as requested
+                amount=balance.outstanding_debt,
+                due_date=balance.last_payment_date or datetime.utcnow(),
+                status=BillStatus.OVERDUE if balance.outstanding_debt > 0 else BillStatus.PENDING
+            )
+            db.save_bill(bill)
+            bills_created.append(bill.id)
+            logger.info(f"[E-Bloc] Created E-Bloc bill {bill.id} for property {property_id} with amount {balance.outstanding_debt} Lei")
         
         # Create payment records from receipts
         payments_created = []
