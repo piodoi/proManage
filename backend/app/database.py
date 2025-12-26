@@ -5,8 +5,8 @@ from sqlalchemy.pool import QueuePool
 from pydantic import BaseModel
 
 from app.models import (
-    User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig,
-    AddressMapping, ExtractionPattern, UserRole
+    User, Property, Unit, Renter, Bill, Payment, EmailConfig,
+    ExtractionPattern, UserRole
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -84,22 +84,6 @@ email_configs_table = Table(
     Column("data", Text, nullable=False),
 )
 
-ebloc_configs_table = Table(
-    "ebloc_configs", metadata,
-    Column("id", String(36), primary_key=True),
-    Column("landlord_id", String(36), index=True),
-    Column("property_id", String(36), index=True),
-    Column("data", Text, nullable=False),
-)
-
-address_mappings_table = Table(
-    "address_mappings", metadata,
-    Column("id", String(36), primary_key=True),
-    Column("landlord_id", String(36), index=True),
-    Column("property_id", String(36), index=True),
-    Column("normalized_address", String(500), index=True),
-    Column("data", Text, nullable=False),
-)
 
 extraction_patterns_table = Table(
     "extraction_patterns", metadata,
@@ -454,120 +438,6 @@ class Database:
         with engine.connect() as conn:
             result = conn.execute(
                 email_configs_table.delete().where(email_configs_table.c.id == config_id)
-            )
-            conn.commit()
-            return result.rowcount > 0
-
-    def get_ebloc_config(self, config_id: str) -> Optional[EblocConfig]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                ebloc_configs_table.select().where(ebloc_configs_table.c.id == config_id)
-            ).fetchone()
-            return _deserialize(EblocConfig, result.data) if result else None
-
-    def get_ebloc_config_by_property(self, landlord_id: str, property_id: str) -> Optional[EblocConfig]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                ebloc_configs_table.select().where(
-                    (ebloc_configs_table.c.landlord_id == landlord_id) &
-                    (ebloc_configs_table.c.property_id == property_id)
-                )
-            ).fetchone()
-            return _deserialize(EblocConfig, result.data) if result else None
-
-    def list_ebloc_configs(self, landlord_id: Optional[str] = None) -> list[EblocConfig]:
-        with engine.connect() as conn:
-            if landlord_id:
-                results = conn.execute(
-                    ebloc_configs_table.select().where(ebloc_configs_table.c.landlord_id == landlord_id)
-                ).fetchall()
-            else:
-                results = conn.execute(ebloc_configs_table.select()).fetchall()
-            return [_deserialize(EblocConfig, r.data) for r in results]
-
-    def save_ebloc_config(self, config: EblocConfig) -> EblocConfig:
-        with engine.connect() as conn:
-            existing = conn.execute(
-                ebloc_configs_table.select().where(ebloc_configs_table.c.id == config.id)
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    ebloc_configs_table.update().where(ebloc_configs_table.c.id == config.id).values(
-                        landlord_id=config.landlord_id, property_id=config.property_id, data=_serialize(config)
-                    )
-                )
-            else:
-                conn.execute(
-                    ebloc_configs_table.insert().values(
-                        id=config.id, landlord_id=config.landlord_id,
-                        property_id=config.property_id, data=_serialize(config)
-                    )
-                )
-            conn.commit()
-        return config
-
-    def delete_ebloc_config(self, config_id: str) -> bool:
-        with engine.connect() as conn:
-            result = conn.execute(
-                ebloc_configs_table.delete().where(ebloc_configs_table.c.id == config_id)
-            )
-            conn.commit()
-            return result.rowcount > 0
-
-    def get_address_mapping(self, mapping_id: str) -> Optional[AddressMapping]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                address_mappings_table.select().where(address_mappings_table.c.id == mapping_id)
-            ).fetchone()
-            return _deserialize(AddressMapping, result.data) if result else None
-
-    def list_address_mappings(self, landlord_id: Optional[str] = None) -> list[AddressMapping]:
-        with engine.connect() as conn:
-            if landlord_id:
-                results = conn.execute(
-                    address_mappings_table.select().where(address_mappings_table.c.landlord_id == landlord_id)
-                ).fetchall()
-            else:
-                results = conn.execute(address_mappings_table.select()).fetchall()
-            return [_deserialize(AddressMapping, r.data) for r in results]
-
-    def find_address_mapping(self, landlord_id: str, normalized_address: str) -> Optional[AddressMapping]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                address_mappings_table.select().where(
-                    (address_mappings_table.c.landlord_id == landlord_id) &
-                    (address_mappings_table.c.normalized_address == normalized_address)
-                )
-            ).fetchone()
-            return _deserialize(AddressMapping, result.data) if result else None
-
-    def save_address_mapping(self, mapping: AddressMapping) -> AddressMapping:
-        with engine.connect() as conn:
-            existing = conn.execute(
-                address_mappings_table.select().where(address_mappings_table.c.id == mapping.id)
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    address_mappings_table.update().where(address_mappings_table.c.id == mapping.id).values(
-                        landlord_id=mapping.landlord_id, property_id=mapping.property_id,
-                        normalized_address=mapping.normalized_address, data=_serialize(mapping)
-                    )
-                )
-            else:
-                conn.execute(
-                    address_mappings_table.insert().values(
-                        id=mapping.id, landlord_id=mapping.landlord_id,
-                        property_id=mapping.property_id, normalized_address=mapping.normalized_address,
-                        data=_serialize(mapping)
-                    )
-                )
-            conn.commit()
-        return mapping
-
-    def delete_address_mapping(self, mapping_id: str) -> bool:
-        with engine.connect() as conn:
-            result = conn.execute(
-                address_mappings_table.delete().where(address_mappings_table.c.id == mapping_id)
             )
             conn.commit()
             return result.rowcount > 0

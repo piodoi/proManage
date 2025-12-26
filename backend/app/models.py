@@ -71,6 +71,8 @@ class User(BaseModel):
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE  # Deprecated, use subscription_tier
     subscription_tier: int = 0  # 0 = off, 1 = on (reserved for future tiers)
     subscription_expires: Optional[datetime] = None
+    ebloc_username: Optional[str] = None  # E-bloc login credentials (one per user)
+    ebloc_password_hash: Optional[str] = None  # Encrypted password for E-bloc
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -136,24 +138,8 @@ class EmailConfig(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class EblocConfig(BaseModel):
-    id: str = Field(default_factory=gen_id)
-    landlord_id: str
-    property_id: str
-    username: str
-    password_hash: str
-    ebloc_page_id: Optional[str] = None
-    ebloc_url: Optional[str] = None  # URL to the e-bloc property page
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class AddressMapping(BaseModel):
-    id: str = Field(default_factory=gen_id)
-    landlord_id: str
-    property_id: str
-    extracted_address: str
-    normalized_address: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ExtractionPattern(BaseModel):
@@ -287,19 +273,10 @@ class EmailConfigCreate(BaseModel):
 
 
 class EblocConfigCreate(BaseModel):
-    property_id: Optional[str] = None
     username: str
     password: str
-    ebloc_page_id: Optional[str] = None
-    # For instant import - pass property data directly
-    ebloc_property_name: Optional[str] = None
-    ebloc_property_address: Optional[str] = None
-    ebloc_property_url: Optional[str] = None
 
 
-class AddressMappingCreate(BaseModel):
-    property_id: str
-    extracted_address: str
 
 
 class TokenData(BaseModel):

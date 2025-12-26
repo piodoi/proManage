@@ -404,39 +404,25 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     }
   };
 
-  const handleConfigureEbloc = async (propertyId?: string) => {
+  const handleConfigureEbloc = async () => {
     if (!token) {
       console.error('[E-Bloc] No token available');
       return;
     }
     
-    const eblocPageId = eblocForm.selectedPropertyId;
-    if (!eblocPageId) {
-      console.error('[E-Bloc] No e-bloc property selected');
-      setError('Please select a property to import');
+    if (!eblocForm.username || !eblocForm.password) {
+      setError('Please enter both username and password');
       return;
     }
     
-    // Find the selected property data
-    const selectedProperty = eblocDiscoveredProperties.find(p => p.page_id === eblocPageId);
-    if (!selectedProperty) {
-      setError('Selected property not found');
-      return;
-    }
-    
-    console.log('[E-Bloc] Configuring/importing property (instant)...', { propertyId, eblocPageId, selectedProperty });
+    console.log('[E-Bloc] Configuring credentials...');
     setEblocImporting(true);
     setError('');
     
     try {
       const result = await api.ebloc.configure(token, {
-        property_id: propertyId || undefined,
         username: eblocForm.username,
         password: eblocForm.password,
-        ebloc_page_id: eblocPageId,
-        ebloc_property_name: selectedProperty.name,
-        ebloc_property_address: selectedProperty.address,
-        ebloc_property_url: selectedProperty.url
       });
       
       console.log('[E-Bloc] Configure result:', result);
@@ -445,11 +431,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       setShowEblocDiscover(false);
       setEblocForm({ username: '', password: '', selectedPropertyId: '' });
       setEblocDiscoveredProperties([]);
-      
-      // Reload data to show new property if one was created
-      console.log('[E-Bloc] Reloading data...');
-      await loadData();
-      console.log('[E-Bloc] Data reloaded successfully');
+      setError('');
     } catch (err) {
       console.error('[E-Bloc] Configure error:', err);
       handleError(err);
@@ -468,29 +450,26 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       return;
     }
     
-    console.log(`[E-Bloc] Importing ${eblocDiscoveredProperties.length} properties (instant)...`);
+    console.log(`[E-Bloc] Creating ${eblocDiscoveredProperties.length} properties...`);
     setEblocImporting(true);
     setError('');
     
     try {
-      // Import all discovered properties using instant import
+      // Create properties from discovered e-bloc properties
       for (let i = 0; i < eblocDiscoveredProperties.length; i++) {
         const eblocProp = eblocDiscoveredProperties[i];
-        console.log(`[E-Bloc] Importing property ${i + 1}/${eblocDiscoveredProperties.length}:`, eblocProp);
+        console.log(`[E-Bloc] Creating property ${i + 1}/${eblocDiscoveredProperties.length}:`, eblocProp);
         
-        const result = await api.ebloc.configure(token, {
-          username: eblocForm.username,
-          password: eblocForm.password,
-          ebloc_page_id: eblocProp.page_id,
-          ebloc_property_name: eblocProp.name,
-          ebloc_property_address: eblocProp.address,
-          ebloc_property_url: eblocProp.url
+        // Create property directly
+        await api.properties.create(token, {
+          name: eblocProp.name,
+          address: eblocProp.address || eblocProp.name,
         });
         
-        console.log(`[E-Bloc] Property ${i + 1} imported:`, result);
+        console.log(`[E-Bloc] Property ${i + 1} created`);
       }
       
-      console.log('[E-Bloc] All properties imported, reloading data...');
+      console.log('[E-Bloc] All properties created, reloading data...');
       setShowEblocDiscover(false);
       setEblocForm({ username: '', password: '', selectedPropertyId: '' });
       setEblocDiscoveredProperties([]);

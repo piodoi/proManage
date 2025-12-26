@@ -10,13 +10,13 @@ import base64
 import bcrypt
 
 from app.models import (
-    User, Property, Unit, Renter, Bill, Payment, EmailConfig, EblocConfig, AddressMapping,
+    User, Property, Unit, Renter, Bill, Payment, EmailConfig,
     ExtractionPattern,
     UserRole, BillStatus, BillType, PaymentMethod, PaymentStatus,
     SubscriptionStatus,
     UserCreate, UserUpdate, PropertyCreate, PropertyUpdate, UnitCreate, UnitUpdate,
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
-    EmailConfigCreate, EblocConfigCreate, AddressMappingCreate, TokenData,
+    EmailConfigCreate, EblocConfigCreate, TokenData,
     ExtractionPatternCreate, ExtractionPatternUpdate,
 )
 from app.auth import (
@@ -694,147 +694,92 @@ async def configure_ebloc(
     
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"[E-Bloc] Configure request from user {current_user.user_id}, property_id: {data.property_id}, ebloc_page_id: {data.ebloc_page_id}")
+    logger.info(f"[E-Bloc] Configure request from user {current_user.user_id}")
     
-    # If property_id is not provided, we'll create properties from e-bloc
-    if not data.property_id and data.ebloc_page_id:
-        logger.info(f"[E-Bloc] Creating new property from e-bloc page_id: {data.ebloc_page_id}")
-        
-        # Use provided property data directly (instant import) or fall back to scraping
-        if data.ebloc_property_name and data.ebloc_property_address:
-            logger.info(f"[E-Bloc] Using provided property data (instant import): {data.ebloc_property_name}")
-            prop = Property(
-                landlord_id=current_user.user_id,
-                name=data.ebloc_property_name,
-                address=data.ebloc_property_address
-            )
-            db.save_property(prop)
-            property_id = prop.id
-            logger.info(f"[E-Bloc] Property created with id: {property_id}")
-        else:
-            # Fallback: scrape if data not provided
-            logger.info("[E-Bloc] Property data not provided, falling back to scraping...")
-            scraper = EblocScraper()
-            try:
-                logged_in = await scraper.login(data.username, data.password)
-                if not logged_in:
-                    logger.warning("[E-Bloc] Login failed during property creation")
-                    raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
-                
-                properties = await scraper.get_available_properties()
-                logger.info(f"[E-Bloc] Found {len(properties)} properties, looking for page_id: {data.ebloc_page_id}")
-                ebloc_prop = next((p for p in properties if p.page_id == data.ebloc_page_id), None)
-                if not ebloc_prop:
-                    logger.warning(f"[E-Bloc] Property with page_id {data.ebloc_page_id} not found")
-                    raise HTTPException(status_code=404, detail="E-bloc property not found")
-                
-                logger.info(f"[E-Bloc] Creating property: {ebloc_prop.name} at {ebloc_prop.address}")
-                prop = Property(
-                    landlord_id=current_user.user_id,
-                    name=ebloc_prop.name,
-                    address=ebloc_prop.address or ebloc_prop.name
-                )
-                db.save_property(prop)
-                property_id = prop.id
-                logger.info(f"[E-Bloc] Property created with id: {property_id}")
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"[E-Bloc] Error creating property: {str(e)}", exc_info=True)
-                raise HTTPException(status_code=500, detail=f"Error creating property: {str(e)}")
-            finally:
-                await scraper.close()
-        
-        # Create default "Main" unit so renters can be added immediately
-        from app.models import Unit
-        default_unit = Unit(
-            property_id=property_id,
-            unit_number="Main"
-        )
-        db.save_unit(default_unit)
-        logger.info(f"[E-Bloc] Created default 'Main' unit for property {property_id}")
-    else:
-        property_id = data.property_id
-        logger.info(f"[E-Bloc] Using existing property_id: {property_id}")
+    # Verify credentials by attempting login
+    scraper = EblocScraper()
+    try:
+        logged_in = await scraper.login(data.username, data.password)
+        if not logged_in:
+            raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[E-Bloc] Login error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error verifying credentials: {str(e)}")
+    finally:
+        await scraper.close()
     
-    if not property_id:
-        raise HTTPException(status_code=400, detail="Property ID or ebloc_page_id required")
+    # Get user and update ebloc credentials
+    user = db.get_user(current_user.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    prop = db.get_property(property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
     # Encrypt password (not hash, since we need to retrieve it for scraping)
     password_encrypted = encrypt_password(data.password)
-    existing = db.get_ebloc_config_by_property(current_user.user_id, property_id)
-    if existing:
-        existing.username = data.username
-        existing.password_hash = password_encrypted  # Actually encrypted, not hashed
-        existing.ebloc_page_id = data.ebloc_page_id
-        if data.ebloc_property_url:
-            existing.ebloc_url = data.ebloc_property_url
-        db.save_ebloc_config(existing)
-        return {"status": "updated", "config_id": existing.id, "property_id": property_id}
-    config = EblocConfig(
-        landlord_id=current_user.user_id,
-        property_id=property_id,
-        username=data.username,
-        password_hash=password_encrypted,  # Actually encrypted, not hashed
-        ebloc_page_id=data.ebloc_page_id,
-        ebloc_url=data.ebloc_property_url,
-    )
-    db.save_ebloc_config(config)
-    return {"status": "created", "config_id": config.id, "property_id": property_id}
-
-
-@app.get("/ebloc/config/{property_id}")
-async def get_ebloc_config(property_id: str, current_user: TokenData = Depends(require_landlord)):
-    """Get e-bloc configuration for a property"""
-    prop = db.get_property(property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    user.ebloc_username = data.username
+    user.ebloc_password_hash = password_encrypted
+    db.save_user(user)
     
-    config = db.get_ebloc_config_by_property(current_user.user_id, property_id)
-    if not config:
-        raise HTTPException(status_code=404, detail="E-bloc configuration not found")
+    return {"status": "configured", "message": "E-bloc credentials saved"}
+
+
+@app.get("/ebloc/config")
+async def get_ebloc_config(current_user: TokenData = Depends(require_landlord)):
+    """Get e-bloc configuration for current user"""
+    user = db.get_user(current_user.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not user.ebloc_username:
+        raise HTTPException(status_code=404, detail="E-bloc not configured")
     
     return {
-        "id": config.id,
-        "property_id": config.property_id,
-        "ebloc_page_id": config.ebloc_page_id,
-        "ebloc_url": config.ebloc_url,
-        "username": config.username
+        "username": user.ebloc_username,
+        "configured": True,
     }
 
 
 @app.post("/ebloc/sync/{property_id}")
 async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require_landlord)):
     from app.ebloc_scraper import EblocScraper
-    import bcrypt
     
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    config = db.get_ebloc_config_by_property(current_user.user_id, property_id)
-    if not config:
-        raise HTTPException(status_code=404, detail="E-bloc not configured for this property")
+    
+    # Get user ebloc credentials
+    user = db.get_user(current_user.user_id)
+    if not user or not user.ebloc_username or not user.ebloc_password_hash:
+        raise HTTPException(status_code=404, detail="E-bloc not configured. Please configure your E-bloc credentials first.")
     
     # Decrypt password and login
-    password = decrypt_password(config.password_hash)
+    password = decrypt_password(user.ebloc_password_hash)
     scraper = EblocScraper()
     try:
-        logged_in = await scraper.login(config.username, password)
+        logged_in = await scraper.login(user.ebloc_username, password)
         if not logged_in:
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
         
-        # Get balance and payments
-        balance = await scraper.get_balance(config.ebloc_page_id)
-        payments = await scraper.get_payments(config.ebloc_page_id)
+        # Get all properties from e-bloc and match by address
+        ebloc_properties = await scraper.get_available_properties()
+        matched_property = None
+        for ebloc_prop in ebloc_properties:
+            # Match by address (case-insensitive, partial match)
+            prop_address_lower = prop.address.lower()
+            ebloc_address_lower = (ebloc_prop.address or ebloc_prop.name or "").lower()
+            if prop_address_lower in ebloc_address_lower or ebloc_address_lower in prop_address_lower:
+                matched_property = ebloc_prop
+                break
+        
+        if not matched_property:
+            raise HTTPException(status_code=404, detail=f"Could not find matching E-bloc property for address: {prop.address}")
+        
+        # Get balance and payments using matched property's page_id
+        balance = await scraper.get_balance(matched_property.page_id)
+        payments = await scraper.get_payments(matched_property.page_id)
         
         # Get or create a unit for this property (or use first unit)
         # Create bills from outstanding balance
@@ -939,61 +884,6 @@ async def subscription_status(current_user: TokenData = Depends(require_auth)):
     }
 
 
-@app.get("/address-mappings")
-async def list_address_mappings(current_user: TokenData = Depends(require_landlord)):
-    if current_user.role == UserRole.ADMIN:
-        return db.list_address_mappings()
-    return db.list_address_mappings(landlord_id=current_user.user_id)
-
-
-@app.post("/address-mappings", status_code=status.HTTP_201_CREATED)
-async def create_address_mapping(
-    data: AddressMappingCreate, current_user: TokenData = Depends(require_landlord)
-):
-    prop = db.get_property(data.property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    normalized = data.extracted_address.lower().strip()
-    normalized = " ".join(normalized.split())
-    existing = db.get_address_mapping_by_normalized(current_user.user_id, normalized)
-    if existing:
-        existing.property_id = data.property_id
-        db.save_address_mapping(existing)
-        return existing
-    mapping = AddressMapping(
-        landlord_id=current_user.user_id,
-        property_id=data.property_id,
-        extracted_address=data.extracted_address,
-        normalized_address=normalized,
-    )
-    db.save_address_mapping(mapping)
-    return mapping
-
-
-@app.delete("/address-mappings/{mapping_id}")
-async def delete_address_mapping(mapping_id: str, current_user: TokenData = Depends(require_landlord)):
-    mapping = db.get_address_mapping(mapping_id)
-    if not mapping:
-        raise HTTPException(status_code=404, detail="Mapping not found")
-    if current_user.role != UserRole.ADMIN and mapping.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    db.delete_address_mapping(mapping_id)
-    return {"status": "deleted"}
-
-
-@app.get("/address-mappings/lookup")
-async def lookup_address_mapping(
-    address: str, current_user: TokenData = Depends(require_landlord)
-):
-    normalized = address.lower().strip()
-    normalized = " ".join(normalized.split())
-    for mapping in db.list_address_mappings(landlord_id=current_user.user_id):
-        if mapping.normalized_address in normalized or normalized in mapping.normalized_address:
-            prop = db.get_property(mapping.property_id)
-            return {"property_id": mapping.property_id, "property": prop, "mapping": mapping}
-    return {"property_id": None, "property": None, "mapping": None}
 
 
 @app.post("/admin/bills/parse")
