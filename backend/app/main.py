@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
@@ -44,7 +44,15 @@ def encrypt_password(password: str) -> str:
 
 def decrypt_password(encrypted: str) -> str:
     """Decrypt password for e-bloc"""
-    return fernet.decrypt(encrypted.encode()).decode()
+    try:
+        return fernet.decrypt(encrypted.encode()).decode()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"[E-Bloc] Error decrypting password: {e}", exc_info=True)
+        # If decryption fails, it might be because the encryption key changed
+        # This can happen if the server restarted and EBLOC_ENCRYPTION_KEY wasn't set in env
+        raise ValueError(f"Failed to decrypt password. The encryption key may have changed. Please reconfigure your E-bloc credentials. Error: {str(e)}")
 
 app = FastAPI(title="ProManage API", version="1.0.0")
 
@@ -716,32 +724,67 @@ async def configure_ebloc(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Encrypt password (not hash, since we need to retrieve it for scraping)
-    password_encrypted = encrypt_password(data.password)
-    user.ebloc_username = data.username
-    user.ebloc_password_hash = password_encrypted
-    db.save_user(user)
-    
-    return {"status": "configured", "message": "E-bloc credentials saved"}
+    try:
+        password_encrypted = encrypt_password(data.password)
+        user.ebloc_username = data.username
+        user.ebloc_password_hash = password_encrypted
+        db.save_user(user)
+        logger.info(f"[E-Bloc] Credentials saved for user {current_user.user_id}")
+        
+        # Verify the password was saved correctly by trying to decrypt it
+        try:
+            test_decrypt = decrypt_password(password_encrypted)
+            if test_decrypt != data.password:
+                logger.error(f"[E-Bloc] Password encryption/decryption verification failed!")
+                raise HTTPException(status_code=500, detail="Password encryption verification failed")
+        except ValueError as ve:
+            # Re-raise ValueError as HTTPException with better message
+            raise HTTPException(status_code=500, detail=str(ve))
+        except Exception as e:
+            logger.error(f"[E-Bloc] Password verification error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Password encryption error: {str(e)}")
+        
+        return {"status": "configured", "message": "E-bloc credentials saved"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[E-Bloc] Error saving credentials: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error saving credentials: {str(e)}")
 
 
 @app.get("/ebloc/config")
 async def get_ebloc_config(current_user: TokenData = Depends(require_landlord)):
-    """Get e-bloc configuration for current user"""
+    """Get e-bloc configuration for current user (including decrypted password for form)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     user = db.get_user(current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
     if not user.ebloc_username:
-        raise HTTPException(status_code=404, detail="E-bloc not configured")
+        return {"username": None, "password": None, "configured": False}
+    
+    # Decrypt password for form (since it's encrypted, not hashed, we can retrieve it)
+    password = None
+    if user.ebloc_password_hash:
+        try:
+            password = decrypt_password(user.ebloc_password_hash)
+        except Exception as e:
+            logger.warning(f"[E-Bloc] Could not decrypt password for user {current_user.user_id}: {e}")
+            # Password might be encrypted with a different key (e.g., server restarted with new key)
+            # Return None for password - user will need to re-enter it
+            password = None
     
     return {
         "username": user.ebloc_username,
+        "password": password,
         "configured": True,
     }
 
 
 @app.post("/ebloc/sync/{property_id}")
-async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require_landlord)):
+async def sync_ebloc(property_id: str, association_id: Optional[str] = Query(None), current_user: TokenData = Depends(require_landlord)):
     from app.ebloc_scraper import EblocScraper
     
     prop = db.get_property(property_id)
@@ -756,17 +799,55 @@ async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require
         raise HTTPException(status_code=404, detail="E-bloc not configured. Please configure your E-bloc credentials first.")
     
     # Decrypt password and login
-    password = decrypt_password(user.ebloc_password_hash)
+    if not user.ebloc_password_hash:
+        raise HTTPException(status_code=404, detail="E-bloc password not configured. Please configure your E-bloc credentials first.")
+    
+    try:
+        password = decrypt_password(user.ebloc_password_hash)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"[E-Bloc] Error decrypting password: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error decrypting E-bloc password. Please reconfigure your credentials.")
+    
     scraper = EblocScraper()
     try:
         logged_in = await scraper.login(user.ebloc_username, password)
         if not logged_in:
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
         
-        # Match property by name (use property name to match with gInfoAsoc['nume'])
-        # The scraper will select the property from combo box and navigate to Datorii page
-        balance = await scraper.get_balance(property_name=prop.name)
-        payments = await scraper.get_payments(property_name=prop.name)
+        # Find matching associations by address fields
+        matches = await scraper.find_matching_associations(prop.name)
+        
+        if not matches:
+            raise HTTPException(status_code=404, detail=f"Could not find matching E-bloc association for property: {prop.name}")
+        
+        # If multiple matches and no association_id provided, return them for user selection
+        if len(matches) > 1 and not association_id:
+            return {
+                "status": "multiple_matches",
+                "property_id": property_id,
+                "property_name": prop.name,
+                "matches": [
+                    {
+                        "id": m["id"],
+                        "nume": m["nume"],
+                        "address": f"{m['adr_strada']} {m['adr_nr']}".strip(),
+                        "score": m["score"],
+                        "apartment_index": m.get("apartment_index")
+                    }
+                    for m in matches
+                ]
+            }
+        
+        # Single match or association_id provided - proceed with sync
+        selected_match = next((m for m in matches if m["id"] == association_id), matches[0]) if association_id else matches[0]
+        selected_association_id = selected_match["id"]
+        selected_apartment_index = selected_match.get("apartment_index")
+        selected_apartment_id = selected_match.get("apartment_id")  # id_ap from gInfoAp for cookie
+        
+        balance = await scraper.get_balance(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id)
+        payments = await scraper.get_payments(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id)
         
         # Get or create a unit for this property (or use first unit)
         # Create bills from outstanding balance

@@ -54,6 +54,19 @@ class EblocScraper:
         self.available_properties: list[EblocProperty] = []
         self.debug = debug
         self.last_response_url = None  # Track the final URL after redirects
+    
+    def set_apartment_cookies(self, association_id: str, apartment_id: str):
+        """Set cookies for apartment selection: asoc-cur and home-ap-cur"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Set asoc-cur to the association ID
+        # httpx cookies are set per domain, so we set them for the base domain
+        self.client.cookies.set("asoc-cur", association_id, domain="e-bloc.ro")
+        # Set home-ap-cur to {association_id}_{apartment_id}
+        home_ap_cur = f"{association_id}_{apartment_id}"
+        self.client.cookies.set("home-ap-cur", home_ap_cur, domain="e-bloc.ro")
+        logger.info(f"[E-Bloc Scraper] Set cookies: asoc-cur={association_id}, home-ap-cur={home_ap_cur}")
 
     async def login(self, username: str, password: str) -> bool:
         import logging
@@ -431,20 +444,20 @@ class EblocScraper:
         except Exception:
             return None
 
-    async def select_property_by_name(self, property_name: str) -> Optional[str]:
-        """Select property from combo box by matching property name with gInfoAsoc['nume']"""
+    async def find_matching_associations(self, property_name: str) -> List[dict]:
+        """Find matching associations by comparing address fields from gInfoAsoc with property name, also finds corresponding apartment index"""
         import logging
         logger = logging.getLogger(__name__)
         
         if not self.logged_in:
-            return None
+            return []
         
         try:
             # Get the current page to parse JavaScript variables
             response = await self.client.get(self.LOGIN_URL)
             html = response.text
             
-            # Parse gInfoAsoc to find matching association
+            # Parse gInfoAsoc to find matching associations
             gInfoAsoc_block_match = re.search(
                 r'gInfoAsoc\s*\[\s*\d+\s*\]\s*=.*?(?=gInfoAp|gContAsoc|</script>|$)',
                 html,
@@ -453,16 +466,56 @@ class EblocScraper:
             
             if not gInfoAsoc_block_match:
                 logger.warning("[E-Bloc Scraper] Could not find gInfoAsoc block")
-                return None
+                return []
             
             gInfoAsoc_block = gInfoAsoc_block_match.group(0)
+            
+            # Also parse gInfoAp to find apartment indices
+            gInfoAp_block_match = re.search(
+                r'gInfoAp\s*\[\s*\d+\s*\]\s*=.*?(?=gContAsoc|</script>|$)',
+                html,
+                re.DOTALL
+            )
+            
+            # Build a map of association_id -> (apartment_index, apartment_id) from gInfoAp
+            apartment_map = {}  # association_id -> {"apt_index": int, "id_ap": str}
+            if gInfoAp_block_match:
+                gInfoAp_block = gInfoAp_block_match.group(0)
+                apt_indices = set(re.findall(r'gInfoAp\s*\[\s*(\d+)\s*\]', gInfoAp_block))
+                
+                for apt_index in sorted(apt_indices):
+                    kv_pattern = re.compile(
+                        r'gInfoAp\s*\[\s*' + re.escape(apt_index) + r'\s*\]\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']*)["\']',
+                        re.DOTALL
+                    )
+                    apt_data = {}
+                    for kv_match in kv_pattern.finditer(gInfoAp_block):
+                        key = kv_match.group(1)
+                        value = kv_match.group(2)
+                        apt_data[key] = value
+                    
+                    apt_id_asoc = apt_data.get("id_asoc", "")
+                    apt_id_ap = apt_data.get("id_ap", "")
+                    if apt_id_asoc and apt_id_ap:
+                        # Store the apartment index and apartment ID for this association
+                        apartment_map[apt_id_asoc] = {
+                            "apt_index": int(apt_index),
+                            "id_ap": apt_id_ap
+                        }
+                        logger.debug(f"[E-Bloc Scraper] Mapped association {apt_id_asoc} to apartment index {apt_index}, id_ap={apt_id_ap}")
             
             # Find all association indices
             asoc_indices = set(re.findall(r'gInfoAsoc\s*\[\s*(\d+)\s*\]', gInfoAsoc_block))
             logger.info(f"[E-Bloc Scraper] Found association indices: {sorted(asoc_indices)}")
             
-            matched_asoc_id = None
+            matches = []
             property_name_lower = property_name.lower()
+            
+            # Normalize property name - remove common prefixes and normalize
+            normalized_prop = property_name_lower
+            normalized_prop = re.sub(r'^(strada|str\.?|st\.?)\s+', '', normalized_prop, flags=re.I)
+            normalized_prop = re.sub(r'\s+nr\.?\s*', ' ', normalized_prop, flags=re.I)
+            normalized_prop = normalized_prop.strip()
             
             for asoc_index in sorted(asoc_indices):
                 # Extract all assignments for this association
@@ -476,43 +529,296 @@ class EblocScraper:
                     value = kv_match.group(2)
                     asoc_data[key] = value
                 
-                if "id" in asoc_data and "nume" in asoc_data:
-                    asoc_name = asoc_data["nume"].lower()
-                    # Match property name with association name (partial match)
-                    if property_name_lower in asoc_name or asoc_name in property_name_lower:
-                        matched_asoc_id = asoc_data["id"]
-                        logger.info(f"[E-Bloc Scraper] Matched property '{property_name}' with association '{asoc_data['nume']}' (id: {matched_asoc_id})")
-                        break
+                if "id" not in asoc_data:
+                    continue
+                
+                asoc_id = asoc_data["id"]
+                
+                # Build address components for matching
+                adr_strada = asoc_data.get("adr_strada", "").lower().strip()
+                adr_nr = asoc_data.get("adr_nr", "").lower().strip()
+                adr_bloc = asoc_data.get("adr_bloc", "").lower().strip()
+                
+                # Normalize street name
+                normalized_street = re.sub(r'^(strada|str\.?|st\.?)\s+', '', adr_strada, flags=re.I).strip()
+                
+                # Check for matches using multiple criteria
+                match_score = 0
+                match_reasons = []
+                
+                # Match street name (partial match)
+                if normalized_street and normalized_street in normalized_prop:
+                    match_score += 10
+                    match_reasons.append(f"street: '{adr_strada}'")
+                
+                # Match street name (reverse - property contains street)
+                if normalized_street and normalized_prop in normalized_street:
+                    match_score += 10
+                    match_reasons.append(f"street: '{adr_strada}'")
+                
+                # Match number
+                if adr_nr and adr_nr in normalized_prop:
+                    match_score += 5
+                    match_reasons.append(f"number: '{adr_nr}'")
+                
+                # Match bloc
+                if adr_bloc and adr_bloc in normalized_prop:
+                    match_score += 3
+                    match_reasons.append(f"bloc: '{adr_bloc}'")
+                
+                # Match association name as fallback
+                asoc_name = asoc_data.get("nume", "").lower()
+                if property_name_lower in asoc_name or asoc_name in property_name_lower:
+                    match_score += 2
+                    match_reasons.append(f"name: '{asoc_data.get('nume', '')}'")
+                
+                if match_score > 0:
+                    # Get the apartment info from gInfoAp
+                    apt_info = apartment_map.get(asoc_id, {})
+                    apt_id_ap = apt_info.get("id_ap", "")
+                    
+                    # Use the gInfoAsoc index directly (this is the combo box index)
+                    apartment_index = int(asoc_index)
+                    
+                    matches.append({
+                        "id": asoc_id,
+                        "nume": asoc_data.get("nume", ""),
+                        "adr_strada": adr_strada,
+                        "adr_nr": adr_nr,
+                        "adr_bloc": adr_bloc,
+                        "score": match_score,
+                        "reasons": match_reasons,
+                        "apartment_index": apartment_index,  # gInfoAsoc index for combo box
+                        "apartment_id": apt_id_ap  # id_ap from gInfoAp for cookie (home-ap-cur)
+                    })
+                    logger.info(f"[E-Bloc Scraper] Matched property '{property_name}' with association '{asoc_data.get('nume', '')}' (id: {asoc_id}, score: {match_score}, gInfoAsoc_idx: {asoc_index}, apt_id_ap: {apt_id_ap}, reasons: {', '.join(match_reasons)})")
             
-            if not matched_asoc_id:
+            # Sort by score (highest first)
+            matches.sort(key=lambda x: x["score"], reverse=True)
+            
+            if not matches:
                 logger.warning(f"[E-Bloc Scraper] Could not match property name '{property_name}' with any association")
+            
+            return matches
+        except Exception as e:
+            logger.error(f"[E-Bloc Scraper] Error finding matching associations: {e}", exc_info=True)
+            return []
+
+    async def find_matching_apartment(self, property_name: str, association_id: str) -> Optional[int]:
+        """Find the apartment index from gInfoAp that matches the property name for the given association"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not self.logged_in:
+            return None
+        
+        try:
+            # Get the current page to parse JavaScript variables
+            response = await self.client.get(self.LOGIN_URL)
+            html = response.text
+            
+            # Parse gInfoAp to find matching apartment
+            gInfoAp_block_match = re.search(
+                r'gInfoAp\s*\[\s*\d+\s*\]\s*=.*?(?=gContAsoc|</script>|$)',
+                html,
+                re.DOTALL
+            )
+            
+            if not gInfoAp_block_match:
+                logger.warning("[E-Bloc Scraper] Could not find gInfoAp block")
                 return None
             
-            # Navigate to the matched property page
-            url = f"{self.LOGIN_URL}?page={matched_asoc_id}&t={int(datetime.now().timestamp())}"
-            response = await self.client.get(url)
-            logger.info(f"[E-Bloc Scraper] Navigated to property page: {url}")
+            gInfoAp_block = gInfoAp_block_match.group(0)
             
-            return matched_asoc_id
+            # Find all apartment indices
+            apt_indices = set(re.findall(r'gInfoAp\s*\[\s*(\d+)\s*\]', gInfoAp_block))
+            logger.info(f"[E-Bloc Scraper] Found apartment indices: {sorted(apt_indices)}")
+            
+            property_name_lower = property_name.lower()
+            normalized_prop = property_name_lower
+            normalized_prop = re.sub(r'^(strada|str\.?|st\.?)\s+', '', normalized_prop, flags=re.I)
+            normalized_prop = re.sub(r'\s+nr\.?\s*', ' ', normalized_prop, flags=re.I)
+            normalized_prop = normalized_prop.strip()
+            
+            best_match = None
+            best_score = 0
+            
+            for apt_index in sorted(apt_indices):
+                # Extract all assignments for this apartment
+                kv_pattern = re.compile(
+                    r'gInfoAp\s*\[\s*' + re.escape(apt_index) + r'\s*\]\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']*)["\']',
+                    re.DOTALL
+                )
+                apt_data = {}
+                for kv_match in kv_pattern.finditer(gInfoAp_block):
+                    key = kv_match.group(1)
+                    value = kv_match.group(2)
+                    apt_data[key] = value
+                
+                # Check if this apartment belongs to the target association
+                apt_id_asoc = apt_data.get("id_asoc", "")
+                if apt_id_asoc != association_id:
+                    continue
+                
+                # Get the bloc (address) field
+                apt_bloc = apt_data.get("bloc", "").lower().strip()
+                apt_ap = apt_data.get("ap", "").strip()
+                
+                # Normalize apartment address
+                normalized_apt_bloc = re.sub(r'^(strada|str\.?|st\.?)\s+', '', apt_bloc, flags=re.I)
+                normalized_apt_bloc = re.sub(r'\s+nr\.?\s*', ' ', normalized_apt_bloc, flags=re.I)
+                normalized_apt_bloc = normalized_apt_bloc.strip()
+                
+                # Score the match
+                match_score = 0
+                
+                # Exact match of normalized addresses
+                if normalized_apt_bloc == normalized_prop:
+                    match_score = 100
+                # Property contains apartment address
+                elif normalized_apt_bloc and normalized_apt_bloc in normalized_prop:
+                    match_score = 50
+                # Apartment address contains property
+                elif normalized_apt_bloc and normalized_prop in normalized_apt_bloc:
+                    match_score = 50
+                # Partial match
+                elif normalized_apt_bloc and any(word in normalized_prop for word in normalized_apt_bloc.split() if len(word) > 3):
+                    match_score = 25
+                
+                if match_score > best_score:
+                    best_score = match_score
+                    best_match = int(apt_index)
+                    logger.info(f"[E-Bloc Scraper] Found matching apartment: index={apt_index}, id_asoc={apt_id_asoc}, ap={apt_ap}, bloc='{apt_data.get('bloc', '')}', score={match_score}")
+            
+            if best_match is not None:
+                logger.info(f"[E-Bloc Scraper] Selected apartment index {best_match} for property '{property_name}' in association {association_id}")
+            else:
+                logger.warning(f"[E-Bloc Scraper] Could not find matching apartment for property '{property_name}' in association {association_id}")
+            
+            return best_match
         except Exception as e:
-            logger.error(f"[E-Bloc Scraper] Error selecting property by name: {e}", exc_info=True)
+            logger.error(f"[E-Bloc Scraper] Error finding matching apartment: {e}", exc_info=True)
             return None
 
-    async def navigate_to_datorii(self, page_id: str) -> bool:
-        """Navigate to Datorii (Debts) page (page=11)"""
+    async def select_apartment(self, apartment_index: int) -> bool:
+        """Select apartment from combo box by making a POST request"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not self.logged_in:
+            return False
+        
+        try:
+            # The combo box selection might require a POST request
+            # Based on typical e-bloc behavior, we might need to POST with the apartment index
+            # Let's try to set the apartment by making a request with the apartment parameter
+            # First, get the current page to see the form structure
+            response = await self.client.get(self.LOGIN_URL)
+            html = response.text
+            
+            # Try to find the form or API endpoint for apartment selection
+            # Common pattern: POST to same page with apartment parameter
+            # Or navigate with apartment in query string
+            # For now, we'll try to POST with the apartment index
+            
+            # Extract any required form fields (CSRF tokens, etc.)
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # Try POST request to select apartment
+            # The form might be at the same URL or a specific endpoint
+            post_data = {
+                "home-ap": str(apartment_index),
+                "action": "select_ap"
+            }
+            
+            # Try POST to the login URL
+            response = await self.client.post(self.LOGIN_URL, data=post_data, follow_redirects=True)
+            logger.info(f"[E-Bloc Scraper] Posted apartment selection: index={apartment_index}, status={response.status_code}")
+            
+            # Verify the apartment was selected by checking the response
+            # The page should reflect the selected apartment
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"[E-Bloc Scraper] Error selecting apartment: {e}", exc_info=True)
+            return False
+
+    async def select_property_by_name(self, property_name: str, association_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None) -> tuple[Optional[str], Optional[int]]:
+        """Select property from combo box by matching property name with address fields from gInfoAsoc.
+        Sets cookies (asoc-cur and home-ap-cur) to select the apartment.
+        Returns (association_id, apartment_index)"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not self.logged_in:
+            return None, None
+        
+        try:
+            matched_asoc_id = None
+            matched_apartment_index = apartment_index
+            matched_apartment_id = apartment_id
+            
+            # If association_id is provided, use it directly
+            if association_id:
+                matched_asoc_id = association_id
+            else:
+                # Otherwise, find matches
+                matches = await self.find_matching_associations(property_name)
+                
+                if not matches:
+                    return None, None
+                
+                # Use the best match
+                best_match = matches[0]
+                matched_asoc_id = best_match["id"]
+                # Get apartment index and ID from the match if not provided
+                if matched_apartment_index is None:
+                    matched_apartment_index = best_match.get("apartment_index")
+                if matched_apartment_id is None:
+                    matched_apartment_id = best_match.get("apartment_id")
+                logger.info(f"[E-Bloc Scraper] Found association {matched_asoc_id}, apartment_index: {matched_apartment_index}, apartment_id: {matched_apartment_id}")
+            
+            # Set cookies to select the apartment
+            if matched_asoc_id and matched_apartment_id:
+                self.set_apartment_cookies(matched_asoc_id, matched_apartment_id)
+            elif matched_asoc_id:
+                # If we don't have apartment_id, just set asoc-cur
+                self.client.cookies.set("asoc-cur", matched_asoc_id, domain=".e-bloc.ro")
+                logger.info(f"[E-Bloc Scraper] Set cookie: asoc-cur={matched_asoc_id} (no apartment_id available)")
+            
+            # Navigate to the association page to ensure cookies are sent
+            url = f"{self.LOGIN_URL}?page={matched_asoc_id}&t={int(datetime.now().timestamp())}"
+            response = await self.client.get(url)
+            logger.info(f"[E-Bloc Scraper] Navigated to association page: {url}, status: {response.status_code}")
+            
+            return matched_asoc_id, matched_apartment_index
+        except Exception as e:
+            logger.error(f"[E-Bloc Scraper] Error selecting property by name: {e}", exc_info=True)
+            return None, None
+
+    async def navigate_to_datorii(self, page_id: str, apartment_index: Optional[int] = None) -> tuple[bool, str, Optional[BeautifulSoup]]:
+        """Navigate to Datorii (Debts) page (page=11). Cookies handle apartment selection.
+        Returns (success, url_used, soup) so caller can use the parsed HTML directly."""
         import logging
         logger = logging.getLogger(__name__)
         
         try:
+            # Cookies handle apartment selection, no need for home-ap in URL
             url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
+            logger.info(f"[E-Bloc Scraper] Navigating to Datorii page: {url}")
+            
             response = await self.client.get(url)
-            logger.info(f"[E-Bloc Scraper] Navigated to Datorii page: {url}, status: {response.status_code}")
-            return response.status_code == 200
+            logger.info(f"[E-Bloc Scraper] Navigated to Datorii page, status: {response.status_code}")
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                return (True, url, soup)
+            else:
+                return (False, url, None)
         except Exception as e:
             logger.error(f"[E-Bloc Scraper] Error navigating to Datorii: {e}", exc_info=True)
-            return False
+            return (False, url if 'url' in locals() else "", None)
 
-    async def get_balance(self, property_name: Optional[str] = None, page_id: Optional[str] = None) -> Optional[EblocBalance]:
+    async def get_balance(self, property_name: Optional[str] = None, association_id: Optional[str] = None, page_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None) -> Optional[EblocBalance]:
         """Get outstanding balance information from Datorii page"""
         import logging
         logger = logging.getLogger(__name__)
@@ -521,40 +827,79 @@ class EblocScraper:
             return None
         
         try:
+            # If association_id is provided, use it directly
+            if association_id:
+                page_id = association_id
+                # Set cookies if we have apartment_id (only if not already set correctly)
+                if apartment_id:
+                    current_asoc = self.client.cookies.get("asoc-cur")
+                    current_home_ap = self.client.cookies.get("home-ap-cur")
+                    expected_home_ap = f"{association_id}_{apartment_id}"
+                    if current_asoc != association_id or current_home_ap != expected_home_ap:
+                        self.set_apartment_cookies(association_id, apartment_id)
+                        # Navigate to association page to ensure cookies are sent
+                        asoc_url = f"{self.LOGIN_URL}?page={association_id}&t={int(datetime.now().timestamp())}"
+                        await self.client.get(asoc_url)
+                        logger.info(f"[E-Bloc Scraper] Set cookies for association {association_id}, apartment_id: {apartment_id}")
+                    else:
+                        logger.debug(f"[E-Bloc Scraper] Cookies already set correctly, skipping")
             # If property_name is provided, select it first
-            if property_name:
-                selected_page_id = await self.select_property_by_name(property_name)
+            elif property_name:
+                selected_page_id, apt_idx = await self.select_property_by_name(property_name, association_id=association_id, apartment_index=apartment_index, apartment_id=apartment_id)
                 if not selected_page_id:
                     logger.warning(f"[E-Bloc Scraper] Could not select property '{property_name}'")
                     return None
                 page_id = selected_page_id
+                if apartment_index is None:
+                    apartment_index = apt_idx
+                logger.info(f"[E-Bloc Scraper] Selected property '{property_name}' with association {page_id}, apartment_index: {apartment_index}")
             
-            # Navigate to Datorii page
-            if not await self.navigate_to_datorii(page_id or ""):
-                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page")
+            # Navigate to Datorii page with apartment selection (cookies handle it)
+            success, datorii_url, soup = await self.navigate_to_datorii(page_id or "", apartment_index)
+            if not success or soup is None:
+                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page or parse HTML")
                 return None
-            
-            # Get the Datorii page content
-            url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
-            response = await self.client.get(url)
-            soup = BeautifulSoup(response.text, "html.parser")
             
             # Look for "Datoria curentă" or "Suma de plată" text
             outstanding_debt = 0.0
             debt_text = None
             
-            # Search for "Suma de plată" followed by amount
+            # Search for "Suma de plată" - try multiple approaches
+            # Approach 1: Find text node containing "Suma de plată"
             suma_text = soup.find(string=re.compile(r'Suma de plată', re.I))
             if suma_text:
+                # Get parent element and search for amount nearby
                 parent = suma_text.find_parent()
                 if parent:
+                    # Get text from parent and siblings
                     text = parent.get_text()
-                    # Extract amount: "Suma de plată 442,38 Lei"
-                    amount_match = re.search(r'Suma de plată\s+(\d+[.,]\d+|\d+)\s*(?:Lei|RON)', text, re.I)
+                    # Also check next siblings
+                    next_sibling = parent.find_next_sibling()
+                    if next_sibling:
+                        text += " " + next_sibling.get_text()
+                    
+                    # Extract amount: "Suma de plată 442,38 Lei" or "Suma de plată: 442,38"
+                    amount_match = re.search(r'Suma de plată[:\s]+(\d+[.,]\d+|\d+)\s*(?:Lei|RON)?', text, re.I)
                     if amount_match:
                         debt_text = amount_match.group(1).replace(',', '.')
                         outstanding_debt = float(debt_text)
                         logger.info(f"[E-Bloc Scraper] Found outstanding debt: {outstanding_debt}")
+                    else:
+                        # Try searching in a wider context
+                        logger.debug(f"[E-Bloc Scraper] Could not extract amount from: {text[:200]}")
+            
+            # Approach 2: Search for amount patterns near "Suma de plată" in the entire page
+            if outstanding_debt == 0.0:
+                page_text = soup.get_text()
+                # Look for "Suma de plată" followed by numbers within 50 characters
+                suma_pattern = re.search(r'Suma de plată[:\s]+([^\n]{0,50})', page_text, re.I)
+                if suma_pattern:
+                    context = suma_pattern.group(1)
+                    amount_match = re.search(r'(\d+[.,]\d+|\d+)', context)
+                    if amount_match:
+                        debt_text = amount_match.group(1).replace(',', '.')
+                        outstanding_debt = float(debt_text)
+                        logger.info(f"[E-Bloc Scraper] Found outstanding debt (approach 2): {outstanding_debt}")
             
             # Look for apartment number in "Datoria curentă - Ap. 53"
             apartment_match = None
@@ -618,7 +963,7 @@ class EblocScraper:
             logger.error(f"[E-Bloc Scraper] Error getting balance: {e}", exc_info=True)
             return None
 
-    async def get_payments(self, property_name: Optional[str] = None, page_id: Optional[str] = None) -> List[EblocPayment]:
+    async def get_payments(self, property_name: Optional[str] = None, association_id: Optional[str] = None, page_id: Optional[str] = None, apartment_index: Optional[int] = None, apartment_id: Optional[str] = None) -> List[EblocPayment]:
         """Get payment receipts (chitante) from Datorii page"""
         import logging
         logger = logging.getLogger(__name__)
@@ -627,23 +972,35 @@ class EblocScraper:
             return []
         
         try:
+            # If association_id is provided, use it directly
+            if association_id:
+                page_id = association_id
+                # Set cookies if we have apartment_id (only if not already set)
+                if apartment_id:
+                    # Check if cookies are already set (they might have been set by get_balance)
+                    current_asoc = self.client.cookies.get("asoc-cur")
+                    if current_asoc != association_id:
+                        self.set_apartment_cookies(association_id, apartment_id)
+                        # Navigate to association page to ensure cookies are sent
+                        asoc_url = f"{self.LOGIN_URL}?page={association_id}&t={int(datetime.now().timestamp())}"
+                        await self.client.get(asoc_url)
+                        logger.info(f"[E-Bloc Scraper] Set cookies for association {association_id}, apartment_id: {apartment_id}")
             # If property_name is provided, select it first
-            if property_name:
-                selected_page_id = await self.select_property_by_name(property_name)
+            elif property_name:
+                selected_page_id, apt_idx = await self.select_property_by_name(property_name, association_id=association_id, apartment_index=apartment_index, apartment_id=apartment_id)
                 if not selected_page_id:
                     logger.warning(f"[E-Bloc Scraper] Could not select property '{property_name}'")
                     return []
                 page_id = selected_page_id
+                if apartment_index is None:
+                    apartment_index = apt_idx
+                logger.info(f"[E-Bloc Scraper] Selected property '{property_name}' with association {page_id}, apartment_index: {apartment_index}")
             
-            # Navigate to Datorii page
-            if not await self.navigate_to_datorii(page_id or ""):
-                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page")
+            # Navigate to Datorii page with apartment selection (cookies handle it)
+            success, datorii_url, soup = await self.navigate_to_datorii(page_id or "", apartment_index)
+            if not success or soup is None:
+                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page or parse HTML")
                 return []
-            
-            # Get the Datorii page content
-            url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
-            response = await self.client.get(url)
-            soup = BeautifulSoup(response.text, "html.parser")
             payments = []
             
             # Look for "Istoricul plăţilor" section

@@ -30,6 +30,8 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [showEblocConfig, setShowEblocConfig] = useState<string | null>(null);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
+  const [eblocMatches, setEblocMatches] = useState<Array<{ id: string; nume: string; address: string; score: number }> | null>(null);
+  const [selectedEblocMatch, setSelectedEblocMatch] = useState<string>('');
   const [eblocDiscoveredProperties, setEblocDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string; url: string }>>([]);
   const [eblocDiscovering, setEblocDiscovering] = useState(false);
   const [eblocImporting, setEblocImporting] = useState(false);
@@ -357,8 +359,12 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     if (!token) return;
     try {
       const config = await api.ebloc.getConfig(token);
-      if (config && config.username) {
-        setEblocForm(prev => ({ ...prev, username: config.username || '' }));
+      if (config && config.configured) {
+        setEblocForm(prev => ({ 
+          ...prev, 
+          username: config.username || '',
+          password: config.password || '' // Prefill password if available
+        }));
       }
     } catch (err) {
       // Config not found, that's okay - user will enter credentials
@@ -392,14 +398,18 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
         if (result.properties.length > 0) {
           // Save credentials after successful discovery
           try {
-            await api.ebloc.configure(token, {
+            const configResult = await api.ebloc.configure(token, {
               username: eblocForm.username,
               password: eblocForm.password,
             });
-            console.log('[E-Bloc] Credentials saved successfully');
+            console.log('[E-Bloc] Credentials saved successfully:', configResult);
+            // Clear password from form for security (username can stay)
+            setEblocForm(prev => ({ ...prev, password: '' }));
           } catch (configErr) {
-            console.warn('[E-Bloc] Failed to save credentials:', configErr);
-            // Don't fail the whole operation if saving credentials fails
+            console.error('[E-Bloc] Failed to save credentials:', configErr);
+            // Show error but don't fail the whole operation
+            const errorMsg = configErr instanceof Error ? configErr.message : 'Failed to save credentials';
+            setError(`Properties discovered, but failed to save credentials: ${errorMsg}. Please configure credentials manually.`);
           }
           
           // Ensure all properties have url field
@@ -718,7 +728,13 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                     <p className="text-sm text-slate-400">{property.address}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
+                    <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => {
+                      setShowEblocConfig(open ? property.id : null);
+                      if (!open) {
+                        setEblocMatches(null);
+                        setSelectedEblocMatch('');
+                      }
+                    }}>
                       <DialogTrigger asChild>
                         <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                           Sync E-Bloc
@@ -1185,7 +1201,13 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                       <p className="text-sm text-slate-400">{property.address}</p>
                     </div>
                     <div className="flex gap-2">
-                      <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
+                      <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => {
+                        setShowEblocConfig(open ? property.id : null);
+                        if (!open) {
+                          setEblocMatches(null);
+                          setSelectedEblocMatch('');
+                        }
+                      }}>
                         <DialogTrigger asChild>
                           <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                             Sync E-Bloc
@@ -1208,30 +1230,78 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                                 {error}
                               </div>
                             )}
-                            <Button
-                              onClick={async () => {
-                                if (!token) return;
-                                // Clear error before attempting sync
-                                setError('');
-                                try {
-                                  const result = await api.ebloc.sync(token, property.id);
-                                  setShowEblocConfig(null);
-                                  loadData();
-                                  if (result.bills_created > 0 || result.payments_created > 0) {
-                                    // Show success message
-                                    alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
+                            {eblocMatches && eblocMatches.length > 0 ? (
+                              <div className="space-y-4">
+                                <div>
+                                  <Label className="text-slate-300">Multiple matches found. Please select the correct association:</Label>
+                                  <Select
+                                    value={selectedEblocMatch}
+                                    onValueChange={setSelectedEblocMatch}
+                                  >
+                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                                      <SelectValue placeholder="Select association" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-700 border-slate-600">
+                                      {eblocMatches.map((match) => (
+                                        <SelectItem key={match.id} value={match.id}>
+                                          {match.nume} - {match.address} (score: {match.score})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <Button
+                                  onClick={async () => {
+                                    if (!token || !selectedEblocMatch) return;
+                                    setError('');
+                                    try {
+                                      const result = await api.ebloc.sync(token, property.id, selectedEblocMatch);
+                                      setEblocMatches(null);
+                                      setSelectedEblocMatch('');
+                                      setShowEblocConfig(null);
+                                      loadData();
+                                      if (result.bills_created > 0 || result.payments_created > 0) {
+                                        alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
+                                      }
+                                    } catch (err) {
+                                      const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
+                                      setError(errorMessage);
+                                    }
+                                  }}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                  disabled={!selectedEblocMatch}
+                                >
+                                  Sync Selected
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                onClick={async () => {
+                                  if (!token) return;
+                                  setError('');
+                                  try {
+                                    const result = await api.ebloc.sync(token, property.id);
+                                    // Check if multiple matches were returned
+                                    if (result.status === 'multiple_matches' && result.matches) {
+                                      setEblocMatches(result.matches);
+                                      setSelectedEblocMatch(result.matches[0]?.id || '');
+                                      return; // Don't close dialog, show selection
+                                    }
+                                    setShowEblocConfig(null);
+                                    loadData();
+                                    if (result.bills_created > 0 || result.payments_created > 0) {
+                                      alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
+                                    }
+                                  } catch (err) {
+                                    const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
+                                    setError(errorMessage);
                                   }
-                                } catch (err) {
-                                  const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
-                                  // Only show error in dialog, not in global error area to avoid duplicates
-                                  setError(errorMessage);
-                                  // Don't call handleError to avoid duplicate error display
-                                }
-                              }}
-                              className="w-full bg-emerald-600 hover:bg-emerald-700"
-                            >
-                              Sync Now
-                            </Button>
+                                }}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                              >
+                                Sync Now
+                              </Button>
+                            )}
                           </div>
                         </DialogContent>
                     </Dialog>

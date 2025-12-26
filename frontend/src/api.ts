@@ -96,8 +96,8 @@ export const api = {
   ebloc: {
     discover: (token: string, data: { username: string; password: string }) => request<{ status: string; properties: Array<{ page_id: string; name: string; address: string; url: string }> }>('/ebloc/discover', { method: 'POST', body: data, token }),
     configure: (token: string, data: EblocConfigCreate) => request<{ status: string; message: string }>('/ebloc/configure', { method: 'POST', body: data, token }),
-    getConfig: (token: string) => request<{ username: string; configured: boolean }>('/ebloc/config', { token }),
-    sync: (token: string, propertyId: string) => request<{ status: string; property_id: string; property_name: string; balance?: { outstanding_debt: number; last_payment_date?: string; oldest_debt_month?: string }; bills_created: number; payments_created: number }>(`/ebloc/sync/${propertyId}`, { method: 'POST', token }),
+    getConfig: (token: string) => request<{ username: string; password?: string; configured: boolean }>('/ebloc/config', { token }),
+    sync: (token: string, propertyId: string, associationId?: string) => request<{ status: string; property_id: string; property_name: string; matches?: Array<{ id: string; nume: string; address: string; score: number }>; balance?: { outstanding_debt: number; last_payment_date?: string; oldest_debt_month?: string }; bills_created: number; payments_created: number }>(`/ebloc/sync/${propertyId}${associationId ? `?association_id=${associationId}` : ''}`, { method: 'POST', token }),
   },
 
   subscription: {
