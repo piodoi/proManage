@@ -88,7 +88,7 @@ class Unit(BaseModel):
 
 class Renter(BaseModel):
     id: str = Field(default_factory=gen_id)
-    unit_id: str
+    property_id: str
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -100,7 +100,8 @@ class Renter(BaseModel):
 
 class Bill(BaseModel):
     id: str = Field(default_factory=gen_id)
-    unit_id: str
+    property_id: str
+    renter_id: Optional[str] = None  # None means bill applies to all renters in the property
     bill_type: BillType
     description: str
     amount: float
@@ -247,7 +248,8 @@ class RenterUpdate(BaseModel):
 
 
 class BillCreate(BaseModel):
-    unit_id: str
+    property_id: str
+    renter_id: Optional[str] = None  # None means bill applies to all renters in the property
     bill_type: BillType
     description: str
     amount: float

@@ -62,8 +62,8 @@ export const api = {
   },
 
   renters: {
-    list: (token: string, unitId: string) => request<Renter[]>(`/units/${unitId}/renters`, { token }),
-    create: (token: string, unitId: string, data: RenterCreate) => request<Renter>(`/units/${unitId}/renters`, { method: 'POST', body: data, token }),
+    list: (token: string, propertyId: string) => request<Renter[]>(`/properties/${propertyId}/renters`, { token }),
+    create: (token: string, propertyId: string, data: RenterCreate) => request<Renter>(`/properties/${propertyId}/renters`, { method: 'POST', body: data, token }),
     get: (token: string, id: string) => request<Renter>(`/renters/${id}`, { token }),
     update: (token: string, id: string, data: RenterUpdate) => request<Renter>(`/renters/${id}`, { method: 'PUT', body: data, token }),
     delete: (token: string, id: string) => request<{ status: string }>(`/renters/${id}`, { method: 'DELETE', token }),
@@ -173,7 +173,7 @@ export type UnitUpdate = { unit_number?: string };
 
 export type Renter = {
   id: string;
-  unit_id: string;
+  property_id: string;
   name: string;
   email?: string;
   phone?: string;
@@ -200,7 +200,8 @@ export type RenterUpdate = {
 
 export type Bill = {
   id: string;
-  unit_id: string;
+  property_id: string;
+  renter_id?: string;  // undefined/null means bill applies to all renters in the property
   bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
   description: string;
   amount: number;
@@ -212,7 +213,8 @@ export type Bill = {
 };
 
 export type BillCreate = {
-  unit_id: string;
+  property_id: string;
+  renter_id?: string;  // undefined/null means bill applies to all renters in the property
   bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
   description: string;
   amount: number;

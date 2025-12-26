@@ -57,7 +57,7 @@ units_table = Table(
 renters_table = Table(
     "renters", metadata,
     Column("id", String(36), primary_key=True),
-    Column("unit_id", String(36), index=True),
+    Column("property_id", String(36), index=True),
     Column("access_token", String(36), index=True),
     Column("data", Text, nullable=False),
 )
@@ -65,7 +65,8 @@ renters_table = Table(
 bills_table = Table(
     "bills", metadata,
     Column("id", String(36), primary_key=True),
-    Column("unit_id", String(36), index=True),
+    Column("property_id", String(36), index=True),
+    Column("renter_id", String(36), index=True),
     Column("data", Text, nullable=False),
 )
 
@@ -279,11 +280,11 @@ class Database:
             ).fetchone()
             return _deserialize(Renter, result.data) if result else None
 
-    def list_renters(self, unit_id: Optional[str] = None) -> list[Renter]:
+    def list_renters(self, property_id: Optional[str] = None) -> list[Renter]:
         with engine.connect() as conn:
-            if unit_id:
+            if property_id:
                 results = conn.execute(
-                    renters_table.select().where(renters_table.c.unit_id == unit_id)
+                    renters_table.select().where(renters_table.c.property_id == property_id)
                 ).fetchall()
             else:
                 results = conn.execute(renters_table.select()).fetchall()
@@ -297,13 +298,13 @@ class Database:
             if existing:
                 conn.execute(
                     renters_table.update().where(renters_table.c.id == renter.id).values(
-                        unit_id=renter.unit_id, access_token=renter.access_token, data=_serialize(renter)
+                        property_id=renter.property_id, access_token=renter.access_token, data=_serialize(renter)
                     )
                 )
             else:
                 conn.execute(
                     renters_table.insert().values(
-                        id=renter.id, unit_id=renter.unit_id,
+                        id=renter.id, property_id=renter.property_id,
                         access_token=renter.access_token, data=_serialize(renter)
                     )
                 )
@@ -325,14 +326,14 @@ class Database:
             ).fetchone()
             return _deserialize(Bill, result.data) if result else None
 
-    def list_bills(self, unit_id: Optional[str] = None) -> list[Bill]:
+    def list_bills(self, property_id: Optional[str] = None, renter_id: Optional[str] = None) -> list[Bill]:
         with engine.connect() as conn:
-            if unit_id:
-                results = conn.execute(
-                    bills_table.select().where(bills_table.c.unit_id == unit_id)
-                ).fetchall()
-            else:
-                results = conn.execute(bills_table.select()).fetchall()
+            query = bills_table.select()
+            if property_id:
+                query = query.where(bills_table.c.property_id == property_id)
+            if renter_id:
+                query = query.where(bills_table.c.renter_id == renter_id)
+            results = conn.execute(query).fetchall()
             return [_deserialize(Bill, r.data) for r in results]
 
     def save_bill(self, bill: Bill) -> Bill:
@@ -343,13 +344,13 @@ class Database:
             if existing:
                 conn.execute(
                     bills_table.update().where(bills_table.c.id == bill.id).values(
-                        unit_id=bill.unit_id, data=_serialize(bill)
+                        property_id=bill.property_id, renter_id=bill.renter_id, data=_serialize(bill)
                     )
                 )
             else:
                 conn.execute(
                     bills_table.insert().values(
-                        id=bill.id, unit_id=bill.unit_id, data=_serialize(bill)
+                        id=bill.id, property_id=bill.property_id, renter_id=bill.renter_id, data=_serialize(bill)
                     )
                 )
             conn.commit()

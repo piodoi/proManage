@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, Bill, Unit } from '../api';
+import { api, Bill, Renter } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Plus, Receipt, Settings } from 'lucide-react';
 type PropertyBillsViewProps = {
   token: string | null;
   propertyId: string;
-  units: Unit[];
+  renters: Renter[];
   bills: Bill[];
   onError?: (error: string) => void;
   onBillsChange?: () => void;
@@ -21,14 +21,14 @@ type PropertyBillsViewProps = {
 export default function PropertyBillsView({ 
   token, 
   propertyId, 
-  units, 
+  renters, 
   bills, 
   onError,
   onBillsChange 
 }: PropertyBillsViewProps) {
   const [showBillForm, setShowBillForm] = useState(false);
   const [billForm, setBillForm] = useState({
-    unit_id: '',
+    renter_id: '',  // Empty string means "all/property"
     description: '',
     amount: '',
   });
@@ -42,20 +42,21 @@ export default function PropertyBillsView({
 
   const handleCreateBill = async () => {
     if (!token) return;
-    if (!billForm.unit_id || !billForm.description || !billForm.amount) {
-      handleError(new Error('Please fill in all fields'));
+    if (!billForm.description || !billForm.amount) {
+      handleError(new Error('Please fill in description and amount'));
       return;
     }
     try {
       await api.bills.create(token, {
-        unit_id: billForm.unit_id,
+        property_id: propertyId,
+        renter_id: billForm.renter_id || undefined,  // Empty string becomes undefined (all renters)
         bill_type: 'other',
         description: billForm.description,
         amount: parseFloat(billForm.amount),
         due_date: new Date().toISOString(), // Default to today
       });
       setShowBillForm(false);
-      setBillForm({ unit_id: '', description: '', amount: '' });
+      setBillForm({ renter_id: '', description: '', amount: '' });
       if (onBillsChange) {
         onBillsChange();
       }
@@ -64,9 +65,8 @@ export default function PropertyBillsView({
     }
   };
 
-  // Filter bills for units in this property
-  const propertyUnitIds = new Set(units.map(u => u.id));
-  const propertyBills = bills.filter(bill => propertyUnitIds.has(bill.unit_id));
+  // Filter bills for this property
+  const propertyBills = bills.filter(bill => bill.property_id === propertyId);
 
   return (
     <Card className="bg-slate-800 border-slate-700">
@@ -138,17 +138,21 @@ export default function PropertyBillsView({
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-slate-300">Unit</Label>
-                    <Select value={billForm.unit_id} onValueChange={(v) => setBillForm({ ...billForm, unit_id: v })}>
+                    <Label className="text-slate-300">Renter</Label>
+                    <Select value={billForm.renter_id} onValueChange={(v) => setBillForm({ ...billForm, renter_id: v })}>
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                        <SelectValue placeholder="Select unit" />
+                        <SelectValue placeholder="Select renter" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        {units.map((unit) => (
-                          <SelectItem key={unit.id} value={unit.id}>{unit.unit_number}</SelectItem>
+                        <SelectItem value="">All / Property</SelectItem>
+                        {renters.map((renter) => (
+                          <SelectItem key={renter.id} value={renter.id}>{renter.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Select "All / Property" to apply bill to all renters, or select a specific renter
+                    </p>
                   </div>
                   <div>
                     <Label className="text-slate-300">What is this bill for?</Label>
@@ -183,7 +187,7 @@ export default function PropertyBillsView({
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-400">Unit</TableHead>
+              <TableHead className="text-slate-400">Renter</TableHead>
               <TableHead className="text-slate-400">Description</TableHead>
               <TableHead className="text-slate-400">Type</TableHead>
               <TableHead className="text-slate-400">Amount</TableHead>
@@ -200,10 +204,10 @@ export default function PropertyBillsView({
               </TableRow>
             ) : (
               propertyBills.map((bill) => {
-                const unit = units.find(u => u.id === bill.unit_id);
+                const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
                 return (
                   <TableRow key={bill.id} className="border-slate-700">
-                    <TableCell className="text-slate-300">{unit?.unit_number || 'Unknown'}</TableCell>
+                    <TableCell className="text-slate-300">{renter ? renter.name : 'All / Property'}</TableCell>
                     <TableCell className="text-slate-200">{bill.description}</TableCell>
                     <TableCell className="text-slate-300">{bill.bill_type}</TableCell>
                     <TableCell className="text-slate-200">{bill.amount.toFixed(2)} RON</TableCell>
@@ -227,4 +231,3 @@ export default function PropertyBillsView({
     </Card>
   );
 }
-

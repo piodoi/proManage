@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, Property, Unit, Renter, Bill, SubscriptionStatus } from '../api';
+import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,14 +20,12 @@ type LandlordViewProps = {
 
 export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
   const [properties, setProperties] = useState<Property[]>([]);
-  const [units, setUnits] = useState<Record<string, Unit[]>>({});
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
-  const [showUnitForm, setShowUnitForm] = useState<string | null>(null);
   const [showRenterForm, setShowRenterForm] = useState<string | null>(null);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [showEblocConfig, setShowEblocConfig] = useState<string | null>(null);
@@ -36,7 +34,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [eblocDiscovering, setEblocDiscovering] = useState(false);
   const [eblocImporting, setEblocImporting] = useState(false);
   const [propertyForm, setPropertyForm] = useState({ name: '', address: '' });
-  const [unitForm, setUnitForm] = useState({ unit_number: '' });
   const [renterForm, setRenterForm] = useState({ name: '', rent_date: '', rent_amount: '', rent_currency: 'EUR' as 'EUR' | 'RON' | 'USD', email: '', phone: '' });
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
@@ -194,15 +191,11 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       setBills(billsData);
       setSubscription(subData);
       
-      console.log('[LandlordView] Loading units and renters...');
+      console.log('[LandlordView] Loading renters...');
       for (const prop of propsData) {
-        const unitsData = await api.units.list(token, prop.id);
-        console.log(`[LandlordView] Property ${prop.name}: ${unitsData.length} units`);
-        setUnits((prev) => ({ ...prev, [prop.id]: unitsData }));
-        for (const unit of unitsData) {
-          const rentersData = await api.renters.list(token, unit.id);
-          setRenters((prev) => ({ ...prev, [unit.id]: rentersData }));
-        }
+        const rentersData = await api.renters.list(token, prop.id);
+        console.log(`[LandlordView] Property ${prop.name}: ${rentersData.length} renters`);
+        setRenters((prev) => ({ ...prev, [prop.id]: rentersData }));
       }
       console.log('[LandlordView] Data loaded successfully');
     } catch (err) {
@@ -238,19 +231,8 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     }
   };
 
-  const handleCreateUnit = async (propertyId: string) => {
-    if (!token) return;
-    try {
-      await api.units.create(token, propertyId, unitForm);
-      setShowUnitForm(null);
-      setUnitForm({ unit_number: '' });
-      loadData();
-    } catch (err) {
-      handleError(err);
-    }
-  };
 
-  const handleCreateRenter = async (unitId: string) => {
+  const handleCreateRenter = async (propertyId: string) => {
     if (!token) return;
     if (!renterForm.name || !renterForm.rent_amount) {
       handleError(new Error('Name and rent amount are required'));
@@ -265,7 +247,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       const rentAmountEUR = parseFloat(renterForm.rent_amount);
       
       // Create renter with all info including rent details
-      await api.renters.create(token, unitId, {
+      await api.renters.create(token, propertyId, {
         name: renterForm.name,
         email: renterForm.email || undefined,
         phone: renterForm.phone || undefined,
@@ -716,33 +698,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                     <p className="text-sm text-slate-400">{property.address}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Dialog open={showUnitForm === property.id} onOpenChange={(open) => setShowUnitForm(open ? property.id : null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Unit
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="bg-slate-800 border-slate-700">
-                        <DialogHeader>
-                          <DialogTitle className="text-slate-100">Add Unit</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label className="text-slate-300">Unit Number</Label>
-                            <Input
-                              value={unitForm.unit_number}
-                              onChange={(e) => setUnitForm({ unit_number: e.target.value })}
-                              className="bg-slate-700 border-slate-600 text-slate-100"
-                              placeholder="Apt 101"
-                            />
-                          </div>
-                          <Button onClick={() => handleCreateUnit(property.id)} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                            Add Unit
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
                     <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
@@ -791,190 +746,180 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {(units[property.id] || []).length === 0 ? (
-                    <p className="text-slate-500 text-sm">No units yet</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {(units[property.id] || []).map((unit) => (
-                        <div key={unit.id} className="bg-slate-700/50 rounded p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-slate-200 font-medium">{unit.unit_number}</span>
-                            <Dialog open={showRenterForm === unit.id && (editingRenter === null || renters[unit.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
-                              if (!open) {
-                                setShowRenterForm(null);
-                                setEditingRenter(null);
-                                // Form will be reset by useEffect when editingRenter becomes null
-                              } else {
-                                setShowRenterForm(unit.id);
-                              }
-                            }}>
-                              <DialogTrigger asChild>
-                                <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-100">
-                                  <Users className="w-4 h-4 mr-1" />
-                                  Add Renter
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${editingRenter?.id || 'new'}`}>
-                                <DialogHeader>
-                                  <DialogTitle className="text-slate-100">
-                                    {editingRenter ? 'Edit Renter' : 'Add Renter'}
-                                  </DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label className="text-slate-300">Name *</Label>
-                                    <Input
-                                      key={`name-${editingRenter?.id || 'new'}`}
-                                      value={renterForm.name}
-                                      onChange={(e) => setRenterForm({ ...renterForm, name: e.target.value })}
-                                      className="bg-slate-700 border-slate-600 text-slate-100"
-                                      placeholder="Renter name"
-                                      required
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label className="text-slate-300">Rent Date (Due Date)</Label>
-                                    <Input
-                                      key={`rent_date-${editingRenter?.id || 'new'}`}
-                                      type="date"
-                                      value={renterForm.rent_date}
-                                      onChange={(e) => setRenterForm({ ...renterForm, rent_date: e.target.value })}
-                                      className="bg-slate-700 border-slate-600 text-slate-100"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">
-                                      Defaults to 1st of current month if not filled
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-slate-300">Rent Amount *</Label>
-                                    <div className="flex gap-2 items-center">
-                                      <Input
-                                        key={`rent_amount-${editingRenter?.id || 'new'}`}
-                                        type="number"
-                                        step="0.01"
-                                        value={renterForm.rent_amount}
-                                        onChange={(e) => setRenterForm({ ...renterForm, rent_amount: e.target.value })}
-                                        className="bg-slate-700 border-slate-600 text-slate-100 w-32 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                        placeholder="0.00"
-                                        required
-                                      />
-                                      <Select 
-                                        key={`rent_currency-${editingRenter?.id || 'new'}`}
-                                        value={renterForm.rent_currency} 
-                                        onValueChange={(v) => setRenterForm({ ...renterForm, rent_currency: v as 'EUR' | 'RON' | 'USD' })}
-                                      >
-                                        <SelectTrigger className="w-20 h-10 bg-slate-700 border-slate-600 text-slate-100">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-700 border-slate-600">
-                                          <SelectItem value="EUR">EUR</SelectItem>
-                                          <SelectItem value="RON">RON</SelectItem>
-                                          <SelectItem value="USD">USD</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-1">
-                                      Will be converted to RON automatically if needed
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-slate-300">Phone (optional)</Label>
-                                    <Input
-                                      key={`phone-${editingRenter?.id || 'new'}`}
-                                      type="tel"
-                                      value={renterForm.phone}
-                                      onChange={(e) => setRenterForm({ ...renterForm, phone: e.target.value })}
-                                      className="bg-slate-700 border-slate-600 text-slate-100"
-                                      placeholder="+40 123 456 789"
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label className="text-slate-300">Email (optional)</Label>
-                                    <Input
-                                      key={`email-${editingRenter?.id || 'new'}`}
-                                      type="email"
-                                      value={renterForm.email}
-                                      onChange={(e) => setRenterForm({ ...renterForm, email: e.target.value })}
-                                      className="bg-slate-700 border-slate-600 text-slate-100"
-                                      placeholder="renter@example.com"
-                                    />
-                                  </div>
-                                  <Button 
-                                    onClick={() => editingRenter ? handleUpdateRenter(editingRenter.id) : handleCreateRenter(unit.id)} 
-                                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                                    disabled={!renterForm.name || !renterForm.rent_amount}
-                                  >
-                                    {editingRenter ? 'Update Renter' : 'Add Renter'}
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-slate-200 font-medium">Renters</span>
+                    <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
+                      if (!open) {
+                        setShowRenterForm(null);
+                        setEditingRenter(null);
+                        // Form will be reset by useEffect when editingRenter becomes null
+                      } else {
+                        setShowRenterForm(property.id);
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-100">
+                          <Users className="w-4 h-4 mr-1" />
+                          Add Renter
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${editingRenter?.id || 'new'}`}>
+                        <DialogHeader>
+                          <DialogTitle className="text-slate-100">
+                            {editingRenter ? 'Edit Renter' : 'Add Renter'}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-slate-300">Name *</Label>
+                            <Input
+                              key={`name-${editingRenter?.id || 'new'}`}
+                              value={renterForm.name}
+                              onChange={(e) => setRenterForm({ ...renterForm, name: e.target.value })}
+                              className="bg-slate-700 border-slate-600 text-slate-100"
+                              placeholder="Renter name"
+                              required
+                            />
                           </div>
-                          {(renters[unit.id] || []).length === 0 ? (
-                            <p className="text-slate-500 text-xs">No renters</p>
-                          ) : (
-                            <div className="space-y-1">
-                              {(renters[unit.id] || []).map((renter) => {
-                                const rentAmountEUR = renter.rent_amount_eur || 0;
-                                // Convert to RON using live exchange rates
-                                const rentAmountRON = rentAmountEUR > 0 
-                                  ? (rentAmountEUR * exchangeRates.RON).toFixed(2)
-                                  : '0.00';
-                                
-                                return (
-                                <div key={renter.id} className="flex items-center justify-between text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-slate-300 font-medium">{renter.name}</span>
-                                    {(rentAmountEUR > 0 || renter.rent_date) && (
-                                      <span className="text-xs text-slate-400">
-                                        {rentAmountEUR > 0 && (
-                                          <>
-                                            <span>{rentAmountEUR.toFixed(2)} EUR</span>
-                                            <span className="ml-1">({rentAmountRON} RON)</span>
-                                          </>
-                                        )}
-                                        {renter.rent_date && (
-                                          <span className="ml-2">• Due: {new Date(renter.rent_date).toLocaleDateString()}</span>
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-                                    <div className="flex gap-1">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => openEditRenter(renter)}
-                                      className="text-slate-400 hover:text-slate-200 h-6 px-2"
-                                      title="Edit renter"
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleGetRenterLink(renter.id)}
-                                      className="text-emerald-400 hover:text-emerald-300 h-6 px-2"
-                                      title="Get renter link"
-                                    >
-                                      <ExternalLink className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleDeleteRenter(renter.id)}
-                                      className="text-red-400 hover:text-red-200 h-6 px-2"
-                                      title="Delete renter"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              );
-                              })}
+                          <div>
+                            <Label className="text-slate-300">Rent Date (Due Date)</Label>
+                            <Input
+                              key={`rent_date-${editingRenter?.id || 'new'}`}
+                              type="date"
+                              value={renterForm.rent_date}
+                              onChange={(e) => setRenterForm({ ...renterForm, rent_date: e.target.value })}
+                              className="bg-slate-700 border-slate-600 text-slate-100"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Defaults to 1st of current month if not filled
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-slate-300">Rent Amount *</Label>
+                            <div className="flex gap-2 items-center">
+                              <Input
+                                key={`rent_amount-${editingRenter?.id || 'new'}`}
+                                type="number"
+                                step="0.01"
+                                value={renterForm.rent_amount}
+                                onChange={(e) => setRenterForm({ ...renterForm, rent_amount: e.target.value })}
+                                className="bg-slate-700 border-slate-600 text-slate-100 w-32 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                placeholder="0.00"
+                                required
+                              />
+                              <Select 
+                                key={`rent_currency-${editingRenter?.id || 'new'}`}
+                                value={renterForm.rent_currency} 
+                                onValueChange={(v) => setRenterForm({ ...renterForm, rent_currency: v as 'EUR' | 'RON' | 'USD' })}
+                              >
+                                <SelectTrigger className="w-20 h-10 bg-slate-700 border-slate-600 text-slate-100">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-700 border-slate-600">
+                                  <SelectItem value="EUR">EUR</SelectItem>
+                                  <SelectItem value="RON">RON</SelectItem>
+                                  <SelectItem value="USD">USD</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                          )}
+                            <p className="text-xs text-slate-500 mt-1">
+                              Will be converted to RON automatically if needed
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-slate-300">Phone (optional)</Label>
+                            <Input
+                              key={`phone-${editingRenter?.id || 'new'}`}
+                              type="tel"
+                              value={renterForm.phone}
+                              onChange={(e) => setRenterForm({ ...renterForm, phone: e.target.value })}
+                              className="bg-slate-700 border-slate-600 text-slate-100"
+                              placeholder="+40 123 456 789"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-slate-300">Email (optional)</Label>
+                            <Input
+                              key={`email-${editingRenter?.id || 'new'}`}
+                              type="email"
+                              value={renterForm.email}
+                              onChange={(e) => setRenterForm({ ...renterForm, email: e.target.value })}
+                              className="bg-slate-700 border-slate-600 text-slate-100"
+                              placeholder="renter@example.com"
+                            />
+                          </div>
+                          <Button 
+                            onClick={() => editingRenter ? handleUpdateRenter(editingRenter.id) : handleCreateRenter(property.id)} 
+                            className="w-full bg-emerald-600 hover:bg-emerald-700"
+                            disabled={!renterForm.name || !renterForm.rent_amount}
+                          >
+                            {editingRenter ? 'Update Renter' : 'Add Renter'}
+                          </Button>
                         </div>
-                      ))}
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  {(renters[property.id] || []).length === 0 ? (
+                    <p className="text-slate-500 text-xs">No renters yet</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {(renters[property.id] || []).map((renter) => {
+                        const rentAmountEUR = renter.rent_amount_eur || 0;
+                        // Convert to RON using live exchange rates
+                        const rentAmountRON = rentAmountEUR > 0 
+                          ? (rentAmountEUR * exchangeRates.RON).toFixed(2)
+                          : '0.00';
+                        
+                        return (
+                        <div key={renter.id} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-300 font-medium">{renter.name}</span>
+                            {(rentAmountEUR > 0 || renter.rent_date) && (
+                              <span className="text-xs text-slate-400">
+                                {rentAmountEUR > 0 && (
+                                  <>
+                                    <span>{rentAmountEUR.toFixed(2)} EUR</span>
+                                    <span className="ml-1">({rentAmountRON} RON)</span>
+                                  </>
+                                )}
+                                {renter.rent_date && (
+                                  <span className="ml-2">• Due: {new Date(renter.rent_date).toLocaleDateString()}</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openEditRenter(renter)}
+                              className="text-slate-400 hover:text-slate-200 h-6 px-2"
+                              title="Edit renter"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleGetRenterLink(renter.id)}
+                              className="text-emerald-400 hover:text-emerald-300 h-6 px-2"
+                              title="Get renter link"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteRenter(renter.id)}
+                              className="text-red-400 hover:text-red-200 h-6 px-2"
+                              title="Delete renter"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -984,7 +929,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   <PropertyBillsView
                     token={token}
                     propertyId={property.id}
-                    units={units[property.id] || []}
+                    renters={renters[property.id] || []}
                     bills={bills}
                     onError={setError}
                     onBillsChange={loadData}
@@ -1187,33 +1132,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                       <p className="text-sm text-slate-400">{property.address}</p>
                     </div>
                     <div className="flex gap-2">
-                      <Dialog open={showUnitForm === property.id} onOpenChange={(open) => setShowUnitForm(open ? property.id : null)}>
-                        <DialogTrigger asChild>
-                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-                            <Plus className="w-4 h-4 mr-1" />
-                            Add Unit
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-slate-800 border-slate-700">
-                          <DialogHeader>
-                            <DialogTitle className="text-slate-100">Add Unit</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label className="text-slate-300">Unit Number</Label>
-                              <Input
-                                value={unitForm.unit_number}
-                                onChange={(e) => setUnitForm({ unit_number: e.target.value })}
-                                className="bg-slate-700 border-slate-600 text-slate-100"
-                                placeholder="Apt 101"
-                              />
-                            </div>
-                            <Button onClick={() => handleCreateUnit(property.id)} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                              Add Unit
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
                       <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                         <DialogTrigger asChild>
                           <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
@@ -1261,190 +1179,180 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {(units[property.id] || []).length === 0 ? (
-                      <p className="text-slate-500 text-sm">No units yet</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {(units[property.id] || []).map((unit) => (
-                          <div key={unit.id} className="bg-slate-700/50 rounded p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-slate-200 font-medium">{unit.unit_number}</span>
-                              <Dialog open={showRenterForm === unit.id && (editingRenter === null || renters[unit.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
-                                if (!open) {
-                                  setShowRenterForm(null);
-                                  setEditingRenter(null);
-                                  // Form will be reset by useEffect when editingRenter becomes null
-                                } else {
-                                  setShowRenterForm(unit.id);
-                                }
-                              }}>
-                                <DialogTrigger asChild>
-                                  <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-100">
-                                    <Users className="w-4 h-4 mr-1" />
-                                    Add Renter
-                                  </Button>
-                                </DialogTrigger>
-                              <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${editingRenter?.id || 'new'}`}>
-                                <DialogHeader>
-                                  <DialogTitle className="text-slate-100">
-                                    {editingRenter ? 'Edit Renter' : 'Add Renter'}
-                                  </DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label className="text-slate-300">Name *</Label>
-                                    <Input
-                                      key={`name-${editingRenter?.id || 'new'}`}
-                                      value={renterForm.name}
-                                      onChange={(e) => setRenterForm({ ...renterForm, name: e.target.value })}
-                                      className="bg-slate-700 border-slate-600 text-slate-100"
-                                      placeholder="Renter name"
-                                      required
-                                    />
-                                  </div>
-                                    <div>
-                                      <Label className="text-slate-300">Rent Date (Due Date)</Label>
-                                      <Input
-                                        key={`rent_date-${editingRenter?.id || 'new'}`}
-                                        type="date"
-                                        value={renterForm.rent_date}
-                                        onChange={(e) => setRenterForm({ ...renterForm, rent_date: e.target.value })}
-                                        className="bg-slate-700 border-slate-600 text-slate-100"
-                                      />
-                                      <p className="text-xs text-slate-500 mt-1">
-                                        Defaults to 1st of current month if not filled
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <Label className="text-slate-300">Rent Amount *</Label>
-                                      <div className="flex gap-2 items-center">
-                                        <Input
-                                          key={`rent_amount-${editingRenter?.id || 'new'}`}
-                                          type="number"
-                                          step="0.01"
-                                          value={renterForm.rent_amount}
-                                          onChange={(e) => setRenterForm({ ...renterForm, rent_amount: e.target.value })}
-                                          className="bg-slate-700 border-slate-600 text-slate-100 w-32 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                          placeholder="0.00"
-                                          required
-                                        />
-                                        <Select 
-                                          key={`rent_currency-${editingRenter?.id || 'new'}`}
-                                          value={renterForm.rent_currency} 
-                                          onValueChange={(v) => setRenterForm({ ...renterForm, rent_currency: v as 'EUR' | 'RON' | 'USD' })}
-                                        >
-                                          <SelectTrigger className="w-20 h-10 bg-slate-700 border-slate-600 text-slate-100">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-slate-700 border-slate-600">
-                                            <SelectItem value="EUR">EUR</SelectItem>
-                                            <SelectItem value="RON">RON</SelectItem>
-                                            <SelectItem value="USD">USD</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <p className="text-xs text-slate-500 mt-1">
-                                        Will be converted to RON automatically if needed
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <Label className="text-slate-300">Phone (optional)</Label>
-                                      <Input
-                                        key={`phone-${editingRenter?.id || 'new'}`}
-                                        type="tel"
-                                        value={renterForm.phone}
-                                        onChange={(e) => setRenterForm({ ...renterForm, phone: e.target.value })}
-                                        className="bg-slate-700 border-slate-600 text-slate-100"
-                                        placeholder="+40 123 456 789"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-slate-300">Email (optional)</Label>
-                                      <Input
-                                        key={`email-${editingRenter?.id || 'new'}`}
-                                        type="email"
-                                        value={renterForm.email}
-                                        onChange={(e) => setRenterForm({ ...renterForm, email: e.target.value })}
-                                        className="bg-slate-700 border-slate-600 text-slate-100"
-                                        placeholder="renter@example.com"
-                                      />
-                                    </div>
-                                    <Button 
-                                      onClick={() => editingRenter ? handleUpdateRenter(editingRenter.id) : handleCreateRenter(unit.id)} 
-                                      className="w-full bg-emerald-600 hover:bg-emerald-700"
-                                      disabled={!renterForm.name || !renterForm.rent_amount}
-                                    >
-                                      {editingRenter ? 'Update Renter' : 'Add Renter'}
-                                    </Button>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-slate-200 font-medium">Renters</span>
+                      <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
+                        if (!open) {
+                          setShowRenterForm(null);
+                          setEditingRenter(null);
+                          // Form will be reset by useEffect when editingRenter becomes null
+                        } else {
+                          setShowRenterForm(property.id);
+                        }
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-100">
+                            <Users className="w-4 h-4 mr-1" />
+                            Add Renter
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${editingRenter?.id || 'new'}`}>
+                          <DialogHeader>
+                            <DialogTitle className="text-slate-100">
+                              {editingRenter ? 'Edit Renter' : 'Add Renter'}
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label className="text-slate-300">Name *</Label>
+                              <Input
+                                key={`name-${editingRenter?.id || 'new'}`}
+                                value={renterForm.name}
+                                onChange={(e) => setRenterForm({ ...renterForm, name: e.target.value })}
+                                className="bg-slate-700 border-slate-600 text-slate-100"
+                                placeholder="Renter name"
+                                required
+                              />
                             </div>
-                            {(renters[unit.id] || []).length === 0 ? (
-                              <p className="text-slate-500 text-xs">No renters</p>
-                            ) : (
-                              <div className="space-y-1">
-                                {(renters[unit.id] || []).map((renter) => {
-                                  const rentAmountEUR = renter.rent_amount_eur || 0;
-                                  // Convert to RON using live exchange rates
-                                  const rentAmountRON = rentAmountEUR > 0 
-                                    ? (rentAmountEUR * exchangeRates.RON).toFixed(2)
-                                    : '0.00';
-                                  
-                                  return (
-                                  <div key={renter.id} className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-slate-300 font-medium">{renter.name}</span>
-                                      {(rentAmountEUR > 0 || renter.rent_date) && (
-                                        <span className="text-xs text-slate-400">
-                                          {rentAmountEUR > 0 && (
-                                            <>
-                                              <span>{rentAmountEUR.toFixed(2)} EUR</span>
-                                              <span className="ml-1">({rentAmountRON} RON)</span>
-                                            </>
-                                          )}
-                                          {renter.rent_date && (
-                                            <span className="ml-2">• Due: {new Date(renter.rent_date).toLocaleDateString()}</span>
-                                          )}
-                                        </span>
-                                      )}
-                                    </div>
-                                      <div className="flex gap-1">
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => openEditRenter(renter)}
-                                          className="text-slate-400 hover:text-slate-200 h-6 px-2"
-                                          title="Edit renter"
-                                        >
-                                          <Pencil className="w-3 h-3" />
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => handleGetRenterLink(renter.id)}
-                                          className="text-emerald-400 hover:text-emerald-300 h-6 px-2"
-                                          title="Get renter link"
-                                        >
-                                          <ExternalLink className="w-3 h-3" />
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => handleDeleteRenter(renter.id)}
-                                          className="text-red-400 hover:text-red-200 h-6 px-2"
-                                          title="Delete renter"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                );
-                                })}
+                            <div>
+                              <Label className="text-slate-300">Rent Date (Due Date)</Label>
+                              <Input
+                                key={`rent_date-${editingRenter?.id || 'new'}`}
+                                type="date"
+                                value={renterForm.rent_date}
+                                onChange={(e) => setRenterForm({ ...renterForm, rent_date: e.target.value })}
+                                className="bg-slate-700 border-slate-600 text-slate-100"
+                              />
+                              <p className="text-xs text-slate-500 mt-1">
+                                Defaults to 1st of current month if not filled
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-slate-300">Rent Amount *</Label>
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  key={`rent_amount-${editingRenter?.id || 'new'}`}
+                                  type="number"
+                                  step="0.01"
+                                  value={renterForm.rent_amount}
+                                  onChange={(e) => setRenterForm({ ...renterForm, rent_amount: e.target.value })}
+                                  className="bg-slate-700 border-slate-600 text-slate-100 w-32 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                  placeholder="0.00"
+                                  required
+                                />
+                                <Select 
+                                  key={`rent_currency-${editingRenter?.id || 'new'}`}
+                                  value={renterForm.rent_currency} 
+                                  onValueChange={(v) => setRenterForm({ ...renterForm, rent_currency: v as 'EUR' | 'RON' | 'USD' })}
+                                >
+                                  <SelectTrigger className="w-20 h-10 bg-slate-700 border-slate-600 text-slate-100">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-slate-700 border-slate-600">
+                                    <SelectItem value="EUR">EUR</SelectItem>
+                                    <SelectItem value="RON">RON</SelectItem>
+                                    <SelectItem value="USD">USD</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            )}
+                              <p className="text-xs text-slate-500 mt-1">
+                                Will be converted to RON automatically if needed
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-slate-300">Phone (optional)</Label>
+                              <Input
+                                key={`phone-${editingRenter?.id || 'new'}`}
+                                type="tel"
+                                value={renterForm.phone}
+                                onChange={(e) => setRenterForm({ ...renterForm, phone: e.target.value })}
+                                className="bg-slate-700 border-slate-600 text-slate-100"
+                                placeholder="+40 123 456 789"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-slate-300">Email (optional)</Label>
+                              <Input
+                                key={`email-${editingRenter?.id || 'new'}`}
+                                type="email"
+                                value={renterForm.email}
+                                onChange={(e) => setRenterForm({ ...renterForm, email: e.target.value })}
+                                className="bg-slate-700 border-slate-600 text-slate-100"
+                                placeholder="renter@example.com"
+                              />
+                            </div>
+                            <Button 
+                              onClick={() => editingRenter ? handleUpdateRenter(editingRenter.id) : handleCreateRenter(property.id)} 
+                              className="w-full bg-emerald-600 hover:bg-emerald-700"
+                              disabled={!renterForm.name || !renterForm.rent_amount}
+                            >
+                              {editingRenter ? 'Update Renter' : 'Add Renter'}
+                            </Button>
                           </div>
-                        ))}
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                    {(renters[property.id] || []).length === 0 ? (
+                      <p className="text-slate-500 text-xs">No renters yet</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {(renters[property.id] || []).map((renter) => {
+                          const rentAmountEUR = renter.rent_amount_eur || 0;
+                          // Convert to RON using live exchange rates
+                          const rentAmountRON = rentAmountEUR > 0 
+                            ? (rentAmountEUR * exchangeRates.RON).toFixed(2)
+                            : '0.00';
+                          
+                          return (
+                          <div key={renter.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-300 font-medium">{renter.name}</span>
+                              {(rentAmountEUR > 0 || renter.rent_date) && (
+                                <span className="text-xs text-slate-400">
+                                  {rentAmountEUR > 0 && (
+                                    <>
+                                      <span>{rentAmountEUR.toFixed(2)} EUR</span>
+                                      <span className="ml-1">({rentAmountRON} RON)</span>
+                                    </>
+                                  )}
+                                  {renter.rent_date && (
+                                    <span className="ml-2">• Due: {new Date(renter.rent_date).toLocaleDateString()}</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditRenter(renter)}
+                                className="text-slate-400 hover:text-slate-200 h-6 px-2"
+                                title="Edit renter"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleGetRenterLink(renter.id)}
+                                className="text-emerald-400 hover:text-emerald-300 h-6 px-2"
+                                title="Get renter link"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteRenter(renter.id)}
+                                className="text-red-400 hover:text-red-200 h-6 px-2"
+                                title="Delete renter"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -1453,7 +1361,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                     <PropertyBillsView
                       token={token}
                       propertyId={property.id}
-                      units={units[property.id] || []}
+                      renters={renters[property.id] || []}
                       bills={bills}
                       onError={setError}
                       onBillsChange={loadData}

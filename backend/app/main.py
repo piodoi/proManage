@@ -268,33 +268,27 @@ async def delete_unit(unit_id: str, current_user: TokenData = Depends(require_la
     return {"status": "deleted"}
 
 
-@app.get("/units/{unit_id}/renters")
-async def list_renters(unit_id: str, current_user: TokenData = Depends(require_landlord)):
-    unit = db.get_unit(unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+@app.get("/properties/{property_id}/renters")
+async def list_renters(property_id: str, current_user: TokenData = Depends(require_landlord)):
+    prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    return db.list_renters(unit_id=unit_id)
+    return db.list_renters(property_id=property_id)
 
 
-@app.post("/units/{unit_id}/renters", status_code=status.HTTP_201_CREATED)
+@app.post("/properties/{property_id}/renters", status_code=status.HTTP_201_CREATED)
 async def create_renter(
-    unit_id: str, data: RenterCreate, current_user: TokenData = Depends(require_landlord)
+    property_id: str, data: RenterCreate, current_user: TokenData = Depends(require_landlord)
 ):
-    unit = db.get_unit(unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     renter = Renter(
-        unit_id=unit_id, 
+        property_id=property_id, 
         name=data.name, 
         email=data.email, 
         phone=data.phone,
@@ -355,10 +349,7 @@ async def delete_renter(renter_id: str, current_user: TokenData = Depends(requir
     renter = db.get_renter(renter_id)
     if not renter:
         raise HTTPException(status_code=404, detail="Renter not found")
-    unit = db.get_unit(renter.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(renter.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -372,10 +363,7 @@ async def get_renter_link(renter_id: str, current_user: TokenData = Depends(requ
     renter = db.get_renter(renter_id)
     if not renter:
         raise HTTPException(status_code=404, detail="Renter not found")
-    unit = db.get_unit(renter.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(renter.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -387,25 +375,25 @@ async def get_renter_link(renter_id: str, current_user: TokenData = Depends(requ
 async def list_bills(current_user: TokenData = Depends(require_landlord)):
     if current_user.role == UserRole.ADMIN:
         return db.list_bills()
-    landlord_units = set()
-    for prop in db.list_properties(landlord_id=current_user.user_id):
-        for unit in db.list_units(property_id=prop.id):
-            landlord_units.add(unit.id)
-    return [b for b in db.list_bills() if b.unit_id in landlord_units]
+    landlord_properties = {prop.id for prop in db.list_properties(landlord_id=current_user.user_id)}
+    return [b for b in db.list_bills() if b.property_id in landlord_properties]
 
 
 @app.post("/bills", status_code=status.HTTP_201_CREATED)
 async def create_bill(data: BillCreate, current_user: TokenData = Depends(require_landlord)):
-    unit = db.get_unit(data.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(data.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    # If renter_id is provided, verify it belongs to the property
+    if data.renter_id:
+        renter = db.get_renter(data.renter_id)
+        if not renter or renter.property_id != data.property_id:
+            raise HTTPException(status_code=404, detail="Renter not found in this property")
     bill = Bill(
-        unit_id=data.unit_id,
+        property_id=data.property_id,
+        renter_id=data.renter_id,
         bill_type=data.bill_type,
         description=data.description,
         amount=data.amount,
@@ -486,11 +474,10 @@ async def renter_info(token: str):
     renter = db.get_renter_by_token(token)
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
-    unit = db.get_unit(renter.unit_id)
-    prop = db.get_property(unit.property_id) if unit else None
+    prop = db.get_property(renter.property_id)
     return {
         "renter": {"id": renter.id, "name": renter.name},
-        "unit": {"id": unit.id, "unit_number": unit.unit_number} if unit else None,
+        "unit": None,  # Units are removed
         "property": {"id": prop.id, "name": prop.name, "address": prop.address} if prop else None,
     }
 
@@ -500,7 +487,9 @@ async def renter_bills(token: str):
     renter = db.get_renter_by_token(token)
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
-    bills = db.list_bills(unit_id=renter.unit_id)
+    # Get bills for this property that either apply to all renters (renter_id is None) or to this specific renter
+    all_bills = db.list_bills(property_id=renter.property_id)
+    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
     result = []
     for bill in bills:
         payments = db.list_payments(bill_id=bill.id)
@@ -518,7 +507,9 @@ async def renter_balance(token: str):
     renter = db.get_renter_by_token(token)
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
-    bills = db.list_bills(unit_id=renter.unit_id)
+    # Get bills for this property that either apply to all renters (renter_id is None) or to this specific renter
+    all_bills = db.list_bills(property_id=renter.property_id)
+    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
     total_due = sum(b.amount for b in bills if b.status != BillStatus.PAID)
     total_paid = 0.0
     for bill in bills:
@@ -604,12 +595,10 @@ async def process_email(
     property_id = match_address_to_property(info.address, landlord_properties)
     if not property_id:
         return {"status": "no_match", "extracted": info, "message": "Could not match to property"}
-    units = db.list_units(property_id=property_id)
-    if not units:
-        return {"status": "no_units", "extracted": info, "message": "Property has no units"}
-    unit = units[0]
+    # Create bill for the property (applies to all renters)
     bill = Bill(
-        unit_id=unit.id,
+        property_id=property_id,
+        renter_id=None,  # Applies to all renters in the property
         bill_type=BillType.UTILITIES,
         description=f"Bill from {sender}: {subject}",
         amount=info.amount or 0,
@@ -826,25 +815,17 @@ async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require
         payments = await scraper.get_payments(config.ebloc_page_id)
         
         # Get or create a unit for this property (or use first unit)
-        units = db.list_units(property_id=property_id)
-        if not units:
-            # Create a default unit
-            unit = Unit(property_id=property_id, unit_number="Default")
-            db.save_unit(unit)
-            units = [unit]
-        
-        unit = units[0]
-        
         # Create bills from outstanding balance
         bills_created = []
         if balance and balance.outstanding_debt > 0:
             # Check if bill already exists
-            existing_bills = db.list_bills(unit_id=unit.id)
-            existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.status == BillStatus.PENDING]
+            existing_bills = db.list_bills(property_id=property_id)
+            existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.status == BillStatus.PENDING and b.renter_id is None]
             
             if not existing_ebloc_bills or sum(b.amount for b in existing_ebloc_bills) < balance.outstanding_debt:
                 bill = Bill(
-                    unit_id=unit.id,
+                    property_id=property_id,
+                    renter_id=None,  # Applies to all renters in the property
                     bill_type=BillType.EBLOC,
                     description=f"E-bloc outstanding balance - {balance.oldest_debt_month or 'Current'}",
                     amount=balance.outstanding_debt,
@@ -858,15 +839,16 @@ async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require
         payments_created = []
         for payment in payments:
             # Find matching bill or create one
-            matching_bills = [b for b in db.list_bills(unit_id=unit.id) 
-                            if b.bill_type == BillType.EBLOC and abs(b.amount - payment.amount) < 0.01]
+            matching_bills = [b for b in db.list_bills(property_id=property_id) 
+                            if b.bill_type == BillType.EBLOC and b.renter_id is None and abs(b.amount - payment.amount) < 0.01]
             
             if matching_bills:
                 bill = matching_bills[0]
             else:
                 # Create a bill for this payment
                 bill = Bill(
-                    unit_id=unit.id,
+                    property_id=property_id,
+                    renter_id=None,  # Applies to all renters in the property
                     bill_type=BillType.EBLOC,
                     description=f"E-bloc payment receipt {payment.receipt_number}",
                     amount=payment.amount,
@@ -914,9 +896,8 @@ async def list_payments(current_user: TokenData = Depends(require_landlord)):
         return db.list_payments()
     landlord_bills = set()
     for prop in db.list_properties(landlord_id=current_user.user_id):
-        for unit in db.list_units(property_id=prop.id):
-            for bill in db.list_bills(unit_id=unit.id):
-                landlord_bills.add(bill.id)
+        for bill in db.list_bills(property_id=prop.id):
+            landlord_bills.add(bill.id)
     return [p for p in db.list_payments() if p.bill_id in landlord_bills]
 
 
