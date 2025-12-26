@@ -647,7 +647,8 @@ async def discover_ebloc_properties(
                 {
                     "page_id": p.page_id,
                     "name": p.name,
-                    "address": p.address or p.name
+                    "address": p.address or p.name,
+                    "url": p.url  # Include the e-bloc URL
                 }
                 for p in properties
             ]
@@ -676,38 +677,60 @@ async def configure_ebloc(
     # If property_id is not provided, we'll create properties from e-bloc
     if not data.property_id and data.ebloc_page_id:
         logger.info(f"[E-Bloc] Creating new property from e-bloc page_id: {data.ebloc_page_id}")
-        # Discover and create property
-        scraper = EblocScraper()
-        try:
-            logged_in = await scraper.login(data.username, data.password)
-            if not logged_in:
-                logger.warning("[E-Bloc] Login failed during property creation")
-                raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
-            
-            properties = await scraper.get_available_properties()
-            logger.info(f"[E-Bloc] Found {len(properties)} properties, looking for page_id: {data.ebloc_page_id}")
-            ebloc_prop = next((p for p in properties if p.page_id == data.ebloc_page_id), None)
-            if not ebloc_prop:
-                logger.warning(f"[E-Bloc] Property with page_id {data.ebloc_page_id} not found")
-                raise HTTPException(status_code=404, detail="E-bloc property not found")
-            
-            logger.info(f"[E-Bloc] Creating property: {ebloc_prop.name} at {ebloc_prop.address}")
-            # Create property
+        
+        # Use provided property data directly (instant import) or fall back to scraping
+        if data.ebloc_property_name and data.ebloc_property_address:
+            logger.info(f"[E-Bloc] Using provided property data (instant import): {data.ebloc_property_name}")
             prop = Property(
                 landlord_id=current_user.user_id,
-                name=ebloc_prop.name,
-                address=ebloc_prop.address or ebloc_prop.name
+                name=data.ebloc_property_name,
+                address=data.ebloc_property_address
             )
             db.save_property(prop)
             property_id = prop.id
             logger.info(f"[E-Bloc] Property created with id: {property_id}")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"[E-Bloc] Error creating property: {str(e)}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error creating property: {str(e)}")
-        finally:
-            await scraper.close()
+        else:
+            # Fallback: scrape if data not provided
+            logger.info("[E-Bloc] Property data not provided, falling back to scraping...")
+            scraper = EblocScraper()
+            try:
+                logged_in = await scraper.login(data.username, data.password)
+                if not logged_in:
+                    logger.warning("[E-Bloc] Login failed during property creation")
+                    raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
+                
+                properties = await scraper.get_available_properties()
+                logger.info(f"[E-Bloc] Found {len(properties)} properties, looking for page_id: {data.ebloc_page_id}")
+                ebloc_prop = next((p for p in properties if p.page_id == data.ebloc_page_id), None)
+                if not ebloc_prop:
+                    logger.warning(f"[E-Bloc] Property with page_id {data.ebloc_page_id} not found")
+                    raise HTTPException(status_code=404, detail="E-bloc property not found")
+                
+                logger.info(f"[E-Bloc] Creating property: {ebloc_prop.name} at {ebloc_prop.address}")
+                prop = Property(
+                    landlord_id=current_user.user_id,
+                    name=ebloc_prop.name,
+                    address=ebloc_prop.address or ebloc_prop.name
+                )
+                db.save_property(prop)
+                property_id = prop.id
+                logger.info(f"[E-Bloc] Property created with id: {property_id}")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[E-Bloc] Error creating property: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Error creating property: {str(e)}")
+            finally:
+                await scraper.close()
+        
+        # Create default "Main" unit so renters can be added immediately
+        from app.models import Unit
+        default_unit = Unit(
+            property_id=property_id,
+            unit_number="Main"
+        )
+        db.save_unit(default_unit)
+        logger.info(f"[E-Bloc] Created default 'Main' unit for property {property_id}")
     else:
         property_id = data.property_id
         logger.info(f"[E-Bloc] Using existing property_id: {property_id}")
@@ -727,6 +750,8 @@ async def configure_ebloc(
         existing.username = data.username
         existing.password_hash = password_encrypted  # Actually encrypted, not hashed
         existing.ebloc_page_id = data.ebloc_page_id
+        if data.ebloc_property_url:
+            existing.ebloc_url = data.ebloc_property_url
         db.save_ebloc_config(existing)
         return {"status": "updated", "config_id": existing.id, "property_id": property_id}
     config = EblocConfig(
@@ -735,9 +760,32 @@ async def configure_ebloc(
         username=data.username,
         password_hash=password_encrypted,  # Actually encrypted, not hashed
         ebloc_page_id=data.ebloc_page_id,
+        ebloc_url=data.ebloc_property_url,
     )
     db.save_ebloc_config(config)
     return {"status": "created", "config_id": config.id, "property_id": property_id}
+
+
+@app.get("/ebloc/config/{property_id}")
+async def get_ebloc_config(property_id: str, current_user: TokenData = Depends(require_landlord)):
+    """Get e-bloc configuration for a property"""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    config = db.get_ebloc_config_by_property(current_user.user_id, property_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="E-bloc configuration not found")
+    
+    return {
+        "id": config.id,
+        "property_id": config.property_id,
+        "ebloc_page_id": config.ebloc_page_id,
+        "ebloc_url": config.ebloc_url,
+        "username": config.username
+    }
 
 
 @app.post("/ebloc/sync/{property_id}")

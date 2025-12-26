@@ -23,7 +23,6 @@ sqlalchemy = "^2.0.45"
 pymysql = "^1.1.2"
 email-validator = "^2.3.0"
 cryptography = "^42.0.0"
-playwright = "^1.40.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.0"

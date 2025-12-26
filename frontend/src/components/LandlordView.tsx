@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Building2, Users, Receipt, Mail, Settings, Copy, ExternalLink } from 'lucide-react';
+import { Plus, Building2, Users, Receipt, Mail, Settings, Copy, ExternalLink, Trash2 } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 
 type LandlordViewProps = {
@@ -22,6 +22,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
+  const [eblocConfigs, setEblocConfigs] = useState<Record<string, { ebloc_url?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
@@ -31,7 +32,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [showEblocConfig, setShowEblocConfig] = useState<string | null>(null);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
-  const [eblocDiscoveredProperties, setEblocDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string }>>([]);
+  const [eblocDiscoveredProperties, setEblocDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string; url: string }>>([]);
   const [eblocDiscovering, setEblocDiscovering] = useState(false);
   const [eblocImporting, setEblocImporting] = useState(false);
   const [propertyForm, setPropertyForm] = useState({ name: '', address: '' });
@@ -86,7 +87,8 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
       setBills(billsData);
       setSubscription(subData);
       
-      console.log('[LandlordView] Loading units and renters...');
+      console.log('[LandlordView] Loading units, renters, and e-bloc configs...');
+      const configs: Record<string, { ebloc_url?: string }> = {};
       for (const prop of propsData) {
         const unitsData = await api.units.list(token, prop.id);
         console.log(`[LandlordView] Property ${prop.name}: ${unitsData.length} units`);
@@ -95,7 +97,16 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
           const rentersData = await api.renters.list(token, unit.id);
           setRenters((prev) => ({ ...prev, [unit.id]: rentersData }));
         }
+        
+        // Load e-bloc config if exists
+        try {
+          const eblocConfig = await api.ebloc.getConfig(token, prop.id);
+          configs[prop.id] = { ebloc_url: eblocConfig.ebloc_url };
+        } catch (err) {
+          // No e-bloc config for this property, that's fine
+        }
       }
+      setEblocConfigs(configs);
       console.log('[LandlordView] Data loaded successfully');
     } catch (err) {
       console.error('[LandlordView] Error loading data:', err);
@@ -111,6 +122,19 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
       await api.properties.create(token, propertyForm);
       setShowPropertyForm(false);
       setPropertyForm({ name: '', address: '' });
+      loadData();
+    } catch (err) {
+      handleError(err);
+    }
+  };
+
+  const handleDeleteProperty = async (propertyId: string) => {
+    if (!token) return;
+    if (!confirm('Are you sure you want to delete this property? This will also delete all units, renters, and bills associated with it.')) {
+      return;
+    }
+    try {
+      await api.properties.delete(token, propertyId);
       loadData();
     } catch (err) {
       handleError(err);
@@ -192,9 +216,14 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
       if (result && result.properties && Array.isArray(result.properties)) {
         console.log(`[E-Bloc] Found ${result.properties.length} properties:`, result.properties);
         if (result.properties.length > 0) {
-          setEblocDiscoveredProperties(result.properties);
-          setEblocForm({ ...eblocForm, selectedPropertyId: result.properties[0].page_id });
-          console.log('[E-Bloc] Selected first property:', result.properties[0].page_id);
+          // Ensure all properties have url field
+          const propertiesWithUrl = result.properties.map(p => ({
+            ...p,
+            url: p.url || `https://www.e-bloc.ro/index.php?page=${p.page_id}`
+          }));
+          setEblocDiscoveredProperties(propertiesWithUrl);
+          setEblocForm({ ...eblocForm, selectedPropertyId: propertiesWithUrl[0].page_id });
+          console.log('[E-Bloc] Selected first property:', propertiesWithUrl[0].page_id);
           setError(''); // Clear any previous errors
         } else {
           console.warn('[E-Bloc] No properties found in e-bloc account');
@@ -234,7 +263,14 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
       return;
     }
     
-    console.log('[E-Bloc] Configuring/importing property...', { propertyId, eblocPageId });
+    // Find the selected property data
+    const selectedProperty = eblocDiscoveredProperties.find(p => p.page_id === eblocPageId);
+    if (!selectedProperty) {
+      setError('Selected property not found');
+      return;
+    }
+    
+    console.log('[E-Bloc] Configuring/importing property (instant)...', { propertyId, eblocPageId, selectedProperty });
     setEblocImporting(true);
     setError('');
     
@@ -243,7 +279,10 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
         property_id: propertyId || undefined,
         username: eblocForm.username,
         password: eblocForm.password,
-        ebloc_page_id: eblocPageId
+        ebloc_page_id: eblocPageId,
+        ebloc_property_name: selectedProperty.name,
+        ebloc_property_address: selectedProperty.address,
+        ebloc_property_url: selectedProperty.url
       });
       
       console.log('[E-Bloc] Configure result:', result);
@@ -275,12 +314,12 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
       return;
     }
     
-    console.log(`[E-Bloc] Importing ${eblocDiscoveredProperties.length} properties...`);
+    console.log(`[E-Bloc] Importing ${eblocDiscoveredProperties.length} properties (instant)...`);
     setEblocImporting(true);
     setError('');
     
     try {
-      // Import all discovered properties
+      // Import all discovered properties using instant import
       for (let i = 0; i < eblocDiscoveredProperties.length; i++) {
         const eblocProp = eblocDiscoveredProperties[i];
         console.log(`[E-Bloc] Importing property ${i + 1}/${eblocDiscoveredProperties.length}:`, eblocProp);
@@ -288,7 +327,10 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
         const result = await api.ebloc.configure(token, {
           username: eblocForm.username,
           password: eblocForm.password,
-          ebloc_page_id: eblocProp.page_id
+          ebloc_page_id: eblocProp.page_id,
+          ebloc_property_name: eblocProp.name,
+          ebloc_property_address: eblocProp.address,
+          ebloc_property_url: eblocProp.url
         });
         
         console.log(`[E-Bloc] Property ${i + 1} imported:`, result);
@@ -425,7 +467,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                             </SelectTrigger>
                             <SelectContent className="bg-slate-700 border-slate-600">
                               {eblocDiscoveredProperties.map((prop) => (
-                                <SelectItem key={prop.page_id} value={prop.page_id}>
+                                <SelectItem key={prop.page_id} value={prop.page_id} data-url={prop.url}>
                                   {prop.name} - {prop.address}
                                 </SelectItem>
                               ))}
@@ -529,6 +571,26 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                     <p className="text-sm text-slate-400">{property.address}</p>
                   </div>
                   <div className="flex gap-2">
+                    {eblocConfigs[property.id]?.ebloc_url && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(eblocConfigs[property.id].ebloc_url, '_blank')}
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                        title="Open in E-Bloc.ro"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-1" />
+                        E-Bloc
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteProperty(property.id)}
+                      className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                     <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">

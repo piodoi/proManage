@@ -193,197 +193,16 @@ class EblocScraper:
                     self.available_properties.append(prop)
                     logger.info(f"[E-Bloc Scraper] ✓ Added property from JS: '{prop.name}' (page_id: {prop.page_id}, address: {prop.address})")
         
-        # If we found properties from JS, we're done
-        if len(self.available_properties) > initial_count:
-            logger.info(f"[E-Bloc Scraper] Successfully parsed {len(self.available_properties) - initial_count} properties from JavaScript")
-            return
-        
-        # Fallback to HTML parsing if JS parsing didn't work
-        logger.info("[E-Bloc Scraper] JavaScript parsing didn't find properties, trying HTML parsing...")
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Strategy 1: Look for ALL select dropdowns (combo boxes) - especially in upper right
-        print(f"[E-Bloc Scraper] Looking for select dropdowns...")
-        logger.info("[E-Bloc Scraper] Looking for select dropdowns...")
-        all_selects = soup.find_all("select")
-        print(f"[E-Bloc Scraper] Found {len(all_selects)} select elements total")
-        logger.info(f"[E-Bloc Scraper] Found {len(all_selects)} select elements total")
-        
-        # Try to find select in upper right area (common pattern)
-        # Look for selects in header, top navigation, or right-aligned containers
-        header_selects = []
-        for container in soup.find_all(["header", "div", "nav"], class_=re.compile(r'header|top|nav|right|upper', re.I)):
-            selects_in_container = container.find_all("select")
-            if selects_in_container:
-                header_selects.extend(selects_in_container)
-                logger.info(f"[E-Bloc Scraper] Found {len(selects_in_container)} select(s) in {container.name} with classes: {container.get('class', [])}")
-        
-        # Also check for selects with common property-related attributes
-        property_selects = soup.find_all("select", {
-            "id": re.compile(r'property|imobil|page|select', re.I)
-        }) + soup.find_all("select", {
-            "name": re.compile(r'property|imobil|page|select', re.I)
-        }) + soup.find_all("select", {
-            "class": re.compile(r'property|imobil|select', re.I)
-        })
-        
-        # Combine all potential property selects
-        all_potential_selects = list(set(all_selects + header_selects + property_selects))
-        logger.info(f"[E-Bloc Scraper] Found {len(all_potential_selects)} potential property select elements")
-        
-        # Process each select element
-        for idx, select in enumerate(all_potential_selects):
-            select_id = select.get("id", "N/A")
-            select_name = select.get("name", "N/A")
-            select_class = select.get("class", [])
-            print(f"[E-Bloc Scraper] Processing select #{idx+1}: id='{select_id}', name='{select_name}', class={select_class}")
-            logger.info(f"[E-Bloc Scraper] Processing select #{idx+1}: id='{select_id}', name='{select_name}', class={select_class}")
-            
-            options = select.find_all("option")
-            print(f"[E-Bloc Scraper] Select #{idx+1} has {len(options)} options")
-            logger.info(f"[E-Bloc Scraper] Select #{idx+1} has {len(options)} options")
-            
-            for opt_idx, option in enumerate(options):
-                value = option.get("value", "")
-                name = option.get_text(strip=True)
-                # Also try to get name from title or data attributes
-                if not name or name == value:
-                    name = option.get("title", "") or option.get("data-name", "") or name
-                
-                print(f"[E-Bloc Scraper]   Option #{opt_idx+1}: value='{value}', name='{name}'")
-                logger.info(f"[E-Bloc Scraper]   Option #{opt_idx+1}: value='{value}', name='{name}'")
-                
-                # Accept any option with a value (even "0" might be valid, but skip empty)
-                if value and value != "":
-                    # Skip placeholder/empty options
-                    if name and name.lower() not in ["select", "alege", "choose", "selectează", ""]:
-                        url = f"{self.LOGIN_URL}?page={value}&t={int(datetime.now().timestamp())}"
-                        if not any(p.page_id == value for p in self.available_properties):
-                            self.available_properties.append(EblocProperty(page_id=value, name=name, url=url))
-                            print(f"[E-Bloc Scraper] ✓ Added property from select: '{name}' (page_id: {value})")
-                            logger.info(f"[E-Bloc Scraper] ✓ Added property from select: '{name}' (page_id: {value})")
-                        else:
-                            logger.debug(f"[E-Bloc Scraper]   Skipped duplicate property: {value}")
-                    else:
-                        logger.debug(f"[E-Bloc Scraper]   Skipped option with placeholder name: '{name}'")
-                else:
-                    logger.debug(f"[E-Bloc Scraper]   Skipped option with no value")
-        
-        # If still no properties, try the first non-empty select we find
-        if len(self.available_properties) == 0 and all_selects:
-            logger.warning("[E-Bloc Scraper] No properties found in any select, trying first select with options...")
-            for select in all_selects:
-                options = select.find_all("option")
-                valid_options = [opt for opt in options if opt.get("value") and opt.get("value") != ""]
-                if len(valid_options) > 0:
-                    logger.info(f"[E-Bloc Scraper] Trying fallback: first select with {len(valid_options)} valid options")
-                    for option in valid_options:
-                        value = option.get("value", "")
-                        name = option.get_text(strip=True) or f"Property {value}"
-                        if value:
-                            url = f"{self.LOGIN_URL}?page={value}&t={int(datetime.now().timestamp())}"
-                            self.available_properties.append(EblocProperty(page_id=value, name=name, url=url))
-                            logger.info(f"[E-Bloc Scraper] ✓ Added property (fallback): '{name}' (page_id: {value})")
-                    break
-        
-        # Strategy 2: Look for links with page= parameter
-        logger.debug("[E-Bloc Scraper] Looking for links with page= parameter...")
-        links = soup.find_all("a", href=True)
-        logger.debug(f"[E-Bloc Scraper] Found {len(links)} links total")
-        for link in links:
-            href = link.get("href", "")
-            if "page=" in href:
-                match = re.search(r'page=(\d+)', href)
-                if match:
-                    page_id = match.group(1)
-                    name = link.get_text(strip=True) or link.get("title", "") or f"Property {page_id}"
-                    # Try to get better name from parent or nearby elements
-                    parent = link.find_parent()
-                    if parent:
-                        parent_text = parent.get_text(strip=True)
-                        if parent_text and len(parent_text) > len(name):
-                            name = parent_text[:100]  # Limit length
-                    
-                    if not any(p.page_id == page_id for p in self.available_properties):
-                        url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
-                        self.available_properties.append(EblocProperty(page_id=page_id, name=name, url=url))
-                        logger.info(f"[E-Bloc Scraper] Added property from link: {name} (page_id: {page_id})")
-        
-        # Strategy 3: Look for navigation menus or property lists
-        logger.debug("[E-Bloc Scraper] Looking for navigation menus...")
-        nav_elements = soup.find_all(["nav", "ul", "div"], class_=re.compile(r'nav|menu|property|imobil', re.I))
-        for nav in nav_elements:
-            nav_links = nav.find_all("a", href=True)
-            for link in nav_links:
-                href = link.get("href", "")
-                if "page=" in href or "id=" in href:
-                    match = re.search(r'(?:page|id)=(\d+)', href)
-                    if match:
-                        page_id = match.group(1)
-                        name = link.get_text(strip=True) or link.get("title", "") or f"Property {page_id}"
-                        if not any(p.page_id == page_id for p in self.available_properties):
-                            url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
-                            self.available_properties.append(EblocProperty(page_id=page_id, name=name, url=url))
-                            logger.info(f"[E-Bloc Scraper] Added property from nav: {name} (page_id: {page_id})")
-        
-        # Strategy 4: Look for any form inputs or hidden fields that might contain property IDs
-        logger.debug("[E-Bloc Scraper] Looking for form inputs with property info...")
-        inputs = soup.find_all("input", {"type": "hidden"})
-        for inp in inputs:
-            name_attr = inp.get("name", "")
-            value = inp.get("value", "")
-            if "property" in name_attr.lower() or "page" in name_attr.lower() or "id" in name_attr.lower():
-                if value and value.isdigit():
-                    page_id = value
-                    # Try to find associated label or text
-                    parent = inp.find_parent()
-                    name = f"Property {page_id}"
-                    if parent:
-                        label = parent.find("label")
-                        if label:
-                            name = label.get_text(strip=True)
-                        else:
-                            text = parent.get_text(strip=True)
-                            if text and len(text) < 100:
-                                name = text
-                    
-                    if not any(p.page_id == page_id for p in self.available_properties):
-                        url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
-                        self.available_properties.append(EblocProperty(page_id=page_id, name=name, url=url))
-                        logger.info(f"[E-Bloc Scraper] Added property from input: {name} (page_id: {page_id})")
-        
+        # Log results
         new_count = len(self.available_properties) - initial_count
-        print(f"[E-Bloc Scraper] Property parsing complete. Added {new_count} new properties. Total: {len(self.available_properties)}")
-        logger.info(f"[E-Bloc Scraper] Property parsing complete. Added {new_count} new properties. Total: {len(self.available_properties)}")
-        
-        # Log all found properties for debugging
-        if len(self.available_properties) > 0:
-            print("[E-Bloc Scraper] Found properties:")
-            logger.info("[E-Bloc Scraper] Found properties:")
-            for prop in self.available_properties:
-                print(f"  - {prop.name} (page_id: {prop.page_id})")
-                logger.info(f"  - {prop.name} (page_id: {prop.page_id})")
+        if new_count > 0:
+            logger.info(f"[E-Bloc Scraper] Successfully parsed {new_count} properties from JavaScript")
+            print(f"[E-Bloc Scraper] Found {new_count} properties:")
+            for prop in self.available_properties[initial_count:]:
+                print(f"  - {prop.name} (page_id: {prop.page_id}, address: {prop.address})")
+                logger.info(f"  - {prop.name} (page_id: {prop.page_id}, address: {prop.address})")
         else:
-            print("[E-Bloc Scraper] No properties found! HTML structure might have changed.")
-            logger.warning("[E-Bloc Scraper] No properties found! HTML structure might have changed.")
-            # Log all select elements found for debugging
-            all_selects_found = soup.find_all("select")
-            logger.warning(f"[E-Bloc Scraper] Found {len(all_selects_found)} select elements but none had valid properties")
-            for sel in all_selects_found:
-                logger.warning(f"[E-Bloc Scraper]   Select: id='{sel.get('id')}', name='{sel.get('name')}', class={sel.get('class')}, options={len(sel.find_all('option'))}")
-            
-            # Save a sample of the HTML for debugging
-            html_sample = html[:5000] if len(html) > 5000 else html
-            logger.warning(f"[E-Bloc Scraper] HTML sample (first 5000 chars):\n{html_sample}")
-            
-            # Also try to find any elements that might contain property info
-            logger.warning("[E-Bloc Scraper] Searching for any elements with 'page', 'property', or 'imobil' in attributes...")
-            property_elements = soup.find_all(attrs={"id": re.compile(r'page|property|imobil', re.I)})
-            property_elements += soup.find_all(attrs={"name": re.compile(r'page|property|imobil', re.I)})
-            property_elements += soup.find_all(attrs={"class": re.compile(r'page|property|imobil', re.I)})
-            logger.warning(f"[E-Bloc Scraper] Found {len(property_elements)} elements with property-related attributes")
-            for elem in property_elements[:10]:  # Log first 10
-                logger.warning(f"[E-Bloc Scraper]   Element: {elem.name}, id='{elem.get('id')}', name='{elem.get('name')}', class={elem.get('class')}")
+            logger.warning("[E-Bloc Scraper] No properties found in JavaScript gInfoAp array")
 
     async def _parse_javascript_properties(self, html: str) -> list[EblocProperty]:
         """Parse properties from JavaScript gInfoAp array"""
@@ -400,6 +219,38 @@ class EblocScraper:
             page_id_match = re.search(r'gPageId\s*=\s*["\']?(\d+)["\']?', html)
             current_page_id = page_id_match.group(1) if page_id_match else None
             logger.info(f"[E-Bloc Scraper] Found gPageId: {current_page_id}")
+            
+            # First, parse gInfoAsoc to get association information (including adr_bloc)
+            gInfoAsoc_block_match = re.search(
+                r'gInfoAsoc\s*\[\s*\d+\s*\]\s*=.*?(?=gInfoAp|gContAsoc|</script>|$)',
+                html,
+                re.DOTALL
+            )
+            associations = {}  # Map id_asoc -> association data
+            if gInfoAsoc_block_match:
+                gInfoAsoc_block = gInfoAsoc_block_match.group(0)
+                logger.debug(f"[E-Bloc Scraper] Found gInfoAsoc block (first 500 chars): {gInfoAsoc_block[:500]}")
+                
+                # Find all association indices
+                asoc_indices = set(re.findall(r'gInfoAsoc\s*\[\s*(\d+)\s*\]', gInfoAsoc_block))
+                logger.info(f"[E-Bloc Scraper] Found association indices: {sorted(asoc_indices)}")
+                
+                for asoc_index in sorted(asoc_indices):
+                    # Extract all assignments for this association
+                    kv_pattern = re.compile(
+                        r'gInfoAsoc\s*\[\s*' + re.escape(asoc_index) + r'\s*\]\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']*)["\']',
+                        re.DOTALL
+                    )
+                    asoc_data = {}
+                    for kv_match in kv_pattern.finditer(gInfoAsoc_block):
+                        key = kv_match.group(1)
+                        value = kv_match.group(2)
+                        asoc_data[key] = value
+                    
+                    if "id" in asoc_data:
+                        asoc_id = asoc_data["id"]
+                        associations[asoc_id] = asoc_data
+                        logger.debug(f"[E-Bloc Scraper]   Association {asoc_index}: id={asoc_id}, adr_bloc={asoc_data.get('adr_bloc', 'N/A')}")
             
             # Extract all gInfoAp entries - they're in format: gInfoAp[ index ] = new Array();gInfoAp[ index ][ "key" ] = "value";
             # We need to find all array indices and their properties
@@ -441,21 +292,35 @@ class EblocScraper:
                     
                     # Extract the "bloc" field which is the address/name
                     if "bloc" in property_data:
-                        address = property_data["bloc"]
+                        address_base = property_data["bloc"]
                         # Get id_asoc and id_ap to construct page_id
                         id_asoc = property_data.get("id_asoc", "")
                         id_ap = property_data.get("id_ap", "")
                         
-                        # The page_id might be the id_asoc or a combination
-                        # Looking at the URL pattern, it seems like page_id is id_asoc
+                        # The page_id is id_asoc
                         page_id = id_asoc if id_asoc else f"{index}"
                         
-                        # Use "bloc" as the name, or construct from other fields
-                        name = address
-                        if "nume" in property_data:
-                            owner_name = property_data["nume"]
-                            # Combine address with owner if available
-                            name = f"{address} ({owner_name})"
+                        # Property name is just the address (no owner name in brackets)
+                        name = address_base
+                        
+                        # Address: base address + "Bl:" + adr_bloc + "Sc:" + scara + "Ap:" + ap (if available)
+                        address_parts = [address_base]
+                        
+                        # Get bloc information from association data
+                        adr_bloc = ""
+                        if id_asoc and id_asoc in associations:
+                            adr_bloc = associations[id_asoc].get("adr_bloc", "").strip()
+                        
+                        scara = property_data.get("scara", "").strip()
+                        ap = property_data.get("ap", "").strip()
+                        
+                        if adr_bloc:
+                            address_parts.append(f"Bl: {adr_bloc}")
+                        if scara:
+                            address_parts.append(f"Sc: {scara}")
+                        if ap:
+                            address_parts.append(f"Ap: {ap}")
+                        address = " ".join(address_parts)
                         
                         url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
                         
@@ -476,76 +341,6 @@ class EblocScraper:
         return properties
     
     async def get_available_properties(self) -> list[EblocProperty]:
-        # If we already have properties from login, return them
-        if self.available_properties:
-            return self.available_properties
-        
-        # If login was successful but no properties found, try using Playwright for JS-rendered content
-        if self.logged_in:
-            try:
-                return await self._get_properties_with_playwright()
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"[E-Bloc Scraper] Playwright method failed: {e}")
-        
-        return self.available_properties
-    
-    async def _get_properties_with_playwright(self) -> list[EblocProperty]:
-        """Use Playwright to get properties from JavaScript-rendered page"""
-        try:
-            from playwright.async_api import async_playwright
-            import logging
-            logger = logging.getLogger(__name__)
-            
-            logger.info("[E-Bloc Scraper] Using Playwright to get JavaScript-rendered properties...")
-            
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                context = await browser.new_context()
-                
-                # Copy cookies from httpx session to Playwright
-                cookies = []
-                for cookie in self.client.cookies.jar:
-                    cookies.append({
-                        "name": cookie.name,
-                        "value": cookie.value,
-                        "domain": cookie.domain or ".e-bloc.ro",
-                        "path": cookie.path or "/",
-                    })
-                if cookies:
-                    await context.add_cookies(cookies)
-                
-                page = await context.new_page()
-                await page.goto(self.LOGIN_URL, wait_until="networkidle")
-                
-                # Wait for property selector to appear (might be loaded via JS)
-                try:
-                    # Wait for select element to appear
-                    await page.wait_for_selector("select", timeout=10000)
-                except:
-                    logger.warning("[E-Bloc Scraper] Select element not found, trying to wait for page load...")
-                    await page.wait_for_timeout(3000)  # Wait 3 seconds for JS to execute
-                
-                # Get the page HTML after JavaScript execution
-                html = await page.content()
-                await browser.close()
-                
-                # Parse the HTML
-                await self._parse_property_selector(html)
-                logger.info(f"[E-Bloc Scraper] Playwright found {len(self.available_properties)} properties")
-                
-        except ImportError:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning("[E-Bloc Scraper] Playwright not installed. Install with: poetry add playwright && playwright install chromium")
-            raise
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"[E-Bloc Scraper] Playwright error: {e}", exc_info=True)
-            raise
-        
         return self.available_properties
 
     async def select_property(self, page_id: str) -> bool:

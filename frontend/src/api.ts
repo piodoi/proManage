@@ -93,8 +93,9 @@ export const api = {
   },
 
   ebloc: {
-    discover: (token: string, data: { username: string; password: string }) => request<{ status: string; properties: Array<{ page_id: string; name: string; address: string }> }>('/ebloc/discover', { method: 'POST', body: data, token }),
+    discover: (token: string, data: { username: string; password: string }) => request<{ status: string; properties: Array<{ page_id: string; name: string; address: string; url: string }> }>('/ebloc/discover', { method: 'POST', body: data, token }),
     configure: (token: string, data: EblocConfigCreate) => request<{ status: string; config_id: string; property_id?: string }>('/ebloc/configure', { method: 'POST', body: data, token }),
+    getConfig: (token: string, propertyId: string) => request<{ id: string; property_id: string; ebloc_page_id?: string; ebloc_url?: string; username: string }>(`/ebloc/config/${propertyId}`, { token }),
     sync: (token: string, propertyId: string) => request<{ status: string; balance?: { outstanding_debt: number; last_payment_date?: string; oldest_debt_month?: string }; bills_created: number; payments_created: number }>(`/ebloc/sync/${propertyId}`, { method: 'POST', token }),
   },
 
@@ -297,6 +298,9 @@ export type EblocConfigCreate = {
   username: string;
   password: string;
   ebloc_page_id?: string;
+  ebloc_property_name?: string;
+  ebloc_property_address?: string;
+  ebloc_property_url?: string;
 };
 
 export type SubscriptionStatus = {

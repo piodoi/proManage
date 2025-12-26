@@ -136,6 +136,7 @@ class EblocConfig(BaseModel):
     username: str
     password_hash: str
     ebloc_page_id: Optional[str] = None
+    ebloc_url: Optional[str] = None  # URL to the e-bloc property page
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -274,6 +275,10 @@ class EblocConfigCreate(BaseModel):
     username: str
     password: str
     ebloc_page_id: Optional[str] = None
+    # For instant import - pass property data directly
+    ebloc_property_name: Optional[str] = None
+    ebloc_property_address: Optional[str] = None
+    ebloc_property_url: Optional[str] = None
 
 
 class AddressMappingCreate(BaseModel):
