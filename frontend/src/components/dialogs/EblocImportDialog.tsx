@@ -1,0 +1,276 @@
+import { useState, useEffect } from 'react';
+import { api } from '../../api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Spinner } from '@/components/ui/spinner';
+import { Building2 } from 'lucide-react';
+
+type EblocImportDialogProps = {
+  token: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+  onError: (error: string) => void;
+};
+
+export default function EblocImportDialog({
+  token,
+  open,
+  onOpenChange,
+  onSuccess,
+  onError,
+}: EblocImportDialogProps) {
+  const [form, setForm] = useState({ username: '', password: '', selectedPropertyId: '' });
+  const [discoveredProperties, setDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string; url: string }>>([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (open && token) {
+      loadEblocConfig();
+    }
+  }, [open, token]);
+
+  const loadEblocConfig = async () => {
+    if (!token) return;
+    try {
+      const config = await api.ebloc.getConfig(token);
+      if (config && config.configured) {
+        setForm(prev => ({
+          ...prev,
+          username: config.username || '',
+          password: config.password || '',
+        }));
+      }
+    } catch (err) {
+      // Config not found, that's okay
+    }
+  };
+
+  const handleDiscover = async () => {
+    if (!token) return;
+    if (!form.username || !form.password) {
+      onError('Please enter both username and password');
+      return;
+    }
+
+    setDiscovering(true);
+    onError('');
+
+    try {
+      const result = await api.ebloc.discover(token, { username: form.username, password: form.password });
+
+      if (result && result.properties && Array.isArray(result.properties)) {
+        if (result.properties.length > 0) {
+          // Save credentials after successful discovery
+          try {
+            await api.ebloc.configure(token, {
+              username: form.username,
+              password: form.password,
+            });
+            setForm(prev => ({ ...prev, password: '' }));
+          } catch (configErr) {
+            const errorMsg = configErr instanceof Error ? configErr.message : 'Failed to save credentials';
+            onError(`Properties discovered, but failed to save credentials: ${errorMsg}. Please configure credentials manually.`);
+          }
+
+          const propertiesWithUrl = result.properties.map(p => ({
+            ...p,
+            url: p.url || `https://www.e-bloc.ro/index.php?page=${p.page_id}`,
+          }));
+          setDiscoveredProperties(propertiesWithUrl);
+          setForm(prev => ({ ...prev, selectedPropertyId: propertiesWithUrl[0].page_id }));
+          onError('');
+        } else {
+          onError('No properties found in your e-bloc account. Please check your credentials.');
+          setDiscoveredProperties([]);
+        }
+      } else {
+        const errorMsg = (result as any)?.detail || (result as any)?.message || 'Unexpected response';
+        onError(errorMsg);
+        setDiscoveredProperties([]);
+      }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to discover properties. Please check your credentials and try again.');
+      setDiscoveredProperties([]);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  const handleImportSelected = async () => {
+    if (!token || !form.selectedPropertyId) return;
+    if (!form.username || !form.password) {
+      onError('Please enter both username and password');
+      return;
+    }
+
+    setImporting(true);
+    onError('');
+
+    try {
+      await api.ebloc.configure(token, {
+        username: form.username,
+        password: form.password,
+      });
+
+      const selectedProp = discoveredProperties.find(p => p.page_id === form.selectedPropertyId);
+      if (selectedProp) {
+        await api.properties.create(token, {
+          name: selectedProp.name,
+          address: selectedProp.address || selectedProp.name,
+        });
+      }
+
+      onOpenChange(false);
+      setForm({ username: '', password: '', selectedPropertyId: '' });
+      setDiscoveredProperties([]);
+      onSuccess();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleImportAll = async () => {
+    if (!token) return;
+    if (discoveredProperties.length === 0) return;
+
+    setImporting(true);
+    onError('');
+
+    try {
+      for (const prop of discoveredProperties) {
+        await api.properties.create(token, {
+          name: prop.name,
+          address: prop.address || prop.name,
+        });
+      }
+
+      onOpenChange(false);
+      setForm({ username: '', password: '', selectedPropertyId: '' });
+      setDiscoveredProperties([]);
+      onSuccess();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
+          <Building2 className="w-4 h-4 mr-2" />
+          Import from E-Bloc
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-slate-100">Import Properties from E-Bloc.ro</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Connect your e-bloc.ro account to discover and import properties. This will also import outstanding balances and payment receipts.
+          </p>
+          <div>
+            <Label className="text-slate-300">E-Bloc Username</Label>
+            <Input
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              className="bg-slate-700 border-slate-600 text-slate-100"
+              placeholder="your-email@example.com"
+              disabled={discovering || importing}
+            />
+          </div>
+          <div>
+            <Label className="text-slate-300">E-Bloc Password</Label>
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="bg-slate-700 border-slate-600 text-slate-100"
+              disabled={discovering || importing}
+            />
+          </div>
+          {discoveredProperties.length === 0 ? (
+            <Button
+              onClick={handleDiscover}
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              disabled={discovering || !form.username || !form.password}
+            >
+              {discovering ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  Discovering...
+                </>
+              ) : (
+                'Discover Properties'
+              )}
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-slate-300">Select Property to Import</Label>
+                <Select
+                  value={form.selectedPropertyId}
+                  onValueChange={(v) => setForm({ ...form, selectedPropertyId: v })}
+                  disabled={importing}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectValue placeholder="Select property" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    {discoveredProperties.map((prop) => (
+                      <SelectItem key={prop.page_id} value={prop.page_id}>
+                        {prop.name} - {prop.address}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleImportSelected}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  disabled={importing || !form.selectedPropertyId}
+                >
+                  {importing ? (
+                    <>
+                      <Spinner className="w-4 h-4 mr-2" />
+                      Importing...
+                    </>
+                  ) : (
+                    'Import Selected'
+                  )}
+                </Button>
+                {discoveredProperties.length > 1 && (
+                  <Button
+                    onClick={handleImportAll}
+                    className="flex-1 bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 disabled:opacity-50"
+                    disabled={importing}
+                  >
+                    {importing ? (
+                      <>
+                        <Spinner className="w-4 h-4 mr-2" />
+                        Importing...
+                      </>
+                    ) : (
+                      `Import All (${discoveredProperties.length})`
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

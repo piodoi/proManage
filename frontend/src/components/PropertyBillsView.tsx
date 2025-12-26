@@ -28,8 +28,8 @@ export default function PropertyBillsView({
 }: PropertyBillsViewProps) {
   const [showBillForm, setShowBillForm] = useState(false);
   const [billForm, setBillForm] = useState({
-    renter_id: '',  // Empty string means "all/property"
-    description: '',
+    renter_id: 'all',  // 'all' means "all/property", specific renter ID otherwise
+    bill_type: 'other' as 'rent' | 'utilities' | 'ebloc' | 'other',
     amount: '',
   });
 
@@ -42,21 +42,21 @@ export default function PropertyBillsView({
 
   const handleCreateBill = async () => {
     if (!token) return;
-    if (!billForm.description || !billForm.amount) {
-      handleError(new Error('Please fill in description and amount'));
+    if (!billForm.amount) {
+      handleError(new Error('Please fill in amount'));
       return;
     }
     try {
       await api.bills.create(token, {
         property_id: propertyId,
-        renter_id: billForm.renter_id || undefined,  // Empty string becomes undefined (all renters)
-        bill_type: 'other',
-        description: billForm.description,
+        renter_id: billForm.renter_id === 'all' ? undefined : billForm.renter_id,  // 'all' becomes undefined (all renters)
+        bill_type: billForm.bill_type,
+        description: billForm.bill_type === 'rent' ? 'Rent' : billForm.bill_type === 'utilities' ? 'Utilities' : billForm.bill_type === 'ebloc' ? 'E-Bloc' : 'Other',
         amount: parseFloat(billForm.amount),
         due_date: new Date().toISOString(), // Default to today
       });
       setShowBillForm(false);
-      setBillForm({ renter_id: '', description: '', amount: '' });
+      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '' });
       if (onBillsChange) {
         onBillsChange();
       }
@@ -142,7 +142,7 @@ export default function PropertyBillsView({
                         <SelectValue placeholder="Select renter" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="">All / Property</SelectItem>
+                        <SelectItem value="all">All / Property</SelectItem>
                         {renters.map((renter) => (
                           <SelectItem key={renter.id} value={renter.id}>{renter.name}</SelectItem>
                         ))}
@@ -153,16 +153,21 @@ export default function PropertyBillsView({
                     </p>
                   </div>
                   <div>
-                    <Label className="text-slate-300">What is this bill for?</Label>
-                    <Input
-                      value={billForm.description}
-                      onChange={(e) => setBillForm({ ...billForm, description: e.target.value })}
-                      className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder="e.g., Utilities, Maintenance, etc."
-                    />
+                    <Label className="text-slate-300">Bill Type *</Label>
+                    <Select value={billForm.bill_type} onValueChange={(v) => setBillForm({ ...billForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}>
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectItem value="rent">Rent</SelectItem>
+                        <SelectItem value="utilities">Utilities</SelectItem>
+                        <SelectItem value="ebloc">E-Bloc</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
-                    <Label className="text-slate-300">Amount (RON)</Label>
+                    <Label className="text-slate-300">Amount (RON) *</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -170,9 +175,10 @@ export default function PropertyBillsView({
                       onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-slate-100"
                       placeholder="0.00"
+                      required
                     />
                   </div>
-                  <Button onClick={handleCreateBill} className="w-full bg-emerald-600 hover:bg-emerald-700">
+                  <Button onClick={handleCreateBill} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!billForm.amount}>
                     Create Bill
                   </Button>
                 </div>

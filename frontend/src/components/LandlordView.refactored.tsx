@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Settings } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Building2, Settings, Copy } from 'lucide-react';
+import PropertyBillsView from './PropertyBillsView';
 import SettingsView from './SettingsView';
 import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
@@ -24,6 +27,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
+  const [renterLink, setRenterLink] = useState<{ token: string; link: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -92,6 +96,9 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
 
   return (
     <>
@@ -215,6 +222,33 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
         </Tabs>
       )}
 
+      <Dialog open={!!renterLink} onOpenChange={(open) => !open && setRenterLink(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-slate-100">Renter Access Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Share this link with your renter. They can use it to view and pay their bills without logging in.
+            </p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={renterLink ? `${window.location.origin}/renter/${renterLink.token}` : ''}
+                className="flex-1 bg-slate-700 border border-slate-600 text-slate-100 px-3 py-2 rounded"
+              />
+              <Button
+                onClick={() => renterLink && copyToClipboard(`${window.location.origin}/renter/${renterLink.token}`)}
+                variant="outline"
+                className="border-slate-600"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
+
