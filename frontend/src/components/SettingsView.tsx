@@ -67,7 +67,7 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
           </p>
           <Dialog open={showEmailConfig} onOpenChange={setShowEmailConfig}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="border-slate-600 text-slate-300">
+              <Button className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                 Configure Email
               </Button>
             </DialogTrigger>

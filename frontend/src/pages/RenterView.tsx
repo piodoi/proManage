@@ -255,7 +255,7 @@ export default function RenterView() {
                     <Button
                       variant={paymentMethod === 'bank_transfer' ? 'default' : 'outline'}
                       onClick={() => setPaymentMethod('bank_transfer')}
-                      className={paymentMethod === 'bank_transfer' ? 'bg-emerald-600' : 'border-slate-600 text-slate-300'}
+                      className={paymentMethod === 'bank_transfer' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600'}
                     >
                       <Banknote className="w-4 h-4 mr-2" />
                       Bank Transfer
@@ -263,7 +263,7 @@ export default function RenterView() {
                     <Button
                       variant={paymentMethod === 'payment_service' ? 'default' : 'outline'}
                       onClick={() => setPaymentMethod('payment_service')}
-                      className={paymentMethod === 'payment_service' ? 'bg-emerald-600' : 'border-slate-600 text-slate-300'}
+                      className={paymentMethod === 'payment_service' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600'}
                     >
                       <CreditCard className="w-4 h-4 mr-2" />
                       Card (2% fee)

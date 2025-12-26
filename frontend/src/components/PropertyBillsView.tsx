@@ -97,16 +97,14 @@ export default function PropertyBillsView({
               }}
             />
             <Button
-              variant="outline"
               size="sm"
               onClick={() => document.getElementById(`pdf-upload-${propertyId}`)?.click()}
-              className="border-slate-600 text-slate-300"
+              className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
             >
               <Receipt className="w-4 h-4 mr-1" />
               Upload PDF
             </Button>
             <Button
-              variant="outline"
               size="sm"
               onClick={async () => {
                 if (!token) return;
@@ -120,7 +118,7 @@ export default function PropertyBillsView({
                   handleError(err);
                 }
               }}
-              className="border-slate-600 text-slate-300"
+              className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
             >
               <Settings className="w-4 h-4 mr-1" />
               Sync Utilities

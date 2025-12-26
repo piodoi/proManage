@@ -172,7 +172,7 @@ export default function AdminDashboard() {
                 <p className="text-slate-400 text-sm mb-4">
                   Parse and extract bill information from PDF documents.
                 </p>
-                <Button onClick={() => setShowBillParser(true)} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                <Button onClick={() => setShowBillParser(true)} className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                   <FileText className="w-4 h-4 mr-2" />
                   Open Bill Parser
                 </Button>

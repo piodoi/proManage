@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import { Check, X } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -82,9 +83,7 @@ export default function ConfirmEmail() {
           {status === 'success' && (
             <div className="text-center">
               <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="w-6 h-6 text-white" />
               </div>
               <p className="text-emerald-400 font-medium mb-2">Email confirmed successfully!</p>
               <p className="text-slate-400 text-sm mb-4">Your account has been activated. You can now access your dashboard.</p>
@@ -100,9 +99,7 @@ export default function ConfirmEmail() {
           {status === 'error' && (
             <div className="text-center">
               <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-6 h-6 text-white" />
               </div>
               <p className="text-red-400 font-medium mb-2">Confirmation failed</p>
               <p className="text-slate-400 text-sm mb-4">{error}</p>

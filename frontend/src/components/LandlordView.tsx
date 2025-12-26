@@ -534,7 +534,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
             <div className="flex gap-2">
               <Dialog open={showEblocDiscover} onOpenChange={setShowEblocDiscover}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                  <Button className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                     <Building2 className="w-4 h-4 mr-2" />
                     Import from E-Bloc
                   </Button>
@@ -629,8 +629,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                           {eblocDiscoveredProperties.length > 1 && (
                             <Button
                               onClick={handleImportEblocProperties}
-                              variant="outline"
-                              className="flex-1 border-slate-600 text-slate-300"
+                              className="flex-1 bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 disabled:opacity-50"
                               disabled={eblocImporting}
                             >
                               {eblocImporting ? (
@@ -710,7 +709,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   <div className="flex gap-2">
                     <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                       <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
+                        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                           Sync E-Bloc
                         </Button>
                       </DialogTrigger>
@@ -745,19 +744,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                         </div>
                       </DialogContent>
                     </Dialog>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteProperty(property.id)}
-                      className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-slate-200 font-medium">Renters</span>
                     <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
                       if (!open) {
                         setShowRenterForm(null);
@@ -768,7 +754,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                       }
                     }}>
                       <DialogTrigger asChild>
-                        <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-100">
+                        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                           <Users className="w-4 h-4 mr-1" />
                           Add Renter
                         </Button>
@@ -885,6 +871,19 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                         </div>
                       </DialogContent>
                     </Dialog>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteProperty(property.id)}
+                      className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-3">
+                    <span className="text-slate-200 font-medium">Renters</span>
                   </div>
                   {(renters[property.id] || []).length === 0 ? (
                     <p className="text-slate-500 text-xs">No renters yet</p>
@@ -988,7 +987,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
               <div className="flex gap-2">
                 <Dialog open={showEblocDiscover} onOpenChange={setShowEblocDiscover}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                    <Button className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                       <Building2 className="w-4 h-4 mr-2" />
                       Import from E-Bloc
                     </Button>
@@ -1083,8 +1082,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                             {eblocDiscoveredProperties.length > 1 && (
                               <Button
                                 onClick={handleImportEblocProperties}
-                                variant="outline"
-                                className="flex-1 border-slate-600 text-slate-300"
+                                className="flex-1 bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 disabled:opacity-50"
                                 disabled={eblocImporting}
                               >
                                 {eblocImporting ? (
@@ -1164,7 +1162,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                     <div className="flex gap-2">
                       <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                         <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
+                          <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                             Sync E-Bloc
                           </Button>
                         </DialogTrigger>
@@ -1197,41 +1195,28 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                             </Button>
                           </div>
                         </DialogContent>
-                      </Dialog>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteProperty(property.id)}
-                        className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-slate-200 font-medium">Renters</span>
-                      <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
-                        if (!open) {
-                          setShowRenterForm(null);
-                          setEditingRenter(null);
-                          // Form will be reset by useEffect when editingRenter becomes null
-                        } else {
-                          setShowRenterForm(property.id);
-                        }
-                      }}>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-100">
-                            <Users className="w-4 h-4 mr-1" />
-                            Add Renter
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${editingRenter?.id || 'new'}`}>
-                          <DialogHeader>
-                            <DialogTitle className="text-slate-100">
-                              {editingRenter ? 'Edit Renter' : 'Add Renter'}
-                            </DialogTitle>
-                          </DialogHeader>
+                    </Dialog>
+                    <Dialog open={showRenterForm === property.id && (editingRenter === null || renters[property.id]?.some(r => r.id === editingRenter.id))} onOpenChange={(open) => {
+                      if (!open) {
+                        setShowRenterForm(null);
+                        setEditingRenter(null);
+                        // Form will be reset by useEffect when editingRenter becomes null
+                      } else {
+                        setShowRenterForm(property.id);
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
+                          <Users className="w-4 h-4 mr-1" />
+                          Add Renter
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${editingRenter?.id || 'new'}`}>
+                        <DialogHeader>
+                          <DialogTitle className="text-slate-100">
+                            {editingRenter ? 'Edit Renter' : 'Add Renter'}
+                          </DialogTitle>
+                        </DialogHeader>
                           <div className="space-y-4">
                             <div>
                               <Label className="text-slate-300">Name *</Label>
@@ -1338,8 +1323,21 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                           </div>
                         </DialogContent>
                       </Dialog>
-                    </div>
-                    {(renters[property.id] || []).length === 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteProperty(property.id)}
+                      className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-3">
+                    <span className="text-slate-200 font-medium">Renters</span>
+                  </div>
+                  {(renters[property.id] || []).length === 0 ? (
                       <p className="text-slate-500 text-xs">No renters yet</p>
                     ) : (
                       <div className="space-y-1">
