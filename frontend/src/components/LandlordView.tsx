@@ -46,6 +46,13 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     loadExchangeRates();
   }, [token]);
 
+  // Load ebloc config when discover dialog opens
+  useEffect(() => {
+    if (showEblocDiscover && token) {
+      loadEblocConfig();
+    }
+  }, [showEblocDiscover, token]);
+
   // Load exchange rates
   const loadExchangeRates = async () => {
     try {
@@ -346,6 +353,19 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     }
   };
 
+  const loadEblocConfig = async () => {
+    if (!token) return;
+    try {
+      const config = await api.ebloc.getConfig(token);
+      if (config && config.username) {
+        setEblocForm(prev => ({ ...prev, username: config.username || '' }));
+      }
+    } catch (err) {
+      // Config not found, that's okay - user will enter credentials
+      console.log('[E-Bloc] No saved credentials found');
+    }
+  };
+
   const handleDiscoverEbloc = async () => {
     if (!token) {
       console.error('[E-Bloc] No token available');
@@ -370,6 +390,18 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       if (result && result.properties && Array.isArray(result.properties)) {
         console.log(`[E-Bloc] Found ${result.properties.length} properties:`, result.properties);
         if (result.properties.length > 0) {
+          // Save credentials after successful discovery
+          try {
+            await api.ebloc.configure(token, {
+              username: eblocForm.username,
+              password: eblocForm.password,
+            });
+            console.log('[E-Bloc] Credentials saved successfully');
+          } catch (configErr) {
+            console.warn('[E-Bloc] Failed to save credentials:', configErr);
+            // Don't fail the whole operation if saving credentials fails
+          }
+          
           // Ensure all properties have url field
           const propertiesWithUrl = result.properties.map(p => ({
             ...p,
@@ -499,7 +531,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
 
   return (
     <>
-      {error && (
+      {error && !error.includes('E-bloc') && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
           {error}
           <button onClick={() => setError('')} className="ml-2 text-red-400 hover:text-red-200">x</button>
@@ -697,23 +729,37 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                           <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
+                          <div>
+                            <p className="text-sm text-slate-300 font-medium mb-1">Property:</p>
+                            <p className="text-sm text-slate-400">{property.name}</p>
+                          </div>
                           <p className="text-sm text-slate-400">
                             Sync outstanding balances and payment receipts from your e-bloc.ro account.
                           </p>
+                          {error && error.includes('E-bloc') && (
+                            <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+                              {error}
+                            </div>
+                          )}
                           <Button
                             onClick={async () => {
                               if (!token) return;
+                              // Clear error before attempting sync
+                              const previousError = error;
+                              setError('');
                               try {
                                 const result = await api.ebloc.sync(token, property.id);
                                 setShowEblocConfig(null);
                                 loadData();
                                 if (result.bills_created > 0 || result.payments_created > 0) {
-                                  setError('');
                                   // Show success message
-                                  alert(`Synced successfully! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
+                                  alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
                                 }
                               } catch (err) {
-                                handleError(err);
+                                const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
+                                // Only show error in dialog, not in global error area to avoid duplicates
+                                setError(errorMessage);
+                                // Don't call handleError to avoid duplicate error display
                               }
                             }}
                             className="w-full bg-emerald-600 hover:bg-emerald-700"
@@ -1150,22 +1196,36 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                             <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
                           </DialogHeader>
                           <div className="space-y-4">
+                            <div>
+                              <p className="text-sm text-slate-300 font-medium mb-1">Property:</p>
+                              <p className="text-sm text-slate-400">{property.name}</p>
+                            </div>
                             <p className="text-sm text-slate-400">
                               Sync outstanding balances and payment receipts from your e-bloc.ro account.
                             </p>
+                            {error && error.includes('E-bloc') && (
+                              <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+                                {error}
+                              </div>
+                            )}
                             <Button
                               onClick={async () => {
                                 if (!token) return;
+                                // Clear error before attempting sync
+                                setError('');
                                 try {
                                   const result = await api.ebloc.sync(token, property.id);
                                   setShowEblocConfig(null);
                                   loadData();
                                   if (result.bills_created > 0 || result.payments_created > 0) {
-                                    setError('');
-                                    alert(`Synced successfully! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
+                                    // Show success message
+                                    alert(`Synced successfully for ${result.property_name || property.name}! Created ${result.bills_created} bills and ${result.payments_created} payments.`);
                                   }
                                 } catch (err) {
-                                  handleError(err);
+                                  const errorMessage = err instanceof Error ? err.message : 'Failed to sync E-bloc data';
+                                  // Only show error in dialog, not in global error area to avoid duplicates
+                                  setError(errorMessage);
+                                  // Don't call handleError to avoid duplicate error display
                                 }
                               }}
                               className="w-full bg-emerald-600 hover:bg-emerald-700"

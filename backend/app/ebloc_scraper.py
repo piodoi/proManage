@@ -431,162 +431,281 @@ class EblocScraper:
         except Exception:
             return None
 
-    async def get_balance(self, page_id: Optional[str] = None) -> Optional[EblocBalance]:
-        """Get outstanding balance information for a property"""
+    async def select_property_by_name(self, property_name: str) -> Optional[str]:
+        """Select property from combo box by matching property name with gInfoAsoc['nume']"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not self.logged_in:
             return None
+        
         try:
-            if page_id:
-                url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
-            else:
-                url = self.LOGIN_URL
+            # Get the current page to parse JavaScript variables
+            response = await self.client.get(self.LOGIN_URL)
+            html = response.text
+            
+            # Parse gInfoAsoc to find matching association
+            gInfoAsoc_block_match = re.search(
+                r'gInfoAsoc\s*\[\s*\d+\s*\]\s*=.*?(?=gInfoAp|gContAsoc|</script>|$)',
+                html,
+                re.DOTALL
+            )
+            
+            if not gInfoAsoc_block_match:
+                logger.warning("[E-Bloc Scraper] Could not find gInfoAsoc block")
+                return None
+            
+            gInfoAsoc_block = gInfoAsoc_block_match.group(0)
+            
+            # Find all association indices
+            asoc_indices = set(re.findall(r'gInfoAsoc\s*\[\s*(\d+)\s*\]', gInfoAsoc_block))
+            logger.info(f"[E-Bloc Scraper] Found association indices: {sorted(asoc_indices)}")
+            
+            matched_asoc_id = None
+            property_name_lower = property_name.lower()
+            
+            for asoc_index in sorted(asoc_indices):
+                # Extract all assignments for this association
+                kv_pattern = re.compile(
+                    r'gInfoAsoc\s*\[\s*' + re.escape(asoc_index) + r'\s*\]\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']*)["\']',
+                    re.DOTALL
+                )
+                asoc_data = {}
+                for kv_match in kv_pattern.finditer(gInfoAsoc_block):
+                    key = kv_match.group(1)
+                    value = kv_match.group(2)
+                    asoc_data[key] = value
+                
+                if "id" in asoc_data and "nume" in asoc_data:
+                    asoc_name = asoc_data["nume"].lower()
+                    # Match property name with association name (partial match)
+                    if property_name_lower in asoc_name or asoc_name in property_name_lower:
+                        matched_asoc_id = asoc_data["id"]
+                        logger.info(f"[E-Bloc Scraper] Matched property '{property_name}' with association '{asoc_data['nume']}' (id: {matched_asoc_id})")
+                        break
+            
+            if not matched_asoc_id:
+                logger.warning(f"[E-Bloc Scraper] Could not match property name '{property_name}' with any association")
+                return None
+            
+            # Navigate to the matched property page
+            url = f"{self.LOGIN_URL}?page={matched_asoc_id}&t={int(datetime.now().timestamp())}"
+            response = await self.client.get(url)
+            logger.info(f"[E-Bloc Scraper] Navigated to property page: {url}")
+            
+            return matched_asoc_id
+        except Exception as e:
+            logger.error(f"[E-Bloc Scraper] Error selecting property by name: {e}", exc_info=True)
+            return None
+
+    async def navigate_to_datorii(self, page_id: str) -> bool:
+        """Navigate to Datorii (Debts) page (page=11)"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
+            response = await self.client.get(url)
+            logger.info(f"[E-Bloc Scraper] Navigated to Datorii page: {url}, status: {response.status_code}")
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"[E-Bloc Scraper] Error navigating to Datorii: {e}", exc_info=True)
+            return False
+
+    async def get_balance(self, property_name: Optional[str] = None, page_id: Optional[str] = None) -> Optional[EblocBalance]:
+        """Get outstanding balance information from Datorii page"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not self.logged_in:
+            return None
+        
+        try:
+            # If property_name is provided, select it first
+            if property_name:
+                selected_page_id = await self.select_property_by_name(property_name)
+                if not selected_page_id:
+                    logger.warning(f"[E-Bloc Scraper] Could not select property '{property_name}'")
+                    return None
+                page_id = selected_page_id
+            
+            # Navigate to Datorii page
+            if not await self.navigate_to_datorii(page_id or ""):
+                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page")
+                return None
+            
+            # Get the Datorii page content
+            url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
             response = await self.client.get(url)
             soup = BeautifulSoup(response.text, "html.parser")
             
-            # Look for debt/balance information
+            # Look for "Datoria curentă" or "Suma de plată" text
+            outstanding_debt = 0.0
             debt_text = None
-            debt_elements = soup.find_all(string=re.compile(r'datorie|restanță|debt', re.I))
-            for elem in debt_elements:
-                parent = elem.find_parent()
+            
+            # Search for "Suma de plată" followed by amount
+            suma_text = soup.find(string=re.compile(r'Suma de plată', re.I))
+            if suma_text:
+                parent = suma_text.find_parent()
                 if parent:
                     text = parent.get_text()
-                    # Try to extract amount
-                    amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:RON|lei)', text, re.I)
+                    # Extract amount: "Suma de plată 442,38 Lei"
+                    amount_match = re.search(r'Suma de plată\s+(\d+[.,]\d+|\d+)\s*(?:Lei|RON)', text, re.I)
                     if amount_match:
                         debt_text = amount_match.group(1).replace(',', '.')
-                        break
+                        outstanding_debt = float(debt_text)
+                        logger.info(f"[E-Bloc Scraper] Found outstanding debt: {outstanding_debt}")
             
-            outstanding_debt = float(debt_text) if debt_text else 0.0
-            
-            # Look for last payment date
-            last_payment_date = None
-            payment_date_elements = soup.find_all(string=re.compile(r'ultima.*plată|last.*payment', re.I))
-            for elem in payment_date_elements:
-                parent = elem.find_parent()
+            # Look for apartment number in "Datoria curentă - Ap. 53"
+            apartment_match = None
+            datoria_text = soup.find(string=re.compile(r'Datoria curentă', re.I))
+            if datoria_text:
+                parent = datoria_text.find_parent()
                 if parent:
                     text = parent.get_text()
-                    date_match = re.search(r'(\d{1,2})[./-](\d{1,2})[./-](\d{4})', text)
-                    if date_match:
+                    # Extract apartment: "Datoria curentă - Ap. 53"
+                    apt_match = re.search(r'Ap\.\s*(\d+)', text, re.I)
+                    if apt_match:
+                        apartment_match = apt_match.group(1)
+                        logger.info(f"[E-Bloc Scraper] Found apartment: {apartment_match}")
+            
+            # Look for last payment date from payment history
+            last_payment_date = None
+            payment_history_text = soup.find(string=re.compile(r'Istoricul plăţilor', re.I))
+            if payment_history_text:
+                # Look for dates in the payment history section
+                parent = payment_history_text.find_parent()
+                if parent:
+                    # Find all date patterns in the section
+                    date_matches = re.findall(r'Data:\s*(\d{1,2})\s+(\w+)\s+(\d{4})', parent.get_text(), re.I)
+                    if date_matches:
+                        # Get the most recent date (last one)
+                        day, month_str, year = date_matches[-1]
                         try:
-                            day, month, year = date_match.groups()
-                            last_payment_date = datetime(int(year), int(month), int(day))
-                            break
-                        except ValueError:
+                            # Convert Romanian month names to numbers
+                            month_map = {
+                                'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
+                                'mai': 5, 'iunie': 6, 'iulie': 7, 'august': 8,
+                                'septembrie': 9, 'octombrie': 10, 'noiembrie': 11, 'decembrie': 12
+                            }
+                            month = month_map.get(month_str.lower(), int(month_str) if month_str.isdigit() else None)
+                            if month:
+                                last_payment_date = datetime(int(year), month, int(day))
+                                logger.info(f"[E-Bloc Scraper] Found last payment date: {last_payment_date}")
+                        except (ValueError, KeyError):
                             pass
             
-            # Look for oldest debt month
+            # Look for oldest debt month from payment history
             oldest_debt_month = None
-            oldest_elements = soup.find_all(string=re.compile(r'cea mai veche|luna.*veche', re.I))
-            for elem in oldest_elements:
-                parent = elem.find_parent()
+            if payment_history_text:
+                parent = payment_history_text.find_parent()
                 if parent:
-                    text = parent.get_text()
-                    month_match = re.search(r'(\w+\s+\d{4})', text, re.I)
-                    if month_match:
-                        oldest_debt_month = month_match.group(1)
-                        break
-            
-            # Debt level
-            debt_level = None
-            if outstanding_debt > 0:
-                if outstanding_debt < 100:
-                    debt_level = "low"
-                elif outstanding_debt < 500:
-                    debt_level = "medium"
-                else:
-                    debt_level = "high"
+                    # Look for month patterns like "Oct 25" or "Sept 25"
+                    month_matches = re.findall(r'(\w+)\s+(\d{2})', parent.get_text(), re.I)
+                    if month_matches:
+                        # Get the oldest month (first one)
+                        month_str, year_short = month_matches[0]
+                        oldest_debt_month = f"{month_str} {year_short}"
+                        logger.info(f"[E-Bloc Scraper] Found oldest debt month: {oldest_debt_month}")
             
             return EblocBalance(
                 outstanding_debt=outstanding_debt,
                 last_payment_date=last_payment_date,
                 oldest_debt_month=oldest_debt_month,
-                debt_level=debt_level
+                debt_level=None
             )
         except Exception as e:
-            print(f"Error getting balance: {e}")
+            logger.error(f"[E-Bloc Scraper] Error getting balance: {e}", exc_info=True)
             return None
 
-    async def get_payments(self, page_id: Optional[str] = None) -> List[EblocPayment]:
-        """Get payment receipts (chitante) for a property"""
+    async def get_payments(self, property_name: Optional[str] = None, page_id: Optional[str] = None) -> List[EblocPayment]:
+        """Get payment receipts (chitante) from Datorii page"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not self.logged_in:
             return []
+        
         try:
-            if page_id:
-                url = f"{self.LOGIN_URL}?page={page_id}&t={int(datetime.now().timestamp())}"
-            else:
-                url = self.LOGIN_URL
+            # If property_name is provided, select it first
+            if property_name:
+                selected_page_id = await self.select_property_by_name(property_name)
+                if not selected_page_id:
+                    logger.warning(f"[E-Bloc Scraper] Could not select property '{property_name}'")
+                    return []
+                page_id = selected_page_id
+            
+            # Navigate to Datorii page
+            if not await self.navigate_to_datorii(page_id or ""):
+                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page")
+                return []
+            
+            # Get the Datorii page content
+            url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
             response = await self.client.get(url)
             soup = BeautifulSoup(response.text, "html.parser")
             payments = []
             
-            # Look for payment/receipt tables or lists
-            # Try to find tables with payment information
-            tables = soup.find_all("table")
-            for table in tables:
-                rows = table.find_all("tr")
-                for row in rows:
-                    cells = row.find_all(["td", "th"])
-                    if len(cells) >= 3:
-                        # Look for receipt number pattern
-                        receipt_text = cells[0].get_text(strip=True) if len(cells) > 0 else ""
-                        date_text = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-                        amount_text = cells[2].get_text(strip=True) if len(cells) > 2 else ""
-                        
-                        # Check if this looks like a payment row
-                        if re.search(r'\d{10,}', receipt_text) and re.search(r'\d+[.,]\d+', amount_text):
-                            receipt_number = re.search(r'\d{10,}', receipt_text).group(0) if re.search(r'\d{10,}', receipt_text) else receipt_text
-                            
-                            # Parse date
-                            payment_date = None
-                            date_match = re.search(r'(\d{1,2})[./-](\d{1,2})[./-](\d{4})', date_text)
-                            if date_match:
-                                try:
-                                    day, month, year = date_match.groups()
-                                    payment_date = datetime(int(year), int(month), int(day))
-                                except ValueError:
-                                    pass
-                            
-                            # Parse amount
-                            amount = 0.0
-                            amount_match = re.search(r'(\d+[.,]\d+|\d+)', amount_text.replace(',', '.'))
-                            if amount_match:
-                                try:
-                                    amount = float(amount_match.group(1))
-                                except ValueError:
-                                    pass
-                            
-                            if receipt_number and payment_date and amount > 0:
-                                payments.append(EblocPayment(
-                                    receipt_number=receipt_number,
-                                    payment_date=payment_date,
-                                    amount=amount
-                                ))
+            # Look for "Istoricul plăţilor" section
+            payment_history_text = soup.find(string=re.compile(r'Istoricul plăţilor', re.I))
+            if not payment_history_text:
+                logger.warning("[E-Bloc Scraper] Could not find payment history section")
+                return []
             
-            # Also try to find payment information in divs or other structures
-            payment_divs = soup.find_all(["div", "li"], class_=re.compile(r'payment|chitanță|receipt', re.I))
-            for div in payment_divs:
-                text = div.get_text()
-                receipt_match = re.search(r'(\d{10,})', text)
-                date_match = re.search(r'(\d{1,2})[./-](\d{1,2})[./-](\d{4})', text)
-                amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:RON|lei)', text, re.I)
+            # Get the parent container of the payment history
+            parent = payment_history_text.find_parent()
+            if not parent:
+                return []
+            
+            # Extract all payment entries from the text
+            # Format: "Ordin de plată 312,28 Lei\nNumărul: 1826641348291,24 Întreţinere Oct 25\nData: 15 Decembrie 2025"
+            text = parent.get_text()
+            
+            # Split by "Ordin de plată" to get individual payments
+            payment_blocks = re.split(r'Ordin de plată', text, flags=re.I)
+            
+            for block in payment_blocks[1:]:  # Skip first empty block
+                # Extract amount: "312,28 Lei"
+                amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:Lei|RON)', block, re.I)
+                if not amount_match:
+                    continue
                 
-                if receipt_match and date_match and amount_match:
-                    receipt_number = receipt_match.group(1)
-                    day, month, year = date_match.groups()
+                amount = float(amount_match.group(1).replace(',', '.'))
+                
+                # Extract receipt number: "Numărul: 1826641348291,24"
+                receipt_match = re.search(r'Numărul:\s*(\d+[.,]?\d*)', block, re.I)
+                receipt_number = receipt_match.group(1).replace(',', '').replace('.', '') if receipt_match else ""
+                
+                # Extract date: "Data: 15 Decembrie 2025"
+                date_match = re.search(r'Data:\s*(\d{1,2})\s+(\w+)\s+(\d{4})', block, re.I)
+                payment_date = None
+                if date_match:
+                    day, month_str, year = date_match.groups()
                     try:
-                        payment_date = datetime(int(year), int(month), int(day))
-                        amount = float(amount_match.group(1).replace(',', '.'))
-                        payments.append(EblocPayment(
-                            receipt_number=receipt_number,
-                            payment_date=payment_date,
-                            amount=amount
-                        ))
-                    except (ValueError, IndexError):
+                        # Convert Romanian month names to numbers
+                        month_map = {
+                            'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
+                            'mai': 5, 'iunie': 6, 'iulie': 7, 'august': 8,
+                            'septembrie': 9, 'octombrie': 10, 'noiembrie': 11, 'decembrie': 12
+                        }
+                        month = month_map.get(month_str.lower(), int(month_str) if month_str.isdigit() else None)
+                        if month:
+                            payment_date = datetime(int(year), month, int(day))
+                    except (ValueError, KeyError):
                         pass
+                
+                if receipt_number and payment_date and amount > 0:
+                    payments.append(EblocPayment(
+                        receipt_number=receipt_number,
+                        payment_date=payment_date,
+                        amount=amount
+                    ))
+                    logger.info(f"[E-Bloc Scraper] Found payment: {receipt_number}, {payment_date}, {amount} Lei")
             
+            logger.info(f"[E-Bloc Scraper] Found {len(payments)} payments")
             return payments
         except Exception as e:
-            print(f"Error getting payments: {e}")
+            logger.error(f"[E-Bloc Scraper] Error getting payments: {e}", exc_info=True)
             return []
 
     async def close(self):

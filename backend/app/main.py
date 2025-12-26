@@ -763,23 +763,10 @@ async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require
         if not logged_in:
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
         
-        # Get all properties from e-bloc and match by address
-        ebloc_properties = await scraper.get_available_properties()
-        matched_property = None
-        for ebloc_prop in ebloc_properties:
-            # Match by address (case-insensitive, partial match)
-            prop_address_lower = prop.address.lower()
-            ebloc_address_lower = (ebloc_prop.address or ebloc_prop.name or "").lower()
-            if prop_address_lower in ebloc_address_lower or ebloc_address_lower in prop_address_lower:
-                matched_property = ebloc_prop
-                break
-        
-        if not matched_property:
-            raise HTTPException(status_code=404, detail=f"Could not find matching E-bloc property for address: {prop.address}")
-        
-        # Get balance and payments using matched property's page_id
-        balance = await scraper.get_balance(matched_property.page_id)
-        payments = await scraper.get_payments(matched_property.page_id)
+        # Match property by name (use property name to match with gInfoAsoc['nume'])
+        # The scraper will select the property from combo box and navigate to Datorii page
+        balance = await scraper.get_balance(property_name=prop.name)
+        payments = await scraper.get_payments(property_name=prop.name)
         
         # Get or create a unit for this property (or use first unit)
         # Create bills from outstanding balance
@@ -841,6 +828,7 @@ async def sync_ebloc(property_id: str, current_user: TokenData = Depends(require
         return {
             "status": "success",
             "property_id": property_id,
+            "property_name": prop.name,
             "balance": {
                 "outstanding_debt": balance.outstanding_debt if balance else 0.0,
                 "last_payment_date": balance.last_payment_date.isoformat() if balance and balance.last_payment_date else None,
