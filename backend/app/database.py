@@ -1,6 +1,6 @@
 import os
 from typing import Optional, TypeVar, Type
-from sqlalchemy import create_engine, Column, String, Text, Integer, MetaData, Table, text
+from sqlalchemy import create_engine, Column, String, Text, Integer, MetaData, Table, text, func
 from sqlalchemy.pool import QueuePool
 from pydantic import BaseModel
 
@@ -135,10 +135,20 @@ class Database:
             ).fetchone()
             return _deserialize(User, result.data) if result else None
 
-    def list_users(self) -> list[User]:
+    def list_users(self, limit: Optional[int] = None, offset: Optional[int] = None) -> list[User]:
         with engine.connect() as conn:
-            results = conn.execute(users_table.select()).fetchall()
+            query = users_table.select()
+            if limit is not None:
+                query = query.limit(limit)
+            if offset is not None:
+                query = query.offset(offset)
+            results = conn.execute(query).fetchall()
             return [_deserialize(User, r.data) for r in results]
+    
+    def count_users(self) -> int:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM users")).fetchone()
+            return result[0] if result else 0
 
     def save_user(self, user: User) -> User:
         with engine.connect() as conn:

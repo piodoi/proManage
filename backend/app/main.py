@@ -67,15 +67,32 @@ async def health():
 
 
 @app.get("/admin/users")
-async def list_users(_: TokenData = Depends(require_admin)):
-    return db.list_users()
+async def list_users(
+    page: int = 1,
+    limit: int = 50,
+    _: TokenData = Depends(require_admin)
+):
+    offset = (page - 1) * limit
+    users = db.list_users(limit=limit, offset=offset)
+    total = db.count_users()
+    return {
+        "users": users,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
 
 @app.post("/admin/users", status_code=status.HTTP_201_CREATED)
 async def create_user(data: UserCreate, _: TokenData = Depends(require_admin)):
     if db.get_user_by_email(data.email):
         raise HTTPException(status_code=400, detail="Email already exists")
-    user = User(email=data.email, name=data.name, role=data.role)
+    password_hash = None
+    if data.password:
+        from app.routes.auth_routes import hash_password
+        password_hash = hash_password(data.password)
+    user = User(email=data.email, name=data.name, role=data.role, password_hash=password_hash)
     db.save_user(user)
     return user
 
@@ -114,14 +131,16 @@ async def delete_user(user_id: str, _: TokenData = Depends(require_admin)):
 @app.put("/admin/users/{user_id}/subscription")
 async def update_subscription(
     user_id: str,
-    status: SubscriptionStatus,
+    tier: int = 0,  # 0 = off, 1 = on
     expires: Optional[datetime] = None,
     _: TokenData = Depends(require_admin),
 ):
     user = db.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.subscription_status = status
+    user.subscription_tier = tier
+    # Keep subscription_status for backward compatibility
+    user.subscription_status = SubscriptionStatus.ACTIVE if tier > 0 else SubscriptionStatus.NONE
     user.subscription_expires = expires
     db.save_user(user)
     return user
@@ -134,7 +153,7 @@ def check_subscription(user_id: str) -> bool:
     property_count = db.count_properties(user_id)
     if property_count < 1:
         return True
-    if user.subscription_status != SubscriptionStatus.ACTIVE:
+    if user.subscription_tier == 0:
         return False
     if user.subscription_expires and user.subscription_expires < datetime.utcnow():
         return False
@@ -916,7 +935,7 @@ async def subscription_status(current_user: TokenData = Depends(require_auth)):
         "expires": user.subscription_expires,
         "property_count": property_count,
         "needs_subscription": needs_subscription,
-        "can_add_property": not needs_subscription or user.subscription_status == SubscriptionStatus.ACTIVE,
+        "can_add_property": not needs_subscription or user.subscription_tier > 0,
     }
 
 

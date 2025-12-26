@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
@@ -21,18 +22,23 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord' });
+  const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord', password: '' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [showBillParser, setShowBillParser] = useState(false);
 
   useEffect(() => {
     loadUsers();
-  }, [token]);
+  }, [token, currentPage]);
 
   const loadUsers = async () => {
     if (!token) return;
     try {
-      const data = await api.admin.listUsers(token);
-      setUsers(data);
+      const data = await api.admin.listUsers(token, currentPage, 50);
+      setUsers(data.users);
+      setTotalPages(data.total_pages);
+      setTotalUsers(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
@@ -42,10 +48,14 @@ export default function AdminDashboard() {
 
   const handleCreate = async () => {
     if (!token) return;
+    if (!formData.password) {
+      setError('Password is required for new users');
+      return;
+    }
     try {
       await api.admin.createUser(token, formData);
       setShowCreate(false);
-      setFormData({ email: '', name: '', role: 'landlord' });
+      setFormData({ email: '', name: '', role: 'landlord', password: '' });
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user');
@@ -55,9 +65,18 @@ export default function AdminDashboard() {
   const handleUpdate = async () => {
     if (!token || !editUser) return;
     try {
-      await api.admin.updateUser(token, editUser.id, formData);
+      // Only send password if it was changed
+      const updateData: { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string } = {
+        email: formData.email,
+        name: formData.name,
+        role: formData.role,
+      };
+      if (formData.password) {
+        updateData.password = formData.password;
+      }
+      await api.admin.updateUser(token, editUser.id, updateData);
       setEditUser(null);
-      setFormData({ email: '', name: '', role: 'landlord' });
+      setFormData({ email: '', name: '', role: 'landlord', password: '' });
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update user');
@@ -74,11 +93,10 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleSubscription = async (userId: string, status: string) => {
+  const handleSubscription = async (userId: string, tier: number) => {
     if (!token) return;
     try {
-      const expires = status === 'active' ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() : undefined;
-      await api.admin.updateSubscription(token, userId, status, expires);
+      await api.admin.updateSubscription(token, userId, tier);
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update subscription');
@@ -87,7 +105,7 @@ export default function AdminDashboard() {
 
   const openEdit = (user: User) => {
     setEditUser(user);
-    setFormData({ email: user.email, name: user.name, role: user.role });
+    setFormData({ email: user.email, name: user.name, role: user.role, password: '' });
   };
 
   if (showBillParser) {
@@ -202,6 +220,16 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
+                        <Label className="text-slate-300">Password *</Label>
+                        <Input
+                          type="password"
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          className="bg-slate-700 border-slate-600 text-slate-100"
+                          required
+                        />
+                      </div>
+                      <div>
                         <Label className="text-slate-300">Name</Label>
                         <Input
                           value={formData.name}
@@ -237,6 +265,7 @@ export default function AdminDashboard() {
                       <TableRow className="border-slate-700">
                         <TableHead className="text-slate-400">Name</TableHead>
                         <TableHead className="text-slate-400">Email</TableHead>
+                        <TableHead className="text-slate-400">Password</TableHead>
                         <TableHead className="text-slate-400">Role</TableHead>
                         <TableHead className="text-slate-400">Subscription</TableHead>
                         <TableHead className="text-slate-400">Actions</TableHead>
@@ -247,6 +276,9 @@ export default function AdminDashboard() {
                         <TableRow key={user.id} className="border-slate-700">
                           <TableCell className="text-slate-200">{user.name}</TableCell>
                           <TableCell className="text-slate-300">{user.email}</TableCell>
+                          <TableCell className="text-slate-300">
+                            {user.password_hash ? '••••••••' : 'OAuth'}
+                          </TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded text-xs ${user.role === 'admin' ? 'bg-purple-900 text-purple-200' : 'bg-blue-900 text-blue-200'}`}>
                               {user.role}
@@ -255,16 +287,15 @@ export default function AdminDashboard() {
                           <TableCell>
                             {user.role === 'landlord' && (
                               <Select
-                                value={user.subscription_status}
-                                onValueChange={(v) => handleSubscription(user.id, v)}
+                                value={((user.subscription_tier ?? 0) > 0 ? '1' : '0')}
+                                onValueChange={(v) => handleSubscription(user.id, parseInt(v, 10))}
                               >
-                                <SelectTrigger className="w-28 h-8 bg-slate-700 border-slate-600 text-slate-100">
+                                <SelectTrigger className="w-20 h-8 bg-slate-700 border-slate-600 text-slate-100">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-700 border-slate-600">
-                                  <SelectItem value="none">None</SelectItem>
-                                  <SelectItem value="active">Active</SelectItem>
-                                  <SelectItem value="expired">Expired</SelectItem>
+                                  <SelectItem value="0">Off</SelectItem>
+                                  <SelectItem value="1">On</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
@@ -294,6 +325,65 @@ export default function AdminDashboard() {
                     </TableBody>
                   </Table>
                 )}
+                {totalPages > 1 && (
+                  <div className="mt-4 flex items-center justify-between">
+                    <p className="text-sm text-slate-400">
+                      Showing {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, totalUsers)} of {totalUsers} users
+                    </p>
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="text-slate-400 hover:text-slate-100"
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Previous
+                          </Button>
+                        </PaginationItem>
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <PaginationItem key={pageNum}>
+                              <Button
+                                variant={currentPage === pageNum ? "outline" : "ghost"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className={currentPage === pageNum ? 'bg-slate-700 text-slate-100 border-slate-600' : 'text-slate-400 hover:text-slate-100'}
+                              >
+                                {pageNum}
+                              </Button>
+                            </PaginationItem>
+                          );
+                        })}
+                        <PaginationItem>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="text-slate-400 hover:text-slate-100"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -310,6 +400,19 @@ export default function AdminDashboard() {
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-slate-100"
                     />
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Password</Label>
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                      placeholder="Leave empty to keep current"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Leave empty to keep current password
+                    </p>
                   </div>
                   <div>
                     <Label className="text-slate-300">Name</Label>

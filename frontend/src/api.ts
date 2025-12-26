@@ -36,13 +36,14 @@ export const api = {
   },
 
   admin: {
-    listUsers: (token: string) => request<User[]>('/admin/users', { token }),
+    listUsers: (token: string, page: number = 1, limit: number = 50) => 
+      request<{ users: User[]; total: number; page: number; limit: number; total_pages: number }>(`/admin/users?page=${page}&limit=${limit}`, { token }),
     createUser: (token: string, data: UserCreate) => request<User>('/admin/users', { method: 'POST', body: data, token }),
     getUser: (token: string, id: string) => request<User>(`/admin/users/${id}`, { token }),
     updateUser: (token: string, id: string, data: UserUpdate) => request<User>(`/admin/users/${id}`, { method: 'PUT', body: data, token }),
     deleteUser: (token: string, id: string) => request<{ status: string }>(`/admin/users/${id}`, { method: 'DELETE', token }),
-    updateSubscription: (token: string, id: string, status: string, expires?: string) =>
-      request<User>(`/admin/users/${id}/subscription?status=${status}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
+    updateSubscription: (token: string, id: string, tier: number, expires?: string) =>
+      request<User>(`/admin/users/${id}/subscription?tier=${tier}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
   },
 
   properties: {
@@ -142,13 +143,15 @@ export type User = {
   name: string;
   role: 'admin' | 'landlord';
   oauth_provider?: 'google' | 'facebook';
-  subscription_status: 'active' | 'expired' | 'none';
+  subscription_status: 'active' | 'expired' | 'none';  // Deprecated, use subscription_tier
+  subscription_tier?: number;  // 0 = off, 1 = on (defaults to 0 if not present)
   subscription_expires?: string;
   created_at: string;
+  password_hash?: string;  // For display purposes only
 };
 
-export type UserCreate = { email: string; name: string; role: 'admin' | 'landlord' };
-export type UserUpdate = { email?: string; name?: string; role?: 'admin' | 'landlord' };
+export type UserCreate = { email: string; name: string; role: 'admin' | 'landlord'; password?: string };
+export type UserUpdate = { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string };
 
 export type Property = {
   id: string;

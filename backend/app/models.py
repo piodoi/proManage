@@ -44,6 +44,8 @@ class EmailConfigType(str, Enum):
     FORWARDING = "forwarding"
 
 
+# Subscription is now an int: 0 = off, 1 = on (reserved for future tiers)
+# Keeping enum for backward compatibility but will be converted to int
 class SubscriptionStatus(str, Enum):
     ACTIVE = "active"
     EXPIRED = "expired"
@@ -66,7 +68,8 @@ class User(BaseModel):
     password_hash: Optional[str] = None
     oauth_provider: Optional[OAuthProvider] = None
     oauth_id: Optional[str] = None
-    subscription_status: SubscriptionStatus = SubscriptionStatus.NONE
+    subscription_status: SubscriptionStatus = SubscriptionStatus.NONE  # Deprecated, use subscription_tier
+    subscription_tier: int = 0  # 0 = off, 1 = on (reserved for future tiers)
     subscription_expires: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -206,12 +209,14 @@ class UserCreate(BaseModel):
     email: str
     name: str
     role: UserRole
+    password: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
     email: Optional[str] = None
     name: Optional[str] = None
     role: Optional[UserRole] = None
+    password: Optional[str] = None
 
 
 class PropertyCreate(BaseModel):
