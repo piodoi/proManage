@@ -54,6 +54,7 @@ class EblocScraper:
         self.available_properties: list[EblocProperty] = []
         self.debug = debug
         self.last_response_url = None  # Track the final URL after redirects
+        self.login_response_html = None  # Store login response HTML to avoid redundant requests
     
     def set_apartment_cookies(self, association_id: str, apartment_id: str):
         """Set cookies for apartment selection: asoc-cur and home-ap-cur"""
@@ -66,7 +67,6 @@ class EblocScraper:
         # Set home-ap-cur to {association_id}_{apartment_id}
         home_ap_cur = f"{association_id}_{apartment_id}"
         self.client.cookies.set("home-ap-cur", home_ap_cur, domain="e-bloc.ro")
-        logger.info(f"[E-Bloc Scraper] Set cookies: asoc-cur={association_id}, home-ap-cur={home_ap_cur}")
 
     async def login(self, username: str, password: str) -> bool:
         import logging
@@ -125,63 +125,18 @@ class EblocScraper:
                     default_page_id = page_match.group(1)
                     logger.info(f"[E-Bloc Scraper] Detected default property page_id: {default_page_id}")
             if self.logged_in:
-                logger.info("[E-Bloc Scraper] Login successful, parsing properties...")
-                
-                # Save HTML for debugging if enabled
-                if self.debug:
-                    try:
-                        import os
-                        from pathlib import Path
-                        debug_dir = Path("debug_html")
-                        debug_dir.mkdir(exist_ok=True)
-                        html_file = debug_dir / "login_response.html"
-                        html_file.write_text(response.text, encoding="utf-8")
-                        logger.info(f"[E-Bloc Scraper] Saved login response HTML to {html_file.absolute()}")
-                        logger.info(f"[E-Bloc Scraper] HTML file size: {len(response.text)} bytes")
-                    except Exception as e:
-                        logger.error(f"[E-Bloc Scraper] Could not save debug HTML: {e}", exc_info=True)
-                
-                # Log HTML structure for debugging
-                html_preview = response.text[:3000] if len(response.text) > 3000 else response.text
-                logger.info(f"[E-Bloc Scraper] Response HTML preview (first 3000 chars):\n{html_preview}")
-                
-                # Check for common indicators of successful login
-                if "logout" in response.text.lower() or "deconectare" in response.text.lower():
-                    logger.info("[E-Bloc Scraper] Login confirmed - found logout link")
-                
-                # Count select elements in HTML
-                select_count = response.text.lower().count("<select")
-                logger.info(f"[E-Bloc Scraper] Found {select_count} '<select' tags in HTML")
-                
-                # Look for select elements in the raw HTML to see their structure
-                import re as regex_module
-                select_pattern = regex_module.compile(r'<select[^>]*>.*?</select>', regex_module.DOTALL | regex_module.IGNORECASE)
-                select_matches = select_pattern.findall(response.text)
-                logger.info(f"[E-Bloc Scraper] Found {len(select_matches)} select blocks in HTML")
-                for i, match in enumerate(select_matches[:5]):  # Log first 5
-                    match_preview = match[:500] if len(match) > 500 else match
-                    logger.info(f"[E-Bloc Scraper] Select block #{i+1} preview:\n{match_preview}")
+                # Store login response HTML to reuse in find_matching_associations
+                self.login_response_html = response.text
                 
                 # Parse properties from the current page
                 await self._parse_property_selector(response.text)
-                logger.info(f"[E-Bloc Scraper] Found {len(self.available_properties)} properties after parsing login response")
                 
                 # If no properties found, try navigating to the main index page (without page parameter)
                 if len(self.available_properties) == 0:
                     logger.warning("[E-Bloc Scraper] No properties found in login response, trying main index page...")
                     main_page = await self.client.get(self.LOGIN_URL)
-                    if self.debug:
-                        try:
-                            from pathlib import Path
-                            debug_dir = Path("debug_html")
-                            debug_dir.mkdir(exist_ok=True)
-                            html_file = debug_dir / "main_page.html"
-                            html_file.write_text(main_page.text, encoding="utf-8")
-                            logger.info(f"[E-Bloc Scraper] Saved main page HTML to {html_file.absolute()}")
-                        except Exception as e:
-                            logger.error(f"[E-Bloc Scraper] Could not save debug HTML: {e}", exc_info=True)
+                    self.login_response_html = main_page.text  # Update stored HTML
                     await self._parse_property_selector(main_page.text)
-                    logger.info(f"[E-Bloc Scraper] Found {len(self.available_properties)} properties after checking main page")
             else:
                 logger.warning(f"[E-Bloc Scraper] Login failed - status: {response.status_code}")
             
@@ -231,7 +186,6 @@ class EblocScraper:
             # Extract gPageId to understand the current page
             page_id_match = re.search(r'gPageId\s*=\s*["\']?(\d+)["\']?', html)
             current_page_id = page_id_match.group(1) if page_id_match else None
-            logger.info(f"[E-Bloc Scraper] Found gPageId: {current_page_id}")
             
             # First, parse gInfoAsoc to get association information (including adr_bloc)
             gInfoAsoc_block_match = re.search(
@@ -242,11 +196,9 @@ class EblocScraper:
             associations = {}  # Map id_asoc -> association data
             if gInfoAsoc_block_match:
                 gInfoAsoc_block = gInfoAsoc_block_match.group(0)
-                logger.debug(f"[E-Bloc Scraper] Found gInfoAsoc block (first 500 chars): {gInfoAsoc_block[:500]}")
                 
                 # Find all association indices
                 asoc_indices = set(re.findall(r'gInfoAsoc\s*\[\s*(\d+)\s*\]', gInfoAsoc_block))
-                logger.info(f"[E-Bloc Scraper] Found association indices: {sorted(asoc_indices)}")
                 
                 for asoc_index in sorted(asoc_indices):
                     # Extract all assignments for this association
@@ -263,7 +215,6 @@ class EblocScraper:
                     if "id" in asoc_data:
                         asoc_id = asoc_data["id"]
                         associations[asoc_id] = asoc_data
-                        logger.debug(f"[E-Bloc Scraper]   Association {asoc_index}: id={asoc_id}, adr_bloc={asoc_data.get('adr_bloc', 'N/A')}")
             
             # Extract all gInfoAp entries - they're in format: gInfoAp[ index ] = new Array();gInfoAp[ index ][ "key" ] = "value";
             # We need to find all array indices and their properties
@@ -287,7 +238,6 @@ class EblocScraper:
                 # The data is in format: gInfoAp[ 0 ] = new Array();gInfoAp[ 0 ][ "key" ] = "value";gInfoAp[ 1 ] = ...
                 # We need to find all indices first
                 indices = set(re.findall(r'gInfoAp\s*\[\s*(\d+)\s*\]', gInfoAp_block))
-                logger.info(f"[E-Bloc Scraper] Found property indices: {sorted(indices)}")
                 
                 for index in sorted(indices):
                     # Extract all assignments for this index
@@ -453,9 +403,13 @@ class EblocScraper:
             return []
         
         try:
-            # Get the current page to parse JavaScript variables
-            response = await self.client.get(self.LOGIN_URL)
-            html = response.text
+            # Reuse login response HTML to avoid redundant navigation
+            if self.login_response_html:
+                html = self.login_response_html
+            else:
+                # Fallback: get the page if HTML wasn't stored
+                response = await self.client.get(self.LOGIN_URL)
+                html = response.text
             
             # Parse gInfoAsoc to find matching associations
             gInfoAsoc_block_match = re.search(
@@ -502,11 +456,9 @@ class EblocScraper:
                             "apt_index": int(apt_index),
                             "id_ap": apt_id_ap
                         }
-                        logger.debug(f"[E-Bloc Scraper] Mapped association {apt_id_asoc} to apartment index {apt_index}, id_ap={apt_id_ap}")
             
             # Find all association indices
             asoc_indices = set(re.findall(r'gInfoAsoc\s*\[\s*(\d+)\s*\]', gInfoAsoc_block))
-            logger.info(f"[E-Bloc Scraper] Found association indices: {sorted(asoc_indices)}")
             
             matches = []
             property_name_lower = property_name.lower()
@@ -542,8 +494,6 @@ class EblocScraper:
                 # Normalize street name
                 normalized_street = re.sub(r'^(strada|str\.?|st\.?)\s+', '', adr_strada, flags=re.I).strip()
                 
-                # Debug logging for matching
-                logger.debug(f"[E-Bloc Scraper] Checking association {asoc_index} (id: {asoc_id}, name: '{asoc_data.get('nume', '')}'): street='{adr_strada}', normalized_street='{normalized_street}', nr='{adr_nr}', bloc='{adr_bloc}'")
                 
                 # Check for matches using multiple criteria
                 match_score = 0
@@ -632,15 +582,12 @@ class EblocScraper:
                         "apartment_index": apartment_index,  # gInfoAsoc index for combo box
                         "apartment_id": apt_id_ap  # id_ap from gInfoAp for cookie (home-ap-cur)
                     })
-                    logger.info(f"[E-Bloc Scraper] Matched property '{property_name}' with association '{asoc_data.get('nume', '')}' (id: {asoc_id}, score: {match_score}, gInfoAsoc_idx: {asoc_index}, apt_id_ap: {apt_id_ap}, reasons: {', '.join(match_reasons)})")
             
             # Sort by score (highest first)
             matches.sort(key=lambda x: x["score"], reverse=True)
             
             if not matches:
-                logger.warning(f"[E-Bloc Scraper] Could not match property name '{property_name}' with any association")
-                # Fallback: return all associations so user can select manually
-                logger.info(f"[E-Bloc Scraper] Returning all {len(asoc_indices)} associations as fallback")
+                logger.warning(f"[E-Bloc Scraper] Could not match property name '{property_name}' with any association, returning all {len(asoc_indices)} associations as fallback")
                 for asoc_index in sorted(asoc_indices):
                     kv_pattern = re.compile(
                         r'gInfoAsoc\s*\[\s*' + re.escape(asoc_index) + r'\s*\]\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']*)["\']',
@@ -871,26 +818,14 @@ class EblocScraper:
         """Navigate to Datorii (Debts) page (page=11). Cookies handle apartment selection.
         Returns (success, url_used, soup) so caller can use the parsed HTML directly."""
         import logging
-        import os
         logger = logging.getLogger(__name__)
         
         try:
             # Cookies handle apartment selection, no need for home-ap in URL
             url = f"{self.LOGIN_URL}?page=11&t={int(datetime.now().timestamp())}"
-            logger.info(f"[E-Bloc Scraper] Navigating to Datorii page: {url}")
-            
             response = await self.client.get(url)
-            logger.info(f"[E-Bloc Scraper] Navigated to Datorii page, status: {response.status_code}")
             
             if response.status_code == 200:
-                # Save HTML for debugging (similar to login page)
-                debug_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug_html")
-                os.makedirs(debug_dir, exist_ok=True)
-                debug_file = os.path.join(debug_dir, "datorii_response.html")
-                with open(debug_file, "w", encoding="utf-8") as f:
-                    f.write(response.text)
-                logger.info(f"[E-Bloc Scraper] Saved Datorii page HTML to {debug_file}")
-                
                 soup = BeautifulSoup(response.text, "html.parser")
                 return (True, url, soup)
             else:
@@ -920,12 +855,7 @@ class EblocScraper:
                     expected_home_ap = f"{association_id}_{apartment_id}"
                     if current_asoc != association_id or current_home_ap != expected_home_ap:
                         self.set_apartment_cookies(association_id, apartment_id)
-                        # Navigate to association page to ensure cookies are sent
-                        asoc_url = f"{self.LOGIN_URL}?page={association_id}&t={int(datetime.now().timestamp())}"
-                        await self.client.get(asoc_url)
-                        logger.info(f"[E-Bloc Scraper] Set cookies for association {association_id}, apartment_id: {apartment_id}")
-                    else:
-                        logger.debug(f"[E-Bloc Scraper] Cookies already set correctly, skipping")
+                        # No need to navigate to association page - cookies will be sent with next request
             # If property_name is provided, select it first
             elif property_name:
                 selected_page_id, apt_idx = await self.select_property_by_name(property_name, association_id=association_id, apartment_index=apartment_index, apartment_id=apartment_id)
@@ -935,12 +865,11 @@ class EblocScraper:
                 matched_asoc_id = selected_page_id
                 if apartment_index is None:
                     apartment_index = apt_idx
-                logger.info(f"[E-Bloc Scraper] Selected property '{property_name}' with association {matched_asoc_id}, apartment_index: {apartment_index}")
             
-            # Navigate to Datorii page with apartment selection (cookies handle it)
+            # Navigate directly to Datorii page (cookies handle apartment selection)
             success, datorii_url, soup = await self.navigate_to_datorii(matched_asoc_id or "", apartment_index)
             if not success or soup is None:
-                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page or parse HTML")
+                logger.warning("[E-Bloc Scraper] Could not navigate to Datorii page")
                 return None, None
             
             return matched_asoc_id, soup
