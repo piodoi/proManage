@@ -277,6 +277,29 @@ export default function Login() {
           {authMode === 'main' && (
             <>
               <Button
+                onClick={() => setAuthMode('login')}
+                className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
+              >
+                Sign in with Email
+              </Button>
+
+              <Button
+                onClick={() => setAuthMode('register')}
+                className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
+              >
+                Create Account
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-slate-600" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-slate-800 px-2 text-slate-400">Or</span>
+                </div>
+              </div>
+
+              <Button
                 onClick={handleGoogleLogin}
                 className="w-full bg-white text-slate-900 hover:bg-slate-100"
               >
@@ -297,31 +320,6 @@ export default function Login() {
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                 </svg>
                 Continue with Facebook
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-slate-600" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-slate-800 px-2 text-slate-400">Or</span>
-                </div>
-              </div>
-
-              <Button
-                onClick={() => setAuthMode('login')}
-                variant="outline"
-                className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                Sign in with Email
-              </Button>
-
-              <Button
-                onClick={() => setAuthMode('register')}
-                variant="outline"
-                className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                Create Account
               </Button>
 
               {!hasAdmin && (

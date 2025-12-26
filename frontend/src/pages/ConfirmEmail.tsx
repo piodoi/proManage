@@ -9,14 +9,28 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function ConfirmEmail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user, token } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState('');
 
+  // Check if user is already logged in
   useEffect(() => {
-    const token = searchParams.get('token');
+    if (user && token) {
+      // User is already logged in, redirect to dashboard
+      navigate('/');
+      return;
+    }
+  }, [user, token, navigate]);
+
+  useEffect(() => {
+    // If already logged in, don't process token
+    if (user && token) {
+      return;
+    }
+
+    const tokenParam = searchParams.get('token');
     
-    if (!token) {
+    if (!tokenParam) {
       setStatus('error');
       setError('No confirmation token provided');
       return;
@@ -27,16 +41,14 @@ export default function ConfirmEmail() {
         const response = await fetch(`${API_URL}/auth/confirm-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token: tokenParam }),
         });
 
         if (response.ok) {
           const data = await response.json();
           setStatus('success');
           login(data.access_token, data.user);
-          setTimeout(() => {
-            navigate('/');
-          }, 2000);
+          // Don't auto-redirect, let user click button
         } else {
           const err = await response.json();
           setStatus('error');
@@ -49,7 +61,7 @@ export default function ConfirmEmail() {
     };
 
     confirmEmail();
-  }, [searchParams, login, navigate]);
+  }, [searchParams, login, user, token]);
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -75,7 +87,13 @@ export default function ConfirmEmail() {
                 </svg>
               </div>
               <p className="text-emerald-400 font-medium mb-2">Email confirmed successfully!</p>
-              <p className="text-slate-400 text-sm">Redirecting to dashboard...</p>
+              <p className="text-slate-400 text-sm mb-4">Your account has been activated. You can now access your dashboard.</p>
+              <Button
+                onClick={() => navigate('/')}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                Go to Dashboard
+              </Button>
             </div>
           )}
 
@@ -88,6 +106,11 @@ export default function ConfirmEmail() {
               </div>
               <p className="text-red-400 font-medium mb-2">Confirmation failed</p>
               <p className="text-slate-400 text-sm mb-4">{error}</p>
+              <p className="text-slate-500 text-xs mb-4">
+                {error.toLowerCase().includes('expired') || error.toLowerCase().includes('invalid')
+                  ? 'The confirmation link may have expired. Please try registering again or contact support.'
+                  : 'Please try again or contact support if the problem persists.'}
+              </p>
               <Button
                 onClick={() => navigate('/login')}
                 className="bg-emerald-600 hover:bg-emerald-700"

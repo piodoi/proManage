@@ -34,7 +34,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [eblocDiscovering, setEblocDiscovering] = useState(false);
   const [eblocImporting, setEblocImporting] = useState(false);
   const [propertyForm, setPropertyForm] = useState({ name: '', address: '' });
-  const [renterForm, setRenterForm] = useState({ name: '', rent_date: '', rent_amount: '', rent_currency: 'EUR' as 'EUR' | 'RON' | 'USD', email: '', phone: '' });
+  const [renterForm, setRenterForm] = useState({ name: '', rent_day: '', start_contract_date: '', rent_amount: '', rent_currency: 'EUR' as 'EUR' | 'RON' | 'USD', email: '', phone: '' });
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
   const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
@@ -115,30 +115,35 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
           name: editingRenter.name, 
           email: editingRenter.email, 
           phone: editingRenter.phone,
-          rent_date: editingRenter.rent_date,
+          rent_day: editingRenter.rent_day,
+          start_contract_date: editingRenter.start_contract_date,
           rent_amount_eur: editingRenter.rent_amount_eur
         }
       });
       
-      // Format date properly for date input (YYYY-MM-DD)
-      let formattedDate = '';
-      if (editingRenter.rent_date) {
+      // Format start_contract_date properly for date input (YYYY-MM-DD)
+      let formattedStartDate = '';
+      if (editingRenter.start_contract_date) {
         try {
-          const date = new Date(editingRenter.rent_date);
+          const date = new Date(editingRenter.start_contract_date);
           if (!isNaN(date.getTime())) {
-            formattedDate = date.toISOString().split('T')[0];
+            formattedStartDate = date.toISOString().split('T')[0];
           }
         } catch (e) {
-          console.error('[LandlordView] Error formatting date:', e, editingRenter.rent_date);
+          console.error('[LandlordView] Error formatting start_contract_date:', e, editingRenter.start_contract_date);
         }
       }
+      
+      // Format rent_day as string for number input
+      const formattedRentDay = editingRenter.rent_day ? editingRenter.rent_day.toString() : '';
       
       // Format amount as string for number input
       const formattedAmount = editingRenter.rent_amount_eur ? editingRenter.rent_amount_eur.toString() : '';
       
       console.log('[LandlordView] Setting form values:', {
         name: editingRenter.name || '',
-        rent_date: formattedDate,
+        rent_day: formattedRentDay,
+        start_contract_date: formattedStartDate,
         rent_amount: formattedAmount,
         rent_currency: 'EUR', // Default to EUR for now
         email: editingRenter.email || '',
@@ -147,7 +152,8 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       
       setRenterForm({ 
         name: editingRenter.name || '', 
-        rent_date: formattedDate,
+        rent_day: formattedRentDay,
+        start_contract_date: formattedStartDate,
         rent_amount: formattedAmount,
         rent_currency: 'EUR', // Default to EUR for now
         email: editingRenter.email || '', 
@@ -155,7 +161,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       });
     } else {
       // Reset form when not editing
-      setRenterForm({ name: '', rent_date: '', rent_amount: '', rent_currency: 'EUR', email: '', phone: '' });
+      setRenterForm({ name: '', rent_day: '', start_contract_date: '', rent_amount: '', rent_currency: 'EUR', email: '', phone: '' });
     }
   }, [editingRenter]);
 
@@ -239,25 +245,27 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       return;
     }
     try {
-      // Default date to 1st of current month if not provided
-      const rentDate = renterForm.rent_date || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-      
       // Convert amount to EUR if needed (for now, assume input is in selected currency)
       // TODO: Implement proper currency conversion
       const rentAmountEUR = parseFloat(renterForm.rent_amount);
+      
+      // Parse rent_day (1-28) and start_contract_date
+      const rentDay = renterForm.rent_day ? parseInt(renterForm.rent_day, 10) : undefined;
+      const startContractDate = renterForm.start_contract_date || undefined;
       
       // Create renter with all info including rent details
       await api.renters.create(token, propertyId, {
         name: renterForm.name,
         email: renterForm.email || undefined,
         phone: renterForm.phone || undefined,
-        rent_date: rentDate,
+        rent_day: rentDay,
+        start_contract_date: startContractDate,
         rent_amount_eur: rentAmountEUR,
       });
       
       setShowRenterForm(null);
       setEditingRenter(null);
-      setRenterForm({ name: '', rent_date: '', rent_amount: '', rent_currency: 'EUR', email: '', phone: '' });
+      setRenterForm({ name: '', rent_day: '', start_contract_date: '', rent_amount: '', rent_currency: 'EUR', email: '', phone: '' });
       await loadData();
     } catch (err) {
       handleError(err);
@@ -271,23 +279,25 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       return;
     }
     try {
-      // Default date to 1st of current month if not provided
-      const rentDate = renterForm.rent_date || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-      
       // Convert amount to EUR if needed (for now, assume input is in selected currency)
       // TODO: Implement proper currency conversion
       const rentAmountEUR = parseFloat(renterForm.rent_amount);
+      
+      // Parse rent_day (1-28) and start_contract_date
+      const rentDay = renterForm.rent_day ? parseInt(renterForm.rent_day, 10) : undefined;
+      const startContractDate = renterForm.start_contract_date || undefined;
       
       await api.renters.update(token, renterId, {
         name: renterForm.name,
         email: renterForm.email || undefined,
         phone: renterForm.phone || undefined,
-        rent_date: rentDate,
+        rent_day: rentDay,
+        start_contract_date: startContractDate,
         rent_amount_eur: rentAmountEUR,
       });
       setEditingRenter(null);
       setShowRenterForm(null);
-      setRenterForm({ name: '', rent_date: '', rent_amount: '', rent_currency: 'EUR', email: '', phone: '' });
+      setRenterForm({ name: '', rent_day: '', start_contract_date: '', rent_amount: '', rent_currency: 'EUR', email: '', phone: '' });
       await loadData();
     } catch (err) {
       handleError(err);
@@ -782,16 +792,33 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                             />
                           </div>
                           <div>
-                            <Label className="text-slate-300">Rent Date (Due Date)</Label>
+                            <Label className="text-slate-300">Rent Day (Day of Month) *</Label>
                             <Input
-                              key={`rent_date-${editingRenter?.id || 'new'}`}
+                              key={`rent_day-${editingRenter?.id || 'new'}`}
+                              type="number"
+                              min="1"
+                              max="28"
+                              value={renterForm.rent_day}
+                              onChange={(e) => setRenterForm({ ...renterForm, rent_day: e.target.value })}
+                              className="bg-slate-700 border-slate-600 text-slate-100"
+                              placeholder="1-28"
+                              required
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Day of month when rent is due (1-28)
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-slate-300">Start Contract Date (optional)</Label>
+                            <Input
+                              key={`start_contract_date-${editingRenter?.id || 'new'}`}
                               type="date"
-                              value={renterForm.rent_date}
-                              onChange={(e) => setRenterForm({ ...renterForm, rent_date: e.target.value })}
+                              value={renterForm.start_contract_date}
+                              onChange={(e) => setRenterForm({ ...renterForm, start_contract_date: e.target.value })}
                               className="bg-slate-700 border-slate-600 text-slate-100"
                             />
                             <p className="text-xs text-slate-500 mt-1">
-                              Defaults to 1st of current month if not filled
+                              Optional start date of the contract
                             </p>
                           </div>
                           <div>
@@ -851,7 +878,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                           <Button 
                             onClick={() => editingRenter ? handleUpdateRenter(editingRenter.id) : handleCreateRenter(property.id)} 
                             className="w-full bg-emerald-600 hover:bg-emerald-700"
-                            disabled={!renterForm.name || !renterForm.rent_amount}
+                            disabled={!renterForm.name || !renterForm.rent_amount || !renterForm.rent_day}
                           >
                             {editingRenter ? 'Update Renter' : 'Add Renter'}
                           </Button>
@@ -874,7 +901,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                         <div key={renter.id} className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
                             <span className="text-slate-300 font-medium">{renter.name}</span>
-                            {(rentAmountEUR > 0 || renter.rent_date) && (
+                            {(rentAmountEUR > 0 || renter.rent_day || renter.start_contract_date) && (
                               <span className="text-xs text-slate-400">
                                 {rentAmountEUR > 0 && (
                                   <>
@@ -882,8 +909,11 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                                     <span className="ml-1">({rentAmountRON} RON)</span>
                                   </>
                                 )}
-                                {renter.rent_date && (
-                                  <span className="ml-2">• Due: {new Date(renter.rent_date).toLocaleDateString()}</span>
+                                {renter.rent_day && (
+                                  <span className="ml-2">• Due day: {renter.rent_day}</span>
+                                )}
+                                {renter.start_contract_date && (
+                                  <span className="ml-2">• Start: {new Date(renter.start_contract_date).toLocaleDateString()}</span>
                                 )}
                               </span>
                             )}
@@ -1215,16 +1245,33 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                               />
                             </div>
                             <div>
-                              <Label className="text-slate-300">Rent Date (Due Date)</Label>
+                              <Label className="text-slate-300">Rent Day (Day of Month) *</Label>
                               <Input
-                                key={`rent_date-${editingRenter?.id || 'new'}`}
+                                key={`rent_day-${editingRenter?.id || 'new'}`}
+                                type="number"
+                                min="1"
+                                max="28"
+                                value={renterForm.rent_day}
+                                onChange={(e) => setRenterForm({ ...renterForm, rent_day: e.target.value })}
+                                className="bg-slate-700 border-slate-600 text-slate-100"
+                                placeholder="1-28"
+                                required
+                              />
+                              <p className="text-xs text-slate-500 mt-1">
+                                Day of month when rent is due (1-28)
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-slate-300">Start Contract Date (optional)</Label>
+                              <Input
+                                key={`start_contract_date-${editingRenter?.id || 'new'}`}
                                 type="date"
-                                value={renterForm.rent_date}
-                                onChange={(e) => setRenterForm({ ...renterForm, rent_date: e.target.value })}
+                                value={renterForm.start_contract_date}
+                                onChange={(e) => setRenterForm({ ...renterForm, start_contract_date: e.target.value })}
                                 className="bg-slate-700 border-slate-600 text-slate-100"
                               />
                               <p className="text-xs text-slate-500 mt-1">
-                                Defaults to 1st of current month if not filled
+                                Optional start date of the contract
                               </p>
                             </div>
                             <div>
@@ -1307,7 +1354,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                           <div key={renter.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-slate-300 font-medium">{renter.name}</span>
-                              {(rentAmountEUR > 0 || renter.rent_date) && (
+                              {(rentAmountEUR > 0 || renter.rent_day || renter.start_contract_date) && (
                                 <span className="text-xs text-slate-400">
                                   {rentAmountEUR > 0 && (
                                     <>
@@ -1315,8 +1362,11 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                                       <span className="ml-1">({rentAmountRON} RON)</span>
                                     </>
                                   )}
-                                  {renter.rent_date && (
-                                    <span className="ml-2">• Due: {new Date(renter.rent_date).toLocaleDateString()}</span>
+                                  {renter.rent_day && (
+                                    <span className="ml-2">• Due day: {renter.rent_day}</span>
+                                  )}
+                                  {renter.start_contract_date && (
+                                    <span className="ml-2">• Start: {new Date(renter.start_contract_date).toLocaleDateString()}</span>
                                   )}
                                 </span>
                               )}

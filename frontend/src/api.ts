@@ -177,7 +177,8 @@ export type Renter = {
   name: string;
   email?: string;
   phone?: string;
-  rent_date?: string;
+  rent_day?: number;  // Day of month (1-28) for recurring rent
+  start_contract_date?: string;  // Optional start date of contract
   rent_amount_eur?: number;
   access_token: string;
   created_at: string;
@@ -187,14 +188,16 @@ export type RenterCreate = {
   name: string; 
   email?: string; 
   phone?: string;
-  rent_date?: string;
+  rent_day?: number;  // Day of month (1-28) for recurring rent
+  start_contract_date?: string;  // Optional start date of contract
   rent_amount_eur?: number;
 };
 export type RenterUpdate = { 
   name?: string; 
   email?: string; 
   phone?: string;
-  rent_date?: string;
+  rent_day?: number;  // Day of month (1-28) for recurring rent
+  start_contract_date?: string;  // Optional start date of contract
   rent_amount_eur?: number;
 };
 

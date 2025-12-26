@@ -92,7 +92,8 @@ class Renter(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    rent_date: Optional[date] = None
+    rent_day: Optional[int] = Field(None, ge=1, le=28)  # Day of month (1-28) for recurring rent
+    start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount_eur: Optional[float] = None
     access_token: str = Field(default_factory=gen_token)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -235,7 +236,8 @@ class RenterCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    rent_date: Optional[date] = None
+    rent_day: Optional[int] = Field(None, ge=1, le=28)  # Day of month (1-28) for recurring rent
+    start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount_eur: Optional[float] = None
 
 
@@ -243,7 +245,8 @@ class RenterUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    rent_date: Optional[date] = None
+    rent_day: Optional[int] = Field(None, ge=1, le=28)  # Day of month (1-28) for recurring rent
+    start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount_eur: Optional[float] = None
 
 

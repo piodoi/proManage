@@ -292,7 +292,8 @@ async def create_renter(
         name=data.name, 
         email=data.email, 
         phone=data.phone,
-        rent_date=data.rent_date,
+        rent_day=data.rent_day,
+        start_contract_date=data.start_contract_date,
         rent_amount_eur=data.rent_amount_eur
     )
     db.save_renter(renter)
@@ -336,8 +337,10 @@ async def update_renter(
         renter.email = data.email
     if data.phone is not None:
         renter.phone = data.phone
-    if data.rent_date is not None:
-        renter.rent_date = data.rent_date
+    if data.rent_day is not None:
+        renter.rent_day = data.rent_day
+    if data.start_contract_date is not None:
+        renter.start_contract_date = data.start_contract_date
     if data.rent_amount_eur is not None:
         renter.rent_amount_eur = data.rent_amount_eur
     db.save_renter(renter)
