@@ -22,7 +22,6 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
-  const [eblocConfigs, setEblocConfigs] = useState<Record<string, { ebloc_url?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
@@ -39,6 +38,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
   const [unitForm, setUnitForm] = useState({ unit_number: '' });
   const [renterForm, setRenterForm] = useState({ name: '', email: '', phone: '' });
   const [billForm, setBillForm] = useState({
+    property_id: '',
     unit_id: '',
     bill_type: 'rent' as 'rent' | 'utilities' | 'ebloc' | 'other',
     description: '',
@@ -87,8 +87,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
       setBills(billsData);
       setSubscription(subData);
       
-      console.log('[LandlordView] Loading units, renters, and e-bloc configs...');
-      const configs: Record<string, { ebloc_url?: string }> = {};
+      console.log('[LandlordView] Loading units and renters...');
       for (const prop of propsData) {
         const unitsData = await api.units.list(token, prop.id);
         console.log(`[LandlordView] Property ${prop.name}: ${unitsData.length} units`);
@@ -97,16 +96,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
           const rentersData = await api.renters.list(token, unit.id);
           setRenters((prev) => ({ ...prev, [unit.id]: rentersData }));
         }
-        
-        // Load e-bloc config if exists
-        try {
-          const eblocConfig = await api.ebloc.getConfig(token, prop.id);
-          configs[prop.id] = { ebloc_url: eblocConfig.ebloc_url };
-        } catch (err) {
-          // No e-bloc config for this property, that's fine
-        }
       }
-      setEblocConfigs(configs);
       console.log('[LandlordView] Data loaded successfully');
     } catch (err) {
       console.error('[LandlordView] Error loading data:', err);
@@ -174,7 +164,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
         due_date: new Date(billForm.due_date).toISOString(),
       });
       setShowBillForm(false);
-      setBillForm({ unit_id: '', bill_type: 'rent', description: '', amount: '', due_date: '', iban: '', bill_number: '' });
+      setBillForm({ property_id: '', unit_id: '', bill_type: 'rent', description: '', amount: '', due_date: '', iban: '', bill_number: '' });
       loadData();
     } catch (err) {
       handleError(err);
@@ -232,7 +222,7 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
         }
       } else {
         console.error('[E-Bloc] Unexpected response format:', result);
-        const errorMsg = result?.detail || result?.message || `Unexpected response: ${JSON.stringify(result)}`;
+        const errorMsg = (result as any)?.detail || (result as any)?.message || `Unexpected response: ${JSON.stringify(result)}`;
         setError(errorMsg);
         setEblocDiscoveredProperties([]);
       }
@@ -380,10 +370,6 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
           <TabsTrigger value="properties" className="data-[state=active]:bg-slate-700">
             <Building2 className="w-4 h-4 mr-2" />
             Properties
-          </TabsTrigger>
-          <TabsTrigger value="bills" className="data-[state=active]:bg-slate-700">
-            <Receipt className="w-4 h-4 mr-2" />
-            Bills
           </TabsTrigger>
           <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
             <Settings className="w-4 h-4 mr-2" />
@@ -571,26 +557,33 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                     <p className="text-sm text-slate-400">{property.address}</p>
                   </div>
                   <div className="flex gap-2">
-                    {eblocConfigs[property.id]?.ebloc_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(eblocConfigs[property.id].ebloc_url, '_blank')}
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                        title="Open in E-Bloc.ro"
-                      >
-                        <ExternalLink className="w-4 h-4 mr-1" />
-                        E-Bloc
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteProperty(property.id)}
-                      className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Dialog open={showUnitForm === property.id} onOpenChange={(open) => setShowUnitForm(open ? property.id : null)}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add Unit
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-slate-800 border-slate-700">
+                        <DialogHeader>
+                          <DialogTitle className="text-slate-100">Add Unit</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-slate-300">Unit Number</Label>
+                            <Input
+                              value={unitForm.unit_number}
+                              onChange={(e) => setUnitForm({ unit_number: e.target.value })}
+                              className="bg-slate-700 border-slate-600 text-slate-100"
+                              placeholder="Apt 101"
+                            />
+                          </div>
+                          <Button onClick={() => handleCreateUnit(property.id)} className="w-full bg-emerald-600 hover:bg-emerald-700">
+                            Add Unit
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                     <Dialog open={showEblocConfig === property.id} onOpenChange={(open) => setShowEblocConfig(open ? property.id : null)}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
@@ -628,33 +621,14 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                         </div>
                       </DialogContent>
                     </Dialog>
-                    <Dialog open={showUnitForm === property.id} onOpenChange={(open) => setShowUnitForm(open ? property.id : null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-                          <Plus className="w-4 h-4 mr-1" />
-                          Unit
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="bg-slate-800 border-slate-700">
-                        <DialogHeader>
-                          <DialogTitle className="text-slate-100">Add Unit</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label className="text-slate-300">Unit Number</Label>
-                            <Input
-                              value={unitForm.unit_number}
-                              onChange={(e) => setUnitForm({ unit_number: e.target.value })}
-                              className="bg-slate-700 border-slate-600 text-slate-100"
-                              placeholder="Apt 101"
-                            />
-                          </div>
-                          <Button onClick={() => handleCreateUnit(property.id)} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                            Add Unit
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteProperty(property.id)}
+                      className="text-red-400 hover:text-red-200 hover:bg-red-900/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -734,12 +708,222 @@ export default function LandlordView({ token, onError }: LandlordViewProps) {
                     </div>
                   )}
                 </CardContent>
+                
+                {/* Bills Section for this Property */}
+                <CardContent className="pt-0">
+                  <Card className="bg-slate-800 border-slate-700">
+                    <CardHeader>
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-slate-100 flex items-center gap-2">
+                          <Receipt className="w-5 h-5" />
+                          Bills
+                        </CardTitle>
+                        <div className="flex gap-2">
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            id={`pdf-upload-${property.id}`}
+                            style={{ display: 'none' }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file || !token) return;
+                              try {
+                                // TODO: Implement PDF upload endpoint
+                                console.log('[Bills] PDF upload for property:', property.id, file.name);
+                                setError('PDF upload functionality coming soon');
+                              } catch (err) {
+                                handleError(err);
+                              }
+                            }}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById(`pdf-upload-${property.id}`)?.click()}
+                            className="border-slate-600 text-slate-300"
+                          >
+                            <Receipt className="w-4 h-4 mr-1" />
+                            Upload PDF
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              if (!token) return;
+                              try {
+                                // TODO: Implement utilities sync endpoint
+                                console.log('[Bills] Sync utilities for property:', property.id);
+                                setError('Utilities sync functionality coming soon');
+                              } catch (err) {
+                                handleError(err);
+                              }
+                            }}
+                            className="border-slate-600 text-slate-300"
+                          >
+                            <Settings className="w-4 h-4 mr-1" />
+                            Sync Utilities
+                          </Button>
+                          <Dialog open={showBillForm && billForm.property_id === property.id} onOpenChange={(open) => {
+                            if (!open) {
+                              setShowBillForm(false);
+                              setBillForm({ ...billForm, property_id: '' });
+                            } else {
+                              setBillForm({ ...billForm, property_id: property.id });
+                            }
+                          }}>
+                            <DialogTrigger asChild>
+                              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                                <Plus className="w-4 h-4 mr-1" />
+                                Add Bill
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="bg-slate-800 border-slate-700">
+                              <DialogHeader>
+                                <DialogTitle className="text-slate-100">Add Bill</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label className="text-slate-300">Unit</Label>
+                                  <Select value={billForm.unit_id} onValueChange={(v) => setBillForm({ ...billForm, unit_id: v })}>
+                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                                      <SelectValue placeholder="Select unit" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-700 border-slate-600">
+                                      {(units[property.id] || []).map((unit) => (
+                                        <SelectItem key={unit.id} value={unit.id}>{unit.unit_number}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-slate-300">Type</Label>
+                                  <Select value={billForm.bill_type} onValueChange={(v) => setBillForm({ ...billForm, bill_type: v as typeof billForm.bill_type })}>
+                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-700 border-slate-600">
+                                      <SelectItem value="rent">Rent</SelectItem>
+                                      <SelectItem value="utilities">Utilities</SelectItem>
+                                      <SelectItem value="ebloc">E-Bloc</SelectItem>
+                                      <SelectItem value="other">Other</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-slate-300">Description</Label>
+                                  <Input
+                                    value={billForm.description}
+                                    onChange={(e) => setBillForm({ ...billForm, description: e.target.value })}
+                                    className="bg-slate-700 border-slate-600 text-slate-100"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-slate-300">Amount</Label>
+                                  <Input
+                                    type="number"
+                                    value={billForm.amount}
+                                    onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
+                                    className="bg-slate-700 border-slate-600 text-slate-100"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-slate-300">Due Date</Label>
+                                  <Input
+                                    type="date"
+                                    value={billForm.due_date}
+                                    onChange={(e) => setBillForm({ ...billForm, due_date: e.target.value })}
+                                    className="bg-slate-700 border-slate-600 text-slate-100"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-slate-300">IBAN (for bank transfer)</Label>
+                                  <Input
+                                    value={billForm.iban}
+                                    onChange={(e) => setBillForm({ ...billForm, iban: e.target.value })}
+                                    className="bg-slate-700 border-slate-600 text-slate-100"
+                                    placeholder="RO49AAAA1B31007593840000"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-slate-300">Bill Number</Label>
+                                  <Input
+                                    value={billForm.bill_number}
+                                    onChange={(e) => setBillForm({ ...billForm, bill_number: e.target.value })}
+                                    className="bg-slate-700 border-slate-600 text-slate-100"
+                                  />
+                                </div>
+                                <Button onClick={handleCreateBill} className="w-full bg-emerald-600 hover:bg-emerald-700">
+                                  Create Bill
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-slate-700">
+                            <TableHead className="text-slate-400">Unit</TableHead>
+                            <TableHead className="text-slate-400">Description</TableHead>
+                            <TableHead className="text-slate-400">Type</TableHead>
+                            <TableHead className="text-slate-400">Amount</TableHead>
+                            <TableHead className="text-slate-400">Due Date</TableHead>
+                            <TableHead className="text-slate-400">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(() => {
+                            // Get all units for this property
+                            const propertyUnits = units[property.id] || [];
+                            const propertyUnitIds = new Set(propertyUnits.map(u => u.id));
+                            // Filter bills for units in this property
+                            const propertyBills = bills.filter(bill => propertyUnitIds.has(bill.unit_id));
+                            
+                            if (propertyBills.length === 0) {
+                              return (
+                                <TableRow>
+                                  <TableCell colSpan={6} className="text-slate-500 text-center py-4">
+                                    No bills yet for this property
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            }
+                            
+                            return propertyBills.map((bill) => {
+                              const unit = propertyUnits.find(u => u.id === bill.unit_id);
+                              return (
+                                <TableRow key={bill.id} className="border-slate-700">
+                                  <TableCell className="text-slate-300">{unit?.unit_number || 'Unknown'}</TableCell>
+                                  <TableCell className="text-slate-200">{bill.description}</TableCell>
+                                  <TableCell className="text-slate-300">{bill.bill_type}</TableCell>
+                                  <TableCell className="text-slate-200">{bill.amount.toFixed(2)} RON</TableCell>
+                                  <TableCell className="text-slate-300">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
+                                  <TableCell>
+                                    <span className={`px-2 py-1 rounded text-xs ${
+                                      bill.status === 'paid' ? 'bg-green-900 text-green-200' :
+                                      bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
+                                      'bg-amber-900 text-amber-200'
+                                    }`}>
+                                      {bill.status}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </CardContent>
               </Card>
             ))
           )}
         </TabsContent>
 
-        <TabsContent value="bills" className="space-y-4">
+        <TabsContent value="bills" className="space-y-4" style={{ display: 'none' }}>
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-medium text-slate-100">Bills</h2>
             <Dialog open={showBillForm} onOpenChange={setShowBillForm}>
