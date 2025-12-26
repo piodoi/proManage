@@ -27,7 +27,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showRenterForm, setShowRenterForm] = useState<string | null>(null);
-  const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [showEblocConfig, setShowEblocConfig] = useState<string | null>(null);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
   const [eblocMatches, setEblocMatches] = useState<Array<{ id: string; nume: string; address: string; score: number }> | null>(null);
@@ -39,7 +38,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [renterForm, setRenterForm] = useState({ name: '', rent_day: '', start_contract_date: '', rent_amount: '', rent_currency: 'EUR' as 'EUR' | 'RON' | 'USD', email: '', phone: '' });
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
-  const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
   const [eblocForm, setEblocForm] = useState({ username: '', password: '', selectedPropertyId: '' });
   const [renterLink, setRenterLink] = useState<{ token: string; link: string } | null>(null);
 
@@ -73,47 +71,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       // Fallback to approximate rates
       setExchangeRates({ EUR: 1, USD: 1.1, RON: 4.97 });
     }
-  };
-
-  // Get rent bill info for a renter
-  const getRenterRentInfo = (renter: Renter): { amount: number; due_date: string; currency: 'EUR' | 'RON' | 'USD' } | null => {
-    console.log('[LandlordView] getRenterRentInfo called for renter:', renter.id, {
-      renter_unit_id: renter.unit_id,
-      total_bills: bills.length,
-      bills_for_unit: bills.filter(b => b.unit_id === renter.unit_id),
-      bills_details: bills.filter(b => b.unit_id === renter.unit_id).map(b => ({
-        id: b.id,
-        unit_id: b.unit_id,
-        bill_type: b.bill_type,
-        amount: b.amount,
-        due_date: b.due_date
-      }))
-    });
-    
-    // Find rent bills for this renter's unit
-    const rentBills = bills.filter(b => b.unit_id === renter.unit_id && b.bill_type === 'rent');
-    console.log('[LandlordView] Rent bills found:', rentBills.length, rentBills);
-    
-    if (rentBills.length === 0) {
-      // Check if there are any bills for this unit with different bill_type
-      const unitBills = bills.filter(b => b.unit_id === renter.unit_id);
-      if (unitBills.length > 0) {
-        console.log('[LandlordView] No rent bills, but found other bills for unit:', unitBills.map(b => ({ type: b.bill_type, amount: b.amount })));
-      }
-      return null;
-    }
-
-    // Get the most recent rent bill
-    const latestRentBill = rentBills.sort((a, b) => 
-      new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
-    )[0];
-
-    console.log('[LandlordView] Using latest rent bill:', latestRentBill);
-    return {
-      amount: latestRentBill.amount,
-      due_date: latestRentBill.due_date,
-      currency: 'EUR' as 'EUR' | 'RON' | 'USD', // Default to EUR, could be stored in bill later
-    };
   };
 
   // Sync form when editing renter changes
@@ -235,7 +192,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
 
   const handleDeleteProperty = async (propertyId: string) => {
     if (!token) return;
-    if (!confirm('Are you sure you want to delete this property? This will also delete all units, renters, and bills associated with it.')) {
+    if (!confirm('Are you sure you want to delete this property? This will also delete all renters and bills associated with it.')) {
       return;
     }
     try {
@@ -327,33 +284,12 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   };
 
   const openEditRenter = (renter: Renter) => {
-    // Find the unit this renter belongs to first
-    let targetUnitId: string | null = null;
-    for (const [unitId, unitRenters] of Object.entries(renters)) {
-      if (unitRenters.some(r => r.id === renter.id)) {
-        targetUnitId = unitId;
-        break;
-      }
-    }
-    
-    if (targetUnitId) {
-      setEditingRenter(renter);
-      setShowRenterForm(targetUnitId);
-      // Form will be populated by useEffect when editingRenter changes
-    }
+    setEditingRenter(renter);
+    setShowRenterForm(renter.property_id);
+    // Form will be populated by useEffect when editingRenter changes
   };
 
 
-  const handleConfigureEmail = async () => {
-    if (!token) return;
-    try {
-      await api.email.configure(token, emailForm);
-      setShowEmailConfig(false);
-      setError('');
-    } catch (err) {
-      handleError(err);
-    }
-  };
 
   const loadEblocConfig = async () => {
     if (!token) return;
@@ -761,7 +697,6 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                             onClick={async () => {
                               if (!token) return;
                               // Clear error before attempting sync
-                              const previousError = error;
                               setError('');
                               try {
                                 const result = await api.ebloc.sync(token, property.id);

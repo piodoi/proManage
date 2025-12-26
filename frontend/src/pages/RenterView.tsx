@@ -128,12 +128,6 @@ export default function RenterView() {
                     <p className="text-slate-400 text-xs">{info.property.address}</p>
                   </div>
                 )}
-                {info.unit && (
-                  <div>
-                    <span className="text-slate-400">Unit:</span>
-                    <p className="text-slate-200">{info.unit.unit_number}</p>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>

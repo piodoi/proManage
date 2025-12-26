@@ -54,13 +54,6 @@ export const api = {
     delete: (token: string, id: string) => request<{ status: string }>(`/properties/${id}`, { method: 'DELETE', token }),
   },
 
-  units: {
-    list: (token: string, propertyId: string) => request<Unit[]>(`/properties/${propertyId}/units`, { token }),
-    create: (token: string, propertyId: string, data: UnitCreate) => request<Unit>(`/properties/${propertyId}/units`, { method: 'POST', body: data, token }),
-    get: (token: string, id: string) => request<Unit>(`/units/${id}`, { token }),
-    update: (token: string, id: string, data: UnitUpdate) => request<Unit>(`/units/${id}`, { method: 'PUT', body: data, token }),
-    delete: (token: string, id: string) => request<{ status: string }>(`/units/${id}`, { method: 'DELETE', token }),
-  },
 
   renters: {
     list: (token: string, propertyId: string) => request<Renter[]>(`/properties/${propertyId}/renters`, { token }),
@@ -164,16 +157,6 @@ export type Property = {
 export type PropertyCreate = { address: string; name: string };
 export type PropertyUpdate = { address?: string; name?: string };
 
-export type Unit = {
-  id: string;
-  property_id: string;
-  unit_number: string;
-  created_at: string;
-};
-
-export type UnitCreate = { unit_number: string };
-export type UnitUpdate = { unit_number?: string };
-
 export type Renter = {
   id: string;
   property_id: string;
@@ -262,7 +245,6 @@ export type AuthResponse = {
 
 export type RenterInfo = {
   renter: { id: string; name: string };
-  unit: { id: string; unit_number: string } | null;
   property: { id: string; name: string; address: string } | null;
 };
 

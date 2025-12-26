@@ -5,7 +5,7 @@ from sqlalchemy.pool import QueuePool
 from pydantic import BaseModel
 
 from app.models import (
-    User, Property, Unit, Renter, Bill, Payment, EmailConfig,
+    User, Property, Renter, Bill, Payment, EmailConfig,
     ExtractionPattern, UserRole
 )
 
@@ -44,13 +44,6 @@ properties_table = Table(
     "properties", metadata,
     Column("id", String(36), primary_key=True),
     Column("landlord_id", String(36), index=True),
-    Column("data", Text, nullable=False),
-)
-
-units_table = Table(
-    "units", metadata,
-    Column("id", String(36), primary_key=True),
-    Column("property_id", String(36), index=True),
     Column("data", Text, nullable=False),
 )
 
@@ -214,51 +207,6 @@ class Database:
                 {"lid": landlord_id}
             ).fetchone()
             return result[0] if result else 0
-
-    def get_unit(self, unit_id: str) -> Optional[Unit]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                units_table.select().where(units_table.c.id == unit_id)
-            ).fetchone()
-            return _deserialize(Unit, result.data) if result else None
-
-    def list_units(self, property_id: Optional[str] = None) -> list[Unit]:
-        with engine.connect() as conn:
-            if property_id:
-                results = conn.execute(
-                    units_table.select().where(units_table.c.property_id == property_id)
-                ).fetchall()
-            else:
-                results = conn.execute(units_table.select()).fetchall()
-            return [_deserialize(Unit, r.data) for r in results]
-
-    def save_unit(self, unit: Unit) -> Unit:
-        with engine.connect() as conn:
-            existing = conn.execute(
-                units_table.select().where(units_table.c.id == unit.id)
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    units_table.update().where(units_table.c.id == unit.id).values(
-                        property_id=unit.property_id, data=_serialize(unit)
-                    )
-                )
-            else:
-                conn.execute(
-                    units_table.insert().values(
-                        id=unit.id, property_id=unit.property_id, data=_serialize(unit)
-                    )
-                )
-            conn.commit()
-        return unit
-
-    def delete_unit(self, unit_id: str) -> bool:
-        with engine.connect() as conn:
-            result = conn.execute(
-                units_table.delete().where(units_table.c.id == unit_id)
-            )
-            conn.commit()
-            return result.rowcount > 0
 
     def get_renter(self, renter_id: str) -> Optional[Renter]:
         with engine.connect() as conn:

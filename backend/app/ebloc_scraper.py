@@ -539,65 +539,126 @@ class EblocScraper:
                 adr_nr = asoc_data.get("adr_nr", "").lower().strip()
                 adr_bloc = asoc_data.get("adr_bloc", "").lower().strip()
                 
-                # Normalize street name
-                normalized_street = re.sub(r'^(strada|str\.?|st\.?)\s+', '', adr_strada, flags=re.I).strip()
+            # Normalize street name
+            normalized_street = re.sub(r'^(strada|str\.?|st\.?)\s+', '', adr_strada, flags=re.I).strip()
+            
+            # Check for matches using multiple criteria
+            match_score = 0
+            match_reasons = []
+            
+            # Word-by-word matching for better abbreviation handling
+            # Split into words and check for matches
+            prop_words = set(normalized_prop.split())
+            street_words = set(normalized_street.split())
+            
+            # Remove common words that don't help matching
+            common_words = {'nr', 'nr.', 'bloc', 'bl', 'sc', 'scara', 'ap', 'sector', 'str', 'str.', 'strada', 'st'}
+            prop_words = {w for w in prop_words if w.lower() not in common_words and len(w) > 2}
+            street_words = {w for w in street_words if w.lower() not in common_words and len(w) > 2}
+            
+            # Count matching words (handles abbreviations like "Plut." matching "Plutonier")
+            matching_words = 0
+            for prop_word in prop_words:
+                for street_word in street_words:
+                    # Check if words match (exact or one contains the other)
+                    if prop_word.lower() == street_word.lower():
+                        matching_words += 1
+                        break
+                    # Handle abbreviations: "plut" matches "plutonier", "radu" matches "radu"
+                    elif prop_word.lower() in street_word.lower() or street_word.lower() in prop_word.lower():
+                        # Only count if the shorter word is at least 3 characters (to avoid false matches)
+                        min_len = min(len(prop_word), len(street_word))
+                        if min_len >= 3:
+                            matching_words += 1
+                            break
+            
+            if matching_words > 0:
+                match_score += matching_words * 8  # 8 points per matching word
+                match_reasons.append(f"words: {matching_words} matching")
+            
+            # Match street name (partial match) - fallback
+            if normalized_street and normalized_street in normalized_prop:
+                match_score += 10
+                match_reasons.append(f"street: '{adr_strada}'")
+            
+            # Match street name (reverse - property contains street)
+            if normalized_street and normalized_prop in normalized_street:
+                match_score += 10
+                match_reasons.append(f"street: '{adr_strada}'")
+            
+            # Match number
+            if adr_nr and adr_nr in normalized_prop:
+                match_score += 5
+                match_reasons.append(f"number: '{adr_nr}'")
+            
+            # Match bloc
+            if adr_bloc and adr_bloc in normalized_prop:
+                match_score += 3
+                match_reasons.append(f"bloc: '{adr_bloc}'")
+            
+            # Match association name as fallback
+            asoc_name = asoc_data.get("nume", "").lower()
+            if property_name_lower in asoc_name or asoc_name in property_name_lower:
+                match_score += 2
+                match_reasons.append(f"name: '{asoc_data.get('nume', '')}'")
+            
+            if match_score > 0:
+                # Get the apartment info from gInfoAp
+                apt_info = apartment_map.get(asoc_id, {})
+                apt_id_ap = apt_info.get("id_ap", "")
                 
-                # Check for matches using multiple criteria
-                match_score = 0
-                match_reasons = []
+                # Use the gInfoAsoc index directly (this is the combo box index)
+                apartment_index = int(asoc_index)
                 
-                # Match street name (partial match)
-                if normalized_street and normalized_street in normalized_prop:
-                    match_score += 10
-                    match_reasons.append(f"street: '{adr_strada}'")
-                
-                # Match street name (reverse - property contains street)
-                if normalized_street and normalized_prop in normalized_street:
-                    match_score += 10
-                    match_reasons.append(f"street: '{adr_strada}'")
-                
-                # Match number
-                if adr_nr and adr_nr in normalized_prop:
-                    match_score += 5
-                    match_reasons.append(f"number: '{adr_nr}'")
-                
-                # Match bloc
-                if adr_bloc and adr_bloc in normalized_prop:
-                    match_score += 3
-                    match_reasons.append(f"bloc: '{adr_bloc}'")
-                
-                # Match association name as fallback
-                asoc_name = asoc_data.get("nume", "").lower()
-                if property_name_lower in asoc_name or asoc_name in property_name_lower:
-                    match_score += 2
-                    match_reasons.append(f"name: '{asoc_data.get('nume', '')}'")
-                
-                if match_score > 0:
-                    # Get the apartment info from gInfoAp
-                    apt_info = apartment_map.get(asoc_id, {})
-                    apt_id_ap = apt_info.get("id_ap", "")
-                    
-                    # Use the gInfoAsoc index directly (this is the combo box index)
-                    apartment_index = int(asoc_index)
-                    
-                    matches.append({
-                        "id": asoc_id,
-                        "nume": asoc_data.get("nume", ""),
-                        "adr_strada": adr_strada,
-                        "adr_nr": adr_nr,
-                        "adr_bloc": adr_bloc,
-                        "score": match_score,
-                        "reasons": match_reasons,
-                        "apartment_index": apartment_index,  # gInfoAsoc index for combo box
-                        "apartment_id": apt_id_ap  # id_ap from gInfoAp for cookie (home-ap-cur)
-                    })
-                    logger.info(f"[E-Bloc Scraper] Matched property '{property_name}' with association '{asoc_data.get('nume', '')}' (id: {asoc_id}, score: {match_score}, gInfoAsoc_idx: {asoc_index}, apt_id_ap: {apt_id_ap}, reasons: {', '.join(match_reasons)})")
+                matches.append({
+                    "id": asoc_id,
+                    "nume": asoc_data.get("nume", ""),
+                    "adr_strada": adr_strada,
+                    "adr_nr": adr_nr,
+                    "adr_bloc": adr_bloc,
+                    "score": match_score,
+                    "reasons": match_reasons,
+                    "apartment_index": apartment_index,  # gInfoAsoc index for combo box
+                    "apartment_id": apt_id_ap  # id_ap from gInfoAp for cookie (home-ap-cur)
+                })
+                logger.info(f"[E-Bloc Scraper] Matched property '{property_name}' with association '{asoc_data.get('nume', '')}' (id: {asoc_id}, score: {match_score}, gInfoAsoc_idx: {asoc_index}, apt_id_ap: {apt_id_ap}, reasons: {', '.join(match_reasons)})")
             
             # Sort by score (highest first)
             matches.sort(key=lambda x: x["score"], reverse=True)
             
             if not matches:
                 logger.warning(f"[E-Bloc Scraper] Could not match property name '{property_name}' with any association")
+                # Fallback: return all associations so user can select manually
+                logger.info(f"[E-Bloc Scraper] Returning all {len(asoc_indices)} associations as fallback")
+                for asoc_index in sorted(asoc_indices):
+                    kv_pattern = re.compile(
+                        r'gInfoAsoc\s*\[\s*' + re.escape(asoc_index) + r'\s*\]\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']*)["\']',
+                        re.DOTALL
+                    )
+                    asoc_data = {}
+                    for kv_match in kv_pattern.finditer(gInfoAsoc_block):
+                        key = kv_match.group(1)
+                        value = kv_match.group(2)
+                        asoc_data[key] = value
+                    
+                    if "id" not in asoc_data:
+                        continue
+                    
+                    asoc_id = asoc_data["id"]
+                    apt_info = apartment_map.get(asoc_id, {})
+                    apt_id_ap = apt_info.get("id_ap", "")
+                    
+                    matches.append({
+                        "id": asoc_id,
+                        "nume": asoc_data.get("nume", ""),
+                        "adr_strada": asoc_data.get("adr_strada", ""),
+                        "adr_nr": asoc_data.get("adr_nr", ""),
+                        "adr_bloc": asoc_data.get("adr_bloc", ""),
+                        "score": 0,  # No match score
+                        "reasons": ["fallback: no match found"],
+                        "apartment_index": int(asoc_index),
+                        "apartment_id": apt_id_ap
+                    })
             
             return matches
         except Exception as e:

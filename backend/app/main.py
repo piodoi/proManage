@@ -10,11 +10,11 @@ import base64
 import bcrypt
 
 from app.models import (
-    User, Property, Unit, Renter, Bill, Payment, EmailConfig,
+    User, Property, Renter, Bill, Payment, EmailConfig,
     ExtractionPattern,
     UserRole, BillStatus, BillType, PaymentMethod, PaymentStatus,
     SubscriptionStatus,
-    UserCreate, UserUpdate, PropertyCreate, PropertyUpdate, UnitCreate, UnitUpdate,
+    UserCreate, UserUpdate, PropertyCreate, PropertyUpdate,
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
     EmailConfigCreate, EblocConfigCreate, TokenData,
     ExtractionPatternCreate, ExtractionPatternUpdate,
@@ -198,15 +198,14 @@ async def list_properties(current_user: TokenData = Depends(require_landlord)):
 @app.post("/properties", status_code=status.HTTP_201_CREATED)
 async def create_property(data: PropertyCreate, current_user: TokenData = Depends(require_landlord)):
     existing_count = db.count_properties(current_user.user_id)
-    if existing_count >= 1 and not check_subscription(current_user.user_id):
+    # Admins have implied subscription - skip check for them
+    if current_user.role != UserRole.ADMIN and existing_count >= 1 and not check_subscription(current_user.user_id):
         raise HTTPException(
             status_code=403,
             detail="Active subscription required to add more than one property",
         )
     prop = Property(landlord_id=current_user.user_id, address=data.address, name=data.name)
     db.save_property(prop)
-    default_unit = Unit(property_id=prop.id, unit_number="Main")
-    db.save_unit(default_unit)
     return prop
 
 
@@ -248,73 +247,6 @@ async def delete_property(property_id: str, current_user: TokenData = Depends(re
     return {"status": "deleted"}
 
 
-@app.get("/properties/{property_id}/units")
-async def list_units(property_id: str, current_user: TokenData = Depends(require_landlord)):
-    prop = db.get_property(property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    return db.list_units(property_id=property_id)
-
-
-@app.post("/properties/{property_id}/units", status_code=status.HTTP_201_CREATED)
-async def create_unit(
-    property_id: str, data: UnitCreate, current_user: TokenData = Depends(require_landlord)
-):
-    prop = db.get_property(property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    unit = Unit(property_id=property_id, unit_number=data.unit_number)
-    db.save_unit(unit)
-    return unit
-
-
-@app.get("/units/{unit_id}")
-async def get_unit(unit_id: str, current_user: TokenData = Depends(require_landlord)):
-    unit = db.get_unit(unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    return unit
-
-
-@app.put("/units/{unit_id}")
-async def update_unit(unit_id: str, data: UnitUpdate, current_user: TokenData = Depends(require_landlord)):
-    unit = db.get_unit(unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if data.unit_number is not None:
-        unit.unit_number = data.unit_number
-    db.save_unit(unit)
-    return unit
-
-
-@app.delete("/units/{unit_id}")
-async def delete_unit(unit_id: str, current_user: TokenData = Depends(require_landlord)):
-    unit = db.get_unit(unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    db.delete_unit(unit_id)
-    return {"status": "deleted"}
-
-
 @app.get("/properties/{property_id}/renters")
 async def list_renters(property_id: str, current_user: TokenData = Depends(require_landlord)):
     prop = db.get_property(property_id)
@@ -352,10 +284,7 @@ async def get_renter(renter_id: str, current_user: TokenData = Depends(require_l
     renter = db.get_renter(renter_id)
     if not renter:
         raise HTTPException(status_code=404, detail="Renter not found")
-    unit = db.get_unit(renter.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(renter.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -370,10 +299,7 @@ async def update_renter(
     renter = db.get_renter(renter_id)
     if not renter:
         raise HTTPException(status_code=404, detail="Renter not found")
-    unit = db.get_unit(renter.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(renter.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -460,10 +386,7 @@ async def get_bill(bill_id: str, current_user: TokenData = Depends(require_landl
     bill = db.get_bill(bill_id)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    unit = db.get_unit(bill.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(bill.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -478,10 +401,7 @@ async def update_bill(
     bill = db.get_bill(bill_id)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    unit = db.get_unit(bill.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(bill.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -507,10 +427,7 @@ async def delete_bill(bill_id: str, current_user: TokenData = Depends(require_la
     bill = db.get_bill(bill_id)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    unit = db.get_unit(bill.unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    prop = db.get_property(unit.property_id)
+    prop = db.get_property(bill.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
@@ -527,7 +444,6 @@ async def renter_info(token: str):
     prop = db.get_property(renter.property_id)
     return {
         "renter": {"id": renter.id, "name": renter.name},
-        "unit": None,  # Units are removed
         "property": {"id": prop.id, "name": prop.name, "address": prop.address} if prop else None,
     }
 
@@ -576,8 +492,8 @@ async def renter_pay(token: str, data: PaymentCreate):
     bill = db.get_bill(data.bill_id)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    if bill.unit_id != renter.unit_id:
-        raise HTTPException(status_code=403, detail="Bill does not belong to this renter")
+    if bill.property_id != renter.property_id:
+        raise HTTPException(status_code=403, detail="Bill does not belong to this renter's property")
     commission = 0.0
     if data.method == PaymentMethod.PAYMENT_SERVICE:
         commission = data.amount * PAYMENT_SERVICE_COMMISSION
@@ -842,8 +758,12 @@ async def sync_ebloc(property_id: str, association_id: Optional[str] = Query(Non
         if not matches:
             raise HTTPException(status_code=404, detail=f"Could not find matching E-bloc association for property: {prop.name}")
         
+        # Check if all matches have score 0 (fallback case - no matches found)
+        all_fallback = all(m.get("score", 0) == 0 for m in matches)
+        
         # If multiple matches and no association_id provided, return them for user selection
-        if len(matches) > 1 and not association_id:
+        # Also return if all matches are fallback (no match found)
+        if (len(matches) > 1 and not association_id) or (all_fallback and not association_id):
             return {
                 "status": "multiple_matches",
                 "property_id": property_id,
