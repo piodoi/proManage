@@ -62,11 +62,11 @@ else:
     logger.warning(f"[E-Bloc] No encryption key in environment. Generated new key. Save this to .env: EBLOC_ENCRYPTION_KEY={EBLOC_ENCRYPTION_KEY}")
 
 def encrypt_password(password: str) -> str:
-    """Encrypt password for e-bloc (needs to be retrievable)"""
+    """Encrypt password for suppliers (needs to be retrievable)"""
     return fernet.encrypt(password.encode()).decode()
 
 def decrypt_password(encrypted: str) -> str:
-    """Decrypt password for e-bloc"""
+    """Decrypt password for suppliers"""
     try:
         return fernet.decrypt(encrypted.encode()).decode()
     except Exception as e:

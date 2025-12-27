@@ -273,7 +273,7 @@ export default function PropertySupplierSettingsDialog({
                         setCredentials({ username: '', password: '' });
                       }}
                       variant="outline"
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                      className="bg-slate-700 text-slate-300 hover:bg-slate-600"
                     >
                       Cancel
                     </Button>
