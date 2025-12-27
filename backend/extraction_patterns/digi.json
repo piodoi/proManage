@@ -2,7 +2,7 @@
   "supplier": "Digi",
   "name": "Digi Bill",
   "bill_type": "utilities",
-  "vendor_hint": "Digi",
+  "vendor_hint": "Digi Romania",
   "iban_pattern": "(RO\\d{2}[A-Z0-9]{4,28})",
   "amount_pattern": "Total[\\s]+de[\\s]+achitat[\\s:]*([0-9.,]+)",
   "address_pattern": "(Strada[\\s]+[^,]+,[\\s]+Nr\\.?[\\s]+[0-9]+,[\\s]+[^\\n]+[\\s\\n]+Judet:[\\s]+[^\\n]+)",
