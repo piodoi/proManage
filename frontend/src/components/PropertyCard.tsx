@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { ExternalLink, Trash2, Pencil, Copy } from 'lucide-react';
+import { ExternalLink, Trash2, Pencil, Copy, Settings } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import EblocSyncDialog from './dialogs/EblocSyncDialog';
+import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
 
 type PropertyCardProps = {
   token: string | null;
@@ -32,6 +33,7 @@ export default function PropertyCard({
 }: PropertyCardProps) {
   const [showRenterDialog, setShowRenterDialog] = useState(false);
   const [showEblocSync, setShowEblocSync] = useState(false);
+  const [showSupplierSettings, setShowSupplierSettings] = useState(false);
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [renterLink, setRenterLink] = useState<{ token: string; link: string } | null>(null);
 
@@ -77,6 +79,22 @@ export default function PropertyCard({
               property={property}
               open={showEblocSync}
               onOpenChange={setShowEblocSync}
+              onSuccess={onDataChange}
+              onError={onError}
+            />
+            <Button
+              size="sm"
+              onClick={() => setShowSupplierSettings(true)}
+              className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600"
+              title="Manage bill suppliers"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+            <PropertySupplierSettingsDialog
+              token={token}
+              property={property}
+              open={showSupplierSettings}
+              onOpenChange={setShowSupplierSettings}
               onSuccess={onDataChange}
               onError={onError}
             />

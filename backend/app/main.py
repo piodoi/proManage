@@ -13,13 +13,14 @@ import bcrypt
 
 from app.models import (
     User, Property, Renter, Bill, Payment, EmailConfig,
-    ExtractionPattern,
+    ExtractionPattern, Supplier, PropertySupplier,
     UserRole, BillStatus, BillType, PaymentMethod, PaymentStatus,
     SubscriptionStatus,
     UserCreate, UserUpdate, PropertyCreate, PropertyUpdate,
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
     EmailConfigCreate, EblocConfigCreate, TokenData,
     ExtractionPatternCreate, ExtractionPatternUpdate,
+    SupplierCreate, PropertySupplierCreate, PropertySupplierUpdate,
 )
 from app.auth import (
     require_auth, require_admin, require_landlord,
@@ -418,6 +419,203 @@ async def delete_property(property_id: str, current_user: TokenData = Depends(re
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     db.delete_property(property_id)
+    return {"status": "deleted"}
+
+
+def initialize_suppliers():
+    """Initialize suppliers from extraction patterns and hardcoded list"""
+    # Hardcoded suppliers with API support
+    api_suppliers = [
+        {"name": "Apanova", "has_api": True, "bill_type": BillType.UTILITIES},
+        {"name": "Nova power & gas", "has_api": True, "bill_type": BillType.UTILITIES},
+        {"name": "EonRomania", "has_api": True, "bill_type": BillType.UTILITIES},
+        {"name": "MyElectrica", "has_api": True, "bill_type": BillType.UTILITIES},
+    ]
+    
+    # Load suppliers from extraction patterns
+    patterns = db.list_extraction_patterns()
+    pattern_suppliers = {}
+    for pattern in patterns:
+        if pattern.supplier:
+            supplier_name = pattern.supplier
+            if supplier_name not in pattern_suppliers:
+                pattern_suppliers[supplier_name] = {
+                    "name": supplier_name,
+                    "has_api": False,  # Default to False unless in hardcoded list
+                    "bill_type": pattern.bill_type,
+                    "extraction_pattern_supplier": supplier_name,
+                }
+    
+    # Check if hardcoded suppliers also exist in patterns
+    for api_supplier in api_suppliers:
+        api_name_lower = api_supplier["name"].lower()
+        for pattern_supplier_name, pattern_supplier_data in pattern_suppliers.items():
+            if pattern_supplier_name.lower() == api_name_lower:
+                # Update pattern supplier to have API support
+                pattern_supplier_data["has_api"] = True
+                break
+        else:
+            # API supplier not in patterns, add it
+            pattern_suppliers[api_supplier["name"]] = api_supplier
+    
+    # Create or update suppliers in database
+    for supplier_data in pattern_suppliers.values():
+        existing = db.get_supplier_by_name(supplier_data["name"])
+        if existing:
+            # Update existing supplier if API status changed
+            if existing.has_api != supplier_data["has_api"]:
+                existing.has_api = supplier_data["has_api"]
+                db.save_supplier(existing)
+        else:
+            # Create new supplier
+            supplier = Supplier(**supplier_data)
+            db.save_supplier(supplier)
+
+
+@app.get("/suppliers")
+async def list_suppliers(current_user: TokenData = Depends(require_landlord)):
+    """List all supported suppliers"""
+    # Initialize suppliers on first request
+    initialize_suppliers()
+    suppliers = db.list_suppliers()
+    return suppliers
+
+
+@app.get("/properties/{property_id}/suppliers")
+async def list_property_suppliers(
+    property_id: str, current_user: TokenData = Depends(require_landlord)
+):
+    """List suppliers configured for a property"""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    property_suppliers = db.list_property_suppliers(property_id)
+    # Enrich with supplier details
+    result = []
+    for ps in property_suppliers:
+        supplier = db.get_supplier(ps.supplier_id)
+        if supplier:
+            result.append({
+                "id": ps.id,
+                "supplier": supplier,
+                "property_id": ps.property_id,
+                "supplier_id": ps.supplier_id,
+                "has_credentials": bool(ps.username and ps.password_hash),
+                "created_at": ps.created_at,
+                "updated_at": ps.updated_at,
+            })
+    return result
+
+
+@app.post("/properties/{property_id}/suppliers", status_code=status.HTTP_201_CREATED)
+async def create_property_supplier(
+    property_id: str, data: PropertySupplierCreate, current_user: TokenData = Depends(require_landlord)
+):
+    """Add a supplier to a property (with optional credentials)"""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    supplier = db.get_supplier(data.supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    
+    # Check if already exists
+    existing = db.get_property_supplier_by_supplier(property_id, data.supplier_id)
+    if existing:
+        raise HTTPException(status_code=400, detail="Supplier already configured for this property")
+    
+    # Encrypt credentials if provided
+    username = None
+    password_hash = None
+    if data.username:
+        username = encrypt_password(data.username)
+    if data.password:
+        password_hash = encrypt_password(data.password)
+    
+    property_supplier = PropertySupplier(
+        property_id=property_id,
+        supplier_id=data.supplier_id,
+        username=username,
+        password_hash=password_hash,
+    )
+    db.save_property_supplier(property_supplier)
+    
+    return {
+        "id": property_supplier.id,
+        "supplier": supplier,
+        "property_id": property_supplier.property_id,
+        "supplier_id": property_supplier.supplier_id,
+        "has_credentials": bool(property_supplier.username and property_supplier.password_hash),
+        "created_at": property_supplier.created_at,
+        "updated_at": property_supplier.updated_at,
+    }
+
+
+@app.put("/properties/{property_id}/suppliers/{property_supplier_id}")
+async def update_property_supplier(
+    property_id: str,
+    property_supplier_id: str,
+    data: PropertySupplierUpdate,
+    current_user: TokenData = Depends(require_landlord),
+):
+    """Update supplier credentials for a property"""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    property_supplier = db.get_property_supplier(property_supplier_id)
+    if not property_supplier:
+        raise HTTPException(status_code=404, detail="Property supplier not found")
+    if property_supplier.property_id != property_id:
+        raise HTTPException(status_code=400, detail="Property supplier does not belong to this property")
+    
+    # Update credentials if provided
+    if data.username is not None:
+        property_supplier.username = encrypt_password(data.username) if data.username else None
+    if data.password is not None:
+        property_supplier.password_hash = encrypt_password(data.password) if data.password else None
+    
+    property_supplier.updated_at = datetime.utcnow()
+    db.save_property_supplier(property_supplier)
+    
+    supplier = db.get_supplier(property_supplier.supplier_id)
+    return {
+        "id": property_supplier.id,
+        "supplier": supplier,
+        "property_id": property_supplier.property_id,
+        "supplier_id": property_supplier.supplier_id,
+        "has_credentials": bool(property_supplier.username and property_supplier.password_hash),
+        "created_at": property_supplier.created_at,
+        "updated_at": property_supplier.updated_at,
+    }
+
+
+@app.delete("/properties/{property_id}/suppliers/{property_supplier_id}")
+async def delete_property_supplier(
+    property_id: str, property_supplier_id: str, current_user: TokenData = Depends(require_landlord)
+):
+    """Remove a supplier from a property"""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    property_supplier = db.get_property_supplier(property_supplier_id)
+    if not property_supplier:
+        raise HTTPException(status_code=404, detail="Property supplier not found")
+    if property_supplier.property_id != property_id:
+        raise HTTPException(status_code=400, detail="Property supplier does not belong to this property")
+    
+    db.delete_property_supplier(property_supplier_id)
     return {"status": "deleted"}
 
 

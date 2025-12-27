@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.models import (
     User, Property, Renter, Bill, Payment, EmailConfig,
-    ExtractionPattern, UserRole
+    ExtractionPattern, UserRole, Supplier, PropertySupplier
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -82,6 +82,21 @@ extraction_patterns_table = Table(
     "extraction_patterns", metadata,
     Column("id", String(36), primary_key=True),
     Column("priority", Integer, index=True),
+    Column("data", Text, nullable=False),
+)
+
+suppliers_table = Table(
+    "suppliers", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("name", String(255), index=True),
+    Column("data", Text, nullable=False),
+)
+
+property_suppliers_table = Table(
+    "property_suppliers", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("property_id", String(36), index=True),
+    Column("supplier_id", String(36), index=True),
     Column("data", Text, nullable=False),
 )
 
@@ -428,6 +443,112 @@ class Database:
         with engine.connect() as conn:
             result = conn.execute(
                 extraction_patterns_table.delete().where(extraction_patterns_table.c.id == pattern_id)
+            )
+            conn.commit()
+            return result.rowcount > 0
+
+    # Supplier methods
+    def get_supplier(self, supplier_id: str) -> Optional[Supplier]:
+        with engine.connect() as conn:
+            result = conn.execute(
+                suppliers_table.select().where(suppliers_table.c.id == supplier_id)
+            ).fetchone()
+            return _deserialize(Supplier, result.data) if result else None
+
+    def get_supplier_by_name(self, name: str) -> Optional[Supplier]:
+        with engine.connect() as conn:
+            result = conn.execute(
+                suppliers_table.select().where(suppliers_table.c.name == name)
+            ).fetchone()
+            return _deserialize(Supplier, result.data) if result else None
+
+    def list_suppliers(self) -> list[Supplier]:
+        with engine.connect() as conn:
+            results = conn.execute(suppliers_table.select()).fetchall()
+            return [_deserialize(Supplier, r.data) for r in results]
+
+    def save_supplier(self, supplier: Supplier) -> Supplier:
+        with engine.connect() as conn:
+            existing = conn.execute(
+                suppliers_table.select().where(suppliers_table.c.id == supplier.id)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    suppliers_table.update().where(suppliers_table.c.id == supplier.id).values(
+                        name=supplier.name, data=_serialize(supplier)
+                    )
+                )
+            else:
+                conn.execute(
+                    suppliers_table.insert().values(
+                        id=supplier.id, name=supplier.name, data=_serialize(supplier)
+                    )
+                )
+            conn.commit()
+        return supplier
+
+    def delete_supplier(self, supplier_id: str) -> bool:
+        with engine.connect() as conn:
+            result = conn.execute(
+                suppliers_table.delete().where(suppliers_table.c.id == supplier_id)
+            )
+            conn.commit()
+            return result.rowcount > 0
+
+    # PropertySupplier methods
+    def get_property_supplier(self, property_supplier_id: str) -> Optional[PropertySupplier]:
+        with engine.connect() as conn:
+            result = conn.execute(
+                property_suppliers_table.select().where(property_suppliers_table.c.id == property_supplier_id)
+            ).fetchone()
+            return _deserialize(PropertySupplier, result.data) if result else None
+
+    def list_property_suppliers(self, property_id: str) -> list[PropertySupplier]:
+        with engine.connect() as conn:
+            results = conn.execute(
+                property_suppliers_table.select().where(property_suppliers_table.c.property_id == property_id)
+            ).fetchall()
+            return [_deserialize(PropertySupplier, r.data) for r in results]
+
+    def get_property_supplier_by_supplier(self, property_id: str, supplier_id: str) -> Optional[PropertySupplier]:
+        with engine.connect() as conn:
+            result = conn.execute(
+                property_suppliers_table.select().where(
+                    (property_suppliers_table.c.property_id == property_id) &
+                    (property_suppliers_table.c.supplier_id == supplier_id)
+                )
+            ).fetchone()
+            return _deserialize(PropertySupplier, result.data) if result else None
+
+    def save_property_supplier(self, property_supplier: PropertySupplier) -> PropertySupplier:
+        with engine.connect() as conn:
+            existing = conn.execute(
+                property_suppliers_table.select().where(property_suppliers_table.c.id == property_supplier.id)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    property_suppliers_table.update().where(property_suppliers_table.c.id == property_supplier.id).values(
+                        property_id=property_supplier.property_id,
+                        supplier_id=property_supplier.supplier_id,
+                        data=_serialize(property_supplier)
+                    )
+                )
+            else:
+                conn.execute(
+                    property_suppliers_table.insert().values(
+                        id=property_supplier.id,
+                        property_id=property_supplier.property_id,
+                        supplier_id=property_supplier.supplier_id,
+                        data=_serialize(property_supplier)
+                    )
+                )
+            conn.commit()
+        return property_supplier
+
+    def delete_property_supplier(self, property_supplier_id: str) -> bool:
+        with engine.connect() as conn:
+            result = conn.execute(
+                property_suppliers_table.delete().where(property_suppliers_table.c.id == property_supplier_id)
             )
             conn.commit()
             return result.rowcount > 0

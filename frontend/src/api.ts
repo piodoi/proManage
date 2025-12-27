@@ -56,6 +56,14 @@ export const api = {
     delete: (token: string, id: string) => request<{ status: string }>(`/properties/${id}`, { method: 'DELETE', token }),
   },
 
+  suppliers: {
+    list: (token: string) => request<Supplier[]>('/suppliers', { token }),
+    listForProperty: (token: string, propertyId: string) => request<PropertySupplier[]>('/properties/' + propertyId + '/suppliers', { token }),
+    addToProperty: (token: string, propertyId: string, data: PropertySupplierCreate) => request<PropertySupplier>('/properties/' + propertyId + '/suppliers', { method: 'POST', body: data, token }),
+    updateForProperty: (token: string, propertyId: string, propertySupplierId: string, data: PropertySupplierUpdate) => request<PropertySupplier>(`/properties/${propertyId}/suppliers/${propertySupplierId}`, { method: 'PUT', body: data, token }),
+    removeFromProperty: (token: string, propertyId: string, propertySupplierId: string) => request<{ status: string }>(`/properties/${propertyId}/suppliers/${propertySupplierId}`, { method: 'DELETE', token }),
+  },
+
 
   renters: {
     list: (token: string, propertyId: string) => request<Renter[]>(`/properties/${propertyId}/renters`, { token }),
@@ -159,6 +167,36 @@ export type Property = {
 
 export type PropertyCreate = { address: string; name: string };
 export type PropertyUpdate = { address?: string; name?: string };
+
+export type Supplier = {
+  id: string;
+  name: string;
+  has_api: boolean;
+  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  extraction_pattern_supplier?: string;
+  created_at: string;
+};
+
+export type PropertySupplier = {
+  id: string;
+  supplier: Supplier;
+  property_id: string;
+  supplier_id: string;
+  has_credentials: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PropertySupplierCreate = {
+  supplier_id: string;
+  username?: string;
+  password?: string;
+};
+
+export type PropertySupplierUpdate = {
+  username?: string;
+  password?: string;
+};
 
 export type Renter = {
   id: string;

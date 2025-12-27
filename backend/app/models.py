@@ -304,6 +304,45 @@ class EblocConfigCreate(BaseModel):
     password: str
 
 
+class Supplier(BaseModel):
+    """Represents a supported supplier (from extraction patterns or hardcoded list)"""
+    id: str = Field(default_factory=gen_id)
+    name: str  # Supplier name (e.g., "Vodafone", "Digi", "Panova")
+    has_api: bool = False  # Whether API integration is available for automatic bill fetching
+    bill_type: BillType = BillType.UTILITIES  # Type of bills this supplier provides
+    extraction_pattern_supplier: Optional[str] = None  # Supplier name from extraction pattern (for matching)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PropertySupplier(BaseModel):
+    """Represents a supplier configured for a specific property with credentials"""
+    id: str = Field(default_factory=gen_id)
+    property_id: str
+    supplier_id: str  # Reference to Supplier.id
+    username: Optional[str] = None  # Encrypted username for API access
+    password_hash: Optional[str] = None  # Encrypted password for API access
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SupplierCreate(BaseModel):
+    name: str
+    has_api: bool = False
+    bill_type: BillType = BillType.UTILITIES
+    extraction_pattern_supplier: Optional[str] = None
+
+
+class PropertySupplierCreate(BaseModel):
+    supplier_id: str
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+class PropertySupplierUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
 
 
 class TokenData(BaseModel):
