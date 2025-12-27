@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, Bill, Renter } from '../api';
+import { api, Bill, Renter, ExtractionResult } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
+import AddressWarningDialog from './dialogs/AddressWarningDialog';
+import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -34,11 +36,60 @@ export default function PropertyBillsView({
     amount: '',
     due_date: new Date().toISOString().split('T')[0], // Default to today
   });
+  const [parsingPdf, setParsingPdf] = useState(false);
+  const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
+  const [showAddressWarning, setShowAddressWarning] = useState(false);
+  const [showPatternSelection, setShowPatternSelection] = useState(false);
 
   const handleError = (err: unknown) => {
     const message = err instanceof Error ? err.message : 'An error occurred';
     if (onError) {
       onError(message);
+    }
+  };
+
+  const createBillFromPdf = async (result: ExtractionResult, patternId?: string, supplier?: string) => {
+    if (!token || !result) return;
+    
+    try {
+      // Parse due date - try to convert from various formats
+      let dueDate = result.due_date || new Date().toISOString().split('T')[0];
+      // If it's in DD/MM/YYYY or DD.MM.YYYY format, convert to YYYY-MM-DD
+      if (dueDate.includes('/') || dueDate.includes('.')) {
+        const parts = dueDate.split(/[\/\.]/);
+        if (parts.length === 3) {
+          dueDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      }
+      
+      // Use supplier from matched pattern, or provided supplier, or fallback
+      const billSupplier = supplier || result.matched_pattern_supplier || result.matched_pattern_name || 'PDF';
+      const extractionPatternId = patternId || result.matched_pattern_id;
+      
+      const billData = {
+        property_id: propertyId,
+        renter_id: 'all', // Default to all/property
+        bill_type: extractionPatternId ? 'utilities' : 'other',
+        description: result.bill_number 
+          ? `Bill from ${billSupplier} - ${result.bill_number}`
+          : `Bill from ${billSupplier}`,
+        amount: result.amount || 0,
+        due_date: dueDate,
+        iban: result.iban,
+        bill_number: result.bill_number,
+        extraction_pattern_id: extractionPatternId,
+        contract_id: result.contract_id,
+      };
+      
+      await api.billParser.createFromPdf(token, billData);
+      setPdfResult(null);
+      setShowAddressWarning(false);
+      setShowPatternSelection(false);
+      if (onBillsChange) {
+        onBillsChange();
+      }
+    } catch (err) {
+      handleError(err);
     }
   };
 
@@ -117,6 +168,7 @@ export default function PropertyBillsView({
   const propertyBills = bills.filter(bill => bill.property_id === propertyId);
 
   return (
+    <>
     <Card className="bg-slate-800 border-slate-700">
       <CardHeader>
         <div className="flex justify-between items-center">
@@ -133,24 +185,42 @@ export default function PropertyBillsView({
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file || !token) return;
+                setParsingPdf(true);
                 try {
-                  // TODO: Implement PDF upload endpoint
-                  console.log('[Bills] PDF upload for property:', propertyId, file.name);
-                  if (onError) {
-                    onError('PDF upload functionality coming soon');
+                  const result = await api.billParser.parse(token, file, propertyId);
+                  setPdfResult(result);
+                  
+                  // Check if pattern was matched
+                  if (!result.matched_pattern_id) {
+                    // No pattern matched - show pattern selection dialog
+                    setShowPatternSelection(true);
+                  } else {
+                    // Pattern matched - check if address matches
+                    if (!result.address_matches && result.address_warning) {
+                      setShowAddressWarning(true);
+                    } else {
+                      // Address matches or no address extracted, proceed to create bill
+                      await createBillFromPdf(result);
+                    }
                   }
                 } catch (err) {
                   handleError(err);
+                } finally {
+                  setParsingPdf(false);
+                  // Reset file input
+                  const input = e.target as HTMLInputElement;
+                  if (input) input.value = '';
                 }
               }}
             />
             <Button
               size="sm"
               onClick={() => document.getElementById(`pdf-upload-${propertyId}`)?.click()}
+              disabled={parsingPdf}
               className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
             >
               <Receipt className="w-4 h-4 mr-1" />
-              Upload PDF
+              {parsingPdf ? 'Parsing...' : 'Upload PDF'}
             </Button>
             <Button
               size="sm"
@@ -315,7 +385,46 @@ export default function PropertyBillsView({
             )}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      <AddressWarningDialog
+        open={showAddressWarning}
+        onOpenChange={setShowAddressWarning}
+        pdfResult={pdfResult}
+        onCancel={() => {
+          setShowAddressWarning(false);
+          setPdfResult(null);
+        }}
+        onConfirm={() => {
+          if (pdfResult) {
+            createBillFromPdf(pdfResult);
+          }
+        }}
+      />
+      <PatternSelectionDialog
+        open={showPatternSelection}
+        onOpenChange={setShowPatternSelection}
+        pdfResult={pdfResult}
+        token={token}
+        onCancel={() => {
+          setShowPatternSelection(false);
+          setPdfResult(null);
+        }}
+        onConfirm={(patternId, supplier) => {
+          if (pdfResult) {
+            // Check address after pattern selection
+            if (!pdfResult.address_matches && pdfResult.address_warning) {
+              // Update pdfResult with selected pattern info for address warning
+              const updatedResult = { ...pdfResult, matched_pattern_id: patternId, matched_pattern_supplier: supplier };
+              setPdfResult(updatedResult);
+              setShowPatternSelection(false);
+              setShowAddressWarning(true);
+            } else {
+              createBillFromPdf(pdfResult, patternId, supplier);
+            }
+          }
+        }}
+      />
+    </>
   );
 }

@@ -102,10 +102,10 @@ export const api = {
   },
 
   billParser: {
-    parse: async (token: string, file: File): Promise<ExtractionResult> => {
+    parse: async (token: string, file: File, propertyId: string): Promise<ExtractionResult> => {
       const formData = new FormData();
       formData.append('file', file);
-      const response = await fetch(`${API_URL}/admin/bills/parse`, {
+      const response = await fetch(`${API_URL}/bills/parse-pdf?property_id=${propertyId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -116,6 +116,7 @@ export const api = {
       }
       return response.json();
     },
+    createFromPdf: (token: string, data: any) => request<Bill>('/bills/create-from-pdf', { method: 'POST', body: data, token }),
   },
 
   extractionPatterns: {
@@ -314,6 +315,7 @@ export type ExtractionPattern = {
   id: string;
   name: string;
   bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  supplier?: string;
   vendor_hint?: string;
   iban_pattern?: string;
   amount_pattern?: string;
@@ -349,12 +351,20 @@ export type ExtractionPatternUpdate = {
 
 export type ExtractionResult = {
   iban?: string;
+  contract_id?: string;
   bill_number?: string;
   amount?: number;
+  due_date?: string;
   address?: string;
   consumption_location?: string;
+  business_name?: string;
   all_addresses: string[];
+  bank_accounts: Array<{bank: string; iban: string}>;
   matched_pattern_id?: string;
   matched_pattern_name?: string;
+  matched_pattern_supplier?: string;
   raw_text?: string;
+  address_matches?: boolean;
+  address_warning?: string;
+  property_address?: string;
 };

@@ -1036,17 +1036,118 @@ async def subscription_status(current_user: TokenData = Depends(require_auth)):
 
 
 
-@app.post("/admin/bills/parse")
+@app.post("/bills/parse-pdf")
 async def parse_bill_pdf(
     file: UploadFile = File(...),
-    _: TokenData = Depends(require_admin),
+    property_id: str = Query(...),
+    current_user: TokenData = Depends(require_landlord),
 ):
+    """Parse PDF bill and check if it matches any extraction patterns. Returns extraction result with address matching warning."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    # Verify property access
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     pdf_bytes = await file.read()
     patterns = db.list_extraction_patterns()
     result = parse_pdf_with_patterns(pdf_bytes, patterns)
-    return result
+    
+    # Check if extracted address matches property address
+    address_matches = True
+    address_warning = None
+    if result.address and prop.address:
+        # Simple address matching - check if key parts match
+        extracted_lower = result.address.lower()
+        property_lower = prop.address.lower()
+        
+        # Normalize addresses for comparison (remove common words, normalize whitespace)
+        import re
+        def normalize_address(addr: str) -> str:
+            # Remove common words
+            addr = re.sub(r'\b(nr\.?|număr|numar|bloc|bl\.?|scara|sc\.?|ap\.?|apartament|sector|sect\.?)\b', '', addr, flags=re.IGNORECASE)
+            # Normalize whitespace
+            addr = re.sub(r'\s+', ' ', addr).strip()
+            return addr
+        
+        normalized_extracted = normalize_address(extracted_lower)
+        normalized_property = normalize_address(property_lower)
+        
+        # Check if they're similar (either contains the other, or share significant words)
+        if normalized_extracted not in normalized_property and normalized_property not in normalized_extracted:
+            # Check for significant word overlap
+            extracted_words = set(w for w in normalized_extracted.split() if len(w) > 3)
+            property_words = set(w for w in normalized_property.split() if len(w) > 3)
+            common_words = extracted_words & property_words
+            if len(common_words) < 2:  # Need at least 2 significant words in common
+                address_matches = False
+                address_warning = f"Extracted address '{result.address}' does not match property address '{prop.address}'. Please verify this is the correct property."
+    
+    return {
+        **result.model_dump(),
+        "address_matches": address_matches,
+        "address_warning": address_warning,
+        "property_address": prop.address,
+    }
+
+
+@app.post("/bills/create-from-pdf")
+async def create_bill_from_pdf(
+    data: dict,
+    current_user: TokenData = Depends(require_landlord),
+):
+    """Create a bill from parsed PDF data."""
+    property_id = data.get("property_id")
+    if not property_id:
+        raise HTTPException(status_code=400, detail="property_id is required")
+    
+    # Verify property access
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Parse due date
+    from datetime import datetime
+    due_date_str = data.get("due_date")
+    if not due_date_str:
+        raise HTTPException(status_code=400, detail="due_date is required")
+    
+    try:
+        # Try parsing different date formats
+        due_date = None
+        for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y", "%Y-%m-%dT%H:%M:%S"]:
+            try:
+                due_date = datetime.strptime(due_date_str, fmt)
+                break
+            except ValueError:
+                continue
+        if not due_date:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {due_date_str}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error parsing due_date: {str(e)}")
+    
+    # Create bill
+    bill = Bill(
+        property_id=property_id,
+        renter_id=data.get("renter_id"),
+        bill_type=BillType(data.get("bill_type", "utilities")),
+        description=data.get("description", "Bill from PDF"),
+        amount=float(data.get("amount", 0)),
+        due_date=due_date,
+        iban=data.get("iban"),
+        bill_number=data.get("bill_number"),
+        extraction_pattern_id=data.get("extraction_pattern_id"),
+        contract_id=data.get("contract_id"),
+        status=BillStatus.PENDING,
+    )
+    db.save_bill(bill)
+    return bill
 
 
 @app.get("/admin/extraction-patterns")

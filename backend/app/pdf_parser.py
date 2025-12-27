@@ -275,5 +275,6 @@ def parse_pdf_with_patterns(
         bank_accounts=bank_accounts_list,
         matched_pattern_id=matched_pattern.id if matched_pattern and is_valid else None,
         matched_pattern_name=matched_pattern.name if matched_pattern and is_valid else None,
+        matched_pattern_supplier=matched_pattern.supplier if matched_pattern and is_valid else None,
         raw_text=text,
     )

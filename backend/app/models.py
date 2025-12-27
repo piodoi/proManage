@@ -114,6 +114,8 @@ class Bill(BaseModel):
     due_date: datetime
     iban: Optional[str] = None
     bill_number: Optional[str] = None
+    extraction_pattern_id: Optional[str] = None  # ID of the extraction pattern used to parse this bill
+    contract_id: Optional[str] = None  # Contract/client ID extracted from PDF for payment
     status: BillStatus = BillStatus.PENDING
     source_email_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -207,6 +209,7 @@ class ExtractionResult(BaseModel):
     bank_accounts: list[dict[str, str]] = Field(default_factory=list)  # List of {bank: name, iban: number}
     matched_pattern_id: Optional[str] = None
     matched_pattern_name: Optional[str] = None
+    matched_pattern_supplier: Optional[str] = None  # Supplier name from matched pattern
     raw_text: Optional[str] = None
 
 
@@ -269,6 +272,8 @@ class BillCreate(BaseModel):
     due_date: datetime
     iban: Optional[str] = None
     bill_number: Optional[str] = None
+    extraction_pattern_id: Optional[str] = None
+    contract_id: Optional[str] = None
 
 
 class BillUpdate(BaseModel):
@@ -277,6 +282,8 @@ class BillUpdate(BaseModel):
     due_date: Optional[datetime] = None
     iban: Optional[str] = None
     bill_number: Optional[str] = None
+    extraction_pattern_id: Optional[str] = None
+    contract_id: Optional[str] = None
     status: Optional[BillStatus] = None
 
 
