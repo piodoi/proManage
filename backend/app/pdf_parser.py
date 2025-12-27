@@ -24,7 +24,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     return text
 
 
-def apply_pattern(text: str, pattern: Optional[str]) -> Optional[str]:
+def apply_pattern(text: str, pattern: Optional[str], debug_name: str = "") -> Optional[str]:
     if not pattern:
         return None
     try:
@@ -38,8 +38,19 @@ def apply_pattern(text: str, pattern: Optional[str]) -> Optional[str]:
                 if len(result) < 3:
                     return None
             return result
-    except re.error:
-        pass
+        elif debug_name and "due_date" in debug_name:
+            # Debug: show why pattern didn't match for due_date
+            idx = text.lower().find('scaden')
+            if idx >= 0:
+                context = text[max(0, idx-10):min(len(text), idx+50)]
+                logger.info(f"[Pattern Debug] Pattern: {pattern}")
+                logger.info(f"[Pattern Debug] Context: {repr(context)}")
+                # Try to see what newline characters are present
+                newline_chars = [c for c in context if c in ['\n', '\r', '\r\n']]
+                logger.info(f"[Pattern Debug] Newline chars in context: {repr(newline_chars)}")
+    except re.error as e:
+        if debug_name:
+            logger.warning(f"[Pattern] Regex error for '{debug_name}': {e}")
     return None
 
 
@@ -132,19 +143,43 @@ def extract_contract_id(text: str, custom_pattern: Optional[str] = None) -> Opti
 def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
     """Extract due date."""
     if custom_pattern:
-        result = apply_pattern(text, custom_pattern)
-        if result:
-            return result.strip()
-    # Default patterns for various date formats
+        # Find context around "scaden" for debugging
+        idx = text.lower().find('scaden')
+        if idx >= 0:
+            context = text[max(0, idx-10):min(len(text), idx+50)]
+            # Show actual characters (including newlines)
+            logger.info(f"[Due Date] Pattern: {custom_pattern}")
+            logger.info(f"[Due Date] Text context: {repr(context)}")
+            # Try the pattern
+            result = apply_pattern(text, custom_pattern, "due_date")
+            if result:
+                logger.info(f"[Due Date] Extracted: {result}")
+                return result
+            else:
+                # Try to see what's actually there
+                logger.warning(f"[Due Date] Pattern failed. Trying alternative...")
+                # Try pattern without requiring colon
+                alt_pattern = custom_pattern.replace(':', '[:\\s]*')
+                alt_result = apply_pattern(text, alt_pattern, "due_date_alt")
+                if alt_result:
+                    logger.info(f"[Due Date] Extracted with alt pattern: {alt_result}")
+                    return alt_result
+        else:
+            logger.warning(f"[Due Date] 'scaden' not found in text")
+    # Default patterns for various date formats (handle newlines between label and date)
+    # Note: [țţ] matches both t-comma (U+021B) and t-cedilla (U+0163) variants
     due_date_patterns = [
-        r'(?:data\s+scadenței|data\s+scadentei|due\s+date|scadență|scadenta)[\s:]*([0-9]{2}/[0-9]{2}/[0-9]{4})',
-        r'(?:data\s+scadenței|data\s+scadentei|due\s+date|scadență|scadenta)[\s:]*([0-9]{4}-[0-9]{2}-[0-9]{2})',
-        r'(?:data\s+scadenței|data\s+scadentei|due\s+date|scadență|scadenta)[\s:]*([0-9]{2}\.[0-9]{2}\.[0-9]{4})',
+        r'(?:data\s+scaden[țţ]ei|data\s+scadentei|due\s+date|scaden[țţ]ă|scadenta):\s*\n\s*([0-9]{2}/[0-9]{2}/[0-9]{4})',
+        r'(?:data\s+scaden[țţ]ei|data\s+scadentei|due\s+date|scaden[țţ]ă|scadenta):\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2})',
+        r'(?:data\s+scaden[țţ]ei|data\s+scadentei|due\s+date|scaden[țţ]ă|scadenta):\s*\n\s*([0-9]{2}\.[0-9]{2}\.[0-9]{4})',
     ]
     for pattern in due_date_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         if match:
-            return match.group(1).strip()
+            result = match.group(1).strip()
+            logger.info(f"[Due Date] Extracted via default pattern: {result}")
+            return result
+    logger.warning(f"[Due Date] No due date found")
     return None
 
 
@@ -179,9 +214,6 @@ def sync_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str]]) 
             text_ibans.add(normalized)
         
         new_accounts = [{"bank": "Unknown", "iban": iban} for iban in text_ibans]
-        if new_accounts:
-            print(f"[Bank Sync] Found {len(new_accounts)} new IBANs in PDF (no existing pattern)", flush=True)
-            logger.info(f"[Bank Sync] Found {len(new_accounts)} new IBANs in PDF")
         return (True, new_accounts)
     
     # Normalize IBANs for comparison (remove spaces)
@@ -190,9 +222,6 @@ def sync_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str]]) 
     for iban in iban_matches:
         normalized = re.sub(r'\s+', '', iban.upper())
         text_ibans.add(normalized)
-    
-    print(f"[Bank Sync] Found {len(text_ibans)} IBANs in PDF", flush=True)
-    logger.info(f"[Bank Sync] Found {len(text_ibans)} IBANs in PDF")
     
     # Create a map of normalized IBAN -> bank_account for quick lookup
     iban_to_account = {}
@@ -212,58 +241,40 @@ def sync_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str]]) 
             if normalized in text_ibans:
                 updated_accounts.append(account)
             else:
-                removed_accounts.append(f"{account.get('bank', 'Unknown')}: {normalized}")
+                removed_accounts.append(normalized)
     
     # Add new IBANs from PDF that aren't in the pattern
     new_accounts = []
     for iban in text_ibans:
         if iban not in iban_to_account:
-            # Try to extract bank name from context around the IBAN
+            # Try to extract bank name from IBAN code
             bank_name = "Unknown"
-            # Look for bank name before the IBAN (common pattern: "Bank Name\nIBAN")
-            iban_pos = text.upper().find(iban)
-            if iban_pos > 0:
-                # Look backwards for bank name (common Romanian banks)
-                context_before = text[max(0, iban_pos-100):iban_pos].upper()
-                bank_keywords = {
-                    'CITI': 'Citibank',
-                    'INGB': 'ING Bank',
-                    'BRDE': 'BRD',
-                    'BTRL': 'Banca Transilvania',
-                    'RNCB': 'BCR',
-                    'BUCU': 'Alpha Bank',
-                    'BACX': 'UniCredit Bank',
-                    'RZBR': 'Raiffeisen Bank',
-                    'TREZ': 'Trezorerie',
-                    'PIRB': 'First Bank',
-                    'CECE': 'CEC Bank',
-                    'UGBI': 'Garanti Bank',
-                }
-                for code, name in bank_keywords.items():
-                    if code in iban:
-                        bank_name = name
-                        break
-                    # Also check if bank name appears in context
-                    if name.upper().replace(' ', '') in context_before or name.upper() in context_before:
-                        bank_name = name
-                        break
+            bank_keywords = {
+                'CITI': 'Citibank',
+                'INGB': 'ING Bank',
+                'BRDE': 'BRD',
+                'BTRL': 'Banca Transilvania',
+                'RNCB': 'BCR',
+                'BUCU': 'Alpha Bank',
+                'BACX': 'UniCredit Bank',
+                'RZBR': 'Raiffeisen Bank',
+                'TREZ': 'Trezorerie',
+                'PIRB': 'First Bank',
+                'CECE': 'CEC Bank',
+                'UGBI': 'Garanti Bank',
+            }
+            for code, name in bank_keywords.items():
+                if code in iban:
+                    bank_name = name
+                    break
             
             new_accounts.append({"bank": bank_name, "iban": iban})
     
     # Combine kept and new accounts
     final_accounts = updated_accounts + new_accounts
     
-    if removed_accounts:
-        print(f"[Bank Sync] Removed {len(removed_accounts)} IBANs not found in PDF: {removed_accounts[:3]}...", flush=True)
-        logger.info(f"[Bank Sync] Removed {len(removed_accounts)} IBANs not found in PDF")
-    
-    if new_accounts:
-        print(f"[Bank Sync] Added {len(new_accounts)} new IBANs from PDF", flush=True)
-        logger.info(f"[Bank Sync] Added {len(new_accounts)} new IBANs from PDF")
-    
-    if not removed_accounts and not new_accounts:
-        print(f"[Bank Sync] ✓ All {len(expected_bank_accounts)} IBANs match, no changes needed", flush=True)
-        logger.info(f"[Bank Sync] ✓ All {len(expected_bank_accounts)} IBANs match, no changes needed")
+    if removed_accounts or new_accounts:
+        logger.info(f"[Bank Sync] Updated: {len(removed_accounts)} removed, {len(new_accounts)} added")
     
     # Valid if we have at least one account (either kept or new)
     is_valid = len(final_accounts) > 0
@@ -312,29 +323,14 @@ def check_vendor_hint(text: str, vendor_hint: Optional[str]) -> bool:
     vendor_hint_lower = vendor_hint.lower().strip()
     text_lower = text.lower()
     
-    # Log for debugging (using print and logger)
-    print(f"[Vendor Hint Check] Looking for '{vendor_hint}' in text (first 200 chars: {text[:200]})", flush=True)
-    logger.info(f"[Vendor Hint Check] Looking for '{vendor_hint}' in text (first 200 chars: {text[:200]})")
-    
     # First try simple substring match (most common case)
     if vendor_hint_lower in text_lower:
-        print(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (substring match)", flush=True)
-        logger.info(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (substring match)")
         return True
     
     # Fallback to regex if vendor_hint contains special characters
     try:
-        match = bool(re.search(re.escape(vendor_hint), text, re.IGNORECASE))
-        if match:
-            print(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (regex match)", flush=True)
-            logger.info(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (regex match)")
-        else:
-            print(f"[Vendor Hint Check] ✗ Did not find '{vendor_hint}' in text", flush=True)
-            logger.info(f"[Vendor Hint Check] ✗ Did not find '{vendor_hint}' in text")
-        return match
+        return bool(re.search(re.escape(vendor_hint), text, re.IGNORECASE))
     except re.error:
-        print(f"[Vendor Hint Check] ✗ Regex error for '{vendor_hint}'", flush=True)
-        logger.info(f"[Vendor Hint Check] ✗ Regex error for '{vendor_hint}'")
         return False
 
 
@@ -349,24 +345,13 @@ def parse_pdf_with_patterns(
         reverse=True,
     )
     matched_pattern: Optional[ExtractionPattern] = None
-    print(f"[PDF Parser] Checking {len(sorted_patterns)} patterns for vendor hints", flush=True)
-    logger.info(f"[PDF Parser] Checking {len(sorted_patterns)} patterns for vendor hints")
-    print(f"[PDF Parser] Text preview (first 500 chars): {text[:500]}", flush=True)
-    logger.info(f"[PDF Parser] Text preview (first 500 chars): {text[:500]}")
     for pattern in sorted_patterns:
-        print(f"[PDF Parser] Checking pattern: {pattern.name} (vendor_hint: '{pattern.vendor_hint}', supplier: '{pattern.supplier}')", flush=True)
-        logger.info(f"[PDF Parser] Checking pattern: {pattern.name} (vendor_hint: '{pattern.vendor_hint}', supplier: '{pattern.supplier}')")
         if check_vendor_hint(text, pattern.vendor_hint):
             matched_pattern = pattern
-            print(f"[PDF Parser] ✓ Matched pattern: {pattern.name} (supplier: {pattern.supplier})", flush=True)
-            logger.info(f"[PDF Parser] ✓ Matched pattern: {pattern.name} (supplier: {pattern.supplier})")
+            logger.info(f"[PDF Parser] Matched pattern: {pattern.name} (supplier: {pattern.supplier})")
             break
-        else:
-            print(f"[PDF Parser] ✗ Pattern '{pattern.name}' did not match", flush=True)
-            logger.info(f"[PDF Parser] ✗ Pattern '{pattern.name}' did not match")
     if not matched_pattern:
-        print(f"[PDF Parser] ✗ No pattern matched. Text preview (first 500 chars): {text[:500]}", flush=True)
-        logger.warning(f"[PDF Parser] ✗ No pattern matched. Text preview (first 500 chars): {text[:500]}")
+        logger.warning(f"[PDF Parser] No pattern matched")
     iban = extract_iban(
         text,
         matched_pattern.iban_pattern if matched_pattern else None,
@@ -387,34 +372,31 @@ def parse_pdf_with_patterns(
         text,
         matched_pattern.due_date_pattern if matched_pattern else None,
     )
+    if due_date:
+        logger.info(f"[PDF Parser] Extracted due_date: {due_date}")
+    else:
+        logger.warning(f"[PDF Parser] No due_date extracted from PDF")
     business_name = extract_business_name(
         text,
         matched_pattern.business_name_pattern if matched_pattern else None,
     )
     
-    # Sync bank accounts if pattern has them defined
+    # Sync bank accounts if pattern has them defined (only after pattern match)
     is_valid = True
     bank_accounts_list = []
     pattern_needs_update = False
     if matched_pattern and matched_pattern.bank_accounts:
-        print(f"[PDF Parser] Syncing bank accounts for pattern '{matched_pattern.name}'", flush=True)
-        logger.info(f"[PDF Parser] Syncing bank accounts for pattern '{matched_pattern.name}'")
         is_valid, bank_accounts_list = sync_bank_accounts(text, matched_pattern.bank_accounts)
-        print(f"[PDF Parser] Bank sync result: {is_valid}, {len(bank_accounts_list)} accounts", flush=True)
-        logger.info(f"[PDF Parser] Bank sync result: {is_valid}, {len(bank_accounts_list)} accounts")
-        
         # Check if bank_accounts_list differs from pattern's bank_accounts
         if bank_accounts_list != matched_pattern.bank_accounts:
             pattern_needs_update = True
-            print(f"[PDF Parser] Pattern bank accounts need update (was {len(matched_pattern.bank_accounts)}, now {len(bank_accounts_list)})", flush=True)
-            logger.info(f"[PDF Parser] Pattern bank accounts need update")
+            logger.info(f"[PDF Parser] Bank accounts updated: {len(matched_pattern.bank_accounts)} -> {len(bank_accounts_list)}")
     elif matched_pattern:
         # No bank accounts in pattern, but we found some in PDF - add them
         is_valid, bank_accounts_list = sync_bank_accounts(text, [])
         if bank_accounts_list:
             pattern_needs_update = True
-            print(f"[PDF Parser] Adding {len(bank_accounts_list)} new bank accounts to pattern", flush=True)
-            logger.info(f"[PDF Parser] Adding {len(bank_accounts_list)} new bank accounts to pattern")
+            logger.info(f"[PDF Parser] Added {len(bank_accounts_list)} new bank accounts to pattern")
     
     all_addresses = extract_addresses(
         text,

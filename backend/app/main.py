@@ -1121,19 +1121,16 @@ async def parse_bill_pdf(
         handler.setLevel(logging.INFO)
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)
-    print(f"[PDF Parse] Starting PDF parse for property {property_id}, checking {len(patterns)} patterns", flush=True)
-    logger.info(f"[PDF Parse] Starting PDF parse for property {property_id}, checking {len(patterns)} patterns")
+    logger.info(f"[PDF Parse] Starting parse for property {property_id}, {len(patterns)} patterns")
     result, pattern_to_update = parse_pdf_with_patterns(pdf_bytes, patterns)
     
     # Update pattern in database if bank accounts changed
     if pattern_to_update:
         pattern_to_update.bank_accounts = result.bank_accounts
         db.save_extraction_pattern(pattern_to_update)
-        print(f"[PDF Parse] Updated pattern '{pattern_to_update.name}' with new bank accounts", flush=True)
-        logger.info(f"[PDF Parse] Updated pattern '{pattern_to_update.name}' with new bank accounts")
+        logger.info(f"[PDF Parse] Updated pattern '{pattern_to_update.name}' bank accounts: {len(result.bank_accounts)}")
     
-    print(f"[PDF Parse] Pattern match result: {result.matched_pattern_id} (supplier: {result.matched_pattern_supplier})", flush=True)
-    logger.info(f"[PDF Parse] Pattern match result: {result.matched_pattern_id} (supplier: {result.matched_pattern_supplier})")
+    logger.info(f"[PDF Parse] Result: pattern={result.matched_pattern_supplier}, amount={result.amount}, due_date={result.due_date}, bill_number={result.bill_number}")
     
     # Check if extracted address matches property address
     address_matches = True

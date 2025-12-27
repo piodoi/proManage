@@ -9,7 +9,7 @@
   "bill_number_pattern": "Seria și numărul facturii:[\\s]*([A-Z0-9\\-/]+)",
   "business_name_pattern": "Vodafone Romania S\\.A\\.",
   "contract_id_pattern": "Cont\\s+client[\\s:]*([0-9]+)",
-  "due_date_pattern": "Data\\s+scadenței[\\s:]*([0-9]{2}/[0-9]{2}/[0-9]{4})",
+  "due_date_pattern": "Data\\s+scaden[țţ]ei:\\s*\\n\\s*([0-9]{2}/[0-9]{2}/[0-9]{4})",
   "bank_accounts": [
     {"bank": "Citibank", "iban": "RO28CITI0000000824824444"},
     {"bank": "ING Bank", "iban": "RO23INGB0001000000000222"},
