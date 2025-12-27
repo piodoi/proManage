@@ -1,0 +1,17 @@
+{
+  "supplier": "Digi",
+  "name": "Digi Bill",
+  "bill_type": "utilities",
+  "vendor_hint": "Digi",
+  "iban_pattern": "(RO\\d{2}[A-Z0-9]{4,28})",
+  "amount_pattern": "Total[\\s]+de[\\s]+achitat[\\s:]*([0-9.,]+)",
+  "address_pattern": "(Strada[\\s]+[^,]+,[\\s]+Nr\\.?[\\s]+[0-9]+,[\\s]+[^\\n]+[\\s\\n]+Judet:[\\s]+[^\\n]+)",
+  "bill_number_pattern": "Factură[\\s]+seria[\\s]+și[\\s]+nr\\.:[\\s]*([A-Z0-9\\-/]+)",
+  "business_name_pattern": "Digi Romania S\\.A\\.",
+  "contract_id_pattern": "cod[\\s]+client[\\s:]*([0-9]+)",
+  "due_date_pattern": "Ultima[\\s]+zi[\\s]+de[\\s]+plată[\\s:]*([0-9]{2}/[0-9]{2}/[0-9]{4})",
+  "bank_accounts": [],
+  "priority": 100,
+  "enabled": true
+}
+

@@ -56,12 +56,28 @@ def apply_pattern(text: str, pattern: Optional[str], debug_name: str = "") -> Op
 
 def extract_iban(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
     if custom_pattern:
-        result = apply_pattern(text, custom_pattern)
-        if result:
-            return result
+        # For IBAN patterns, we want to capture the full IBAN
+        # If pattern has capturing group, use it, otherwise match the whole pattern
+        try:
+            match = re.search(custom_pattern, text, re.IGNORECASE)
+            if match:
+                # If there's a capturing group, use it, otherwise use the full match
+                if match.groups():
+                    result = match.group(1)
+                else:
+                    result = match.group(0)
+                if result:
+                    # Normalize IBAN: remove spaces, uppercase
+                    normalized = re.sub(r'\s+', '', result.upper())
+                    return normalized
+        except re.error:
+            pass
     iban_pattern = r'\b([A-Z]{2}\d{2}[A-Z0-9]{4,30})\b'
-    match = re.search(iban_pattern, text)
-    return match.group(1) if match else None
+    match = re.search(iban_pattern, text, re.IGNORECASE)
+    if match:
+        normalized = re.sub(r'\s+', '', match.group(1).upper())
+        return normalized
+    return None
 
 
 def extract_amount(text: str, custom_pattern: Optional[str] = None) -> Optional[float]:
@@ -186,9 +202,16 @@ def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optiona
 def extract_business_name(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
     """Extract business name for bank transfer."""
     if custom_pattern:
-        result = apply_pattern(text, custom_pattern)
-        if result:
-            return result.strip()
+        # Special handling for pattern that matches first line (^)
+        if custom_pattern.startswith('^'):
+            # Get first line of text
+            first_line = text.split('\n')[0].strip()
+            if first_line:
+                return first_line
+        else:
+            result = apply_pattern(text, custom_pattern)
+            if result:
+                return result.strip()
     # Default patterns
     business_patterns = [
         r'(?:beneficiar|payee|business\s+name|nume\s+firma)[\s:]*([A-Z][A-Za-z\s&\.]+(?:SA|S\.A\.|SRL|LTD))',
