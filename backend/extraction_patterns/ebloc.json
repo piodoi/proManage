@@ -6,7 +6,7 @@
   "iban_pattern": "(RO\\d{2}[A-Z0-9]{4,28})",
   "amount_pattern": "TOTAL[\\s\\n]+DE[\\s\\n]+PLATĂ[\\s\\n]+([0-9.,]+)",
   "address_pattern": "Adresa[\\s:]*([^\\n]{10,150})",
-  "bill_number_pattern": "Ap[0-9][a-zA-Z]+",
+  "bill_number_pattern": "(Ap(?:artament)?[\\s:]*[0-9]+)",
   "business_name_pattern": "^([^\\n]+)",
   "contract_id_pattern": "NOTA[\\s]+DE[\\s]+PLATĂ[\\s]+PENTRU[\\s]+LUNA[\\s]+([A-Za-z]+[\\s]+[0-9]{4})",
   "due_date_pattern": "Data[\\s]+scaden..:[\\s:]*([0-9]+[\\s]+[A-Za-z]+[\\s]+[0-9]{4})",

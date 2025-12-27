@@ -24,6 +24,124 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     return text
 
 
+def extract_value_by_label_position(pdf_bytes: bytes, label: str, max_distance: float = 200.0) -> Optional[str]:
+    """
+    Extract a value from PDF by finding a label and looking for its value to the right or below.
+    Useful for tabular layouts where labels and values are in separate columns.
+    
+    Args:
+        pdf_bytes: PDF file content
+        label: Label text to search for (e.g., "Cont IBAN:", "Cod client:")
+        max_distance: Maximum horizontal distance to search for value (in points)
+    
+    Returns:
+        Extracted value string or None if not found
+    """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    
+    # Normalize label: remove extra spaces, colons, make lowercase for matching
+    label_normalized = re.sub(r'[:\s]+', ' ', label).strip().lower()
+    label_parts = label_normalized.split()
+    
+    for page in doc:
+        # Get words with position: (x0, y0, x1, y1, "text", block_no, line_no, word_no)
+        words = page.get_text("words")
+        if not words:
+            continue
+        
+        # Build list of (x0, y0, x1, y1, text) for easier searching
+        word_list = [(w[0], w[1], w[2], w[3], w[4]) for w in words]
+        
+        # Find label in words
+        for i in range(len(word_list)):
+            # Try to match label starting at position i
+            matched = True
+            label_positions = []
+            label_texts = []
+            
+            # Check if we can match the label starting from word i
+            for j, part in enumerate(label_parts):
+                if i + j >= len(word_list):
+                    matched = False
+                    break
+                x0, y0, x1, y1, text = word_list[i + j]
+                text_normalized = re.sub(r'[:\s]+', ' ', text).strip().lower()
+                # Check if this word contains the label part
+                if part not in text_normalized and text_normalized not in part:
+                    matched = False
+                    break
+                label_positions.append((x0, y0, x1, y1))
+                label_texts.append(text)
+            
+            if matched and label_positions:
+                # Label found! Now find the value
+                label_end_x = label_positions[-1][2]  # x1 of last label word
+                label_start_x = label_positions[0][0]  # x0 of first label word
+                label_y = label_positions[0][1]  # y0 of first label word
+                label_bottom = max(y1 for _, _, _, y1 in label_positions)
+                
+                # Search for value after label position
+                value_candidates = []
+                search_start = i + len(label_parts)
+                
+                for k in range(search_start, len(word_list)):
+                    vx0, vy0, vx1, vy1, vtext = word_list[k]
+                    vtext_clean = vtext.strip()
+                    
+                    # Skip empty text, punctuation-only text, or labels
+                    if not vtext_clean or re.match(r'^[:\.,;]+$', vtext_clean):
+                        continue
+                    
+                    # Same line (y within 5 pixels tolerance) and to the right
+                    if abs(vy0 - label_y) < 5 and vx0 > label_end_x:
+                        # Value is on the same line to the right
+                        distance = vx0 - label_end_x
+                        if distance < max_distance:
+                            value_candidates.append((vx0, vy0, vtext_clean, distance, 'same_line'))
+                    # Next line (y below label but within reasonable distance)
+                    elif vy0 > label_bottom and vy0 < label_bottom + 25:
+                        # Value is on the line below, check if x is similar (within column alignment)
+                        x_diff = abs(vx0 - label_start_x)
+                        if x_diff < max_distance:
+                            value_candidates.append((vx0, vy0, vtext_clean, x_diff, 'next_line'))
+                
+                if value_candidates:
+                    # Sort by: prefer same_line, then by distance (closer is better)
+                    value_candidates.sort(key=lambda v: (v[4] != 'same_line', v[3]))
+                    
+                    # Get the best candidate
+                    best_candidate = value_candidates[0]
+                    value = best_candidate[2]
+                    
+                    # For multi-word values on same line, collect adjacent words
+                    if best_candidate[4] == 'same_line':
+                        best_x, best_y, _, _, _ = best_candidate
+                        # Look for additional words on the same line to the right
+                        value_words = [value]
+                        for k in range(search_start, len(word_list)):
+                            vx0, vy0, vx1, vy1, vtext = word_list[k]
+                            if abs(vy0 - best_y) < 5 and vx0 > best_x + 5:
+                                # Check if this word is close (probably part of same value)
+                                if vx0 < best_x + 150:  # Reasonable width for a value
+                                    vtext_clean = vtext.strip()
+                                    if vtext_clean and not re.match(r'^[:\.,;]+$', vtext_clean):
+                                        value_words.append(vtext_clean)
+                                    else:
+                                        break
+                                else:
+                                    break
+                        
+                        value = ' '.join(value_words)
+                    
+                    if value:
+                        logger.info(f"[Position-based] Found value for label '{label}': {value}")
+                        doc.close()
+                        return value.strip()
+    
+    doc.close()
+    return None
+
+
 def apply_pattern(text: str, pattern: Optional[str], debug_name: str = "") -> Optional[str]:
     if not pattern:
         return None
@@ -34,8 +152,11 @@ def apply_pattern(text: str, pattern: Optional[str], debug_name: str = "") -> Op
             # Clean up the result
             if result:
                 result = result.strip()
-                # For bill numbers, filter out very short results that are likely false matches
-                if len(result) < 3:
+                # Remove trailing period if present
+                result = result.rstrip('.')
+                # Don't filter short results here - let the calling function (extract_bill_number, etc.) decide
+                # This allows apartment numbers (single digits) to pass through
+                if len(result) < 1:
                     return None
             return result
         elif debug_name and "due_date" in debug_name:
@@ -105,15 +226,28 @@ def extract_amount(text: str, custom_pattern: Optional[str] = None) -> Optional[
     return None
 
 
-def extract_bill_number(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
+def extract_bill_number(text: str, custom_pattern: Optional[str] = None, pdf_bytes: Optional[bytes] = None) -> Optional[str]:
     if custom_pattern:
         result = apply_pattern(text, custom_pattern)
         if result:
             # Clean up the result - remove leading/trailing whitespace and ensure it's meaningful
             cleaned = result.strip()
-            # Filter out very short results that are likely false matches (like "re", "nr", etc.)
-            if len(cleaned) >= 3:  # At least 3 characters for a valid bill number
+            # Remove trailing period if present (e.g., "Apartament 5." -> "Apartament 5")
+            cleaned = cleaned.rstrip('.')
+            # For apartment identifiers (like "Apartament 5", "Ap 1", "Ap: 2"), allow them
+            # Check if pattern is for apartment (common patterns)
+            is_apartment_pattern = 'apartament' in custom_pattern.lower() or '\\bap[\\s:]' in custom_pattern.lower()
+            min_length = 3 if is_apartment_pattern else 3  # "Ap 1" is 4 chars, "Apartament 5" is ~13 chars
+            if len(cleaned) >= min_length:
                 return cleaned
+        # If pattern failed and we have PDF bytes, try position-based extraction as fallback
+        elif pdf_bytes:
+            logger.info(f"[Bill Number] Trying position-based extraction as fallback...")
+            # Try common bill number labels
+            for label in ["Factură seria și nr.", "Factura seria si nr.", "Număr factură", "Numar factura"]:
+                position_result = extract_value_by_label_position(pdf_bytes, label, max_distance=150.0)
+                if position_result and len(position_result) >= 3:
+                    return position_result
     bill_patterns = [
         r'(?:nr\.?\s*factura|numar\s*factura|invoice\s*(?:no|number)|bill\s*(?:no|number))[\s:]*([A-Z0-9\-/]+)',
         r'(?:factura|invoice|bill)[\s#:]*([A-Z0-9\-/]+)',
@@ -128,7 +262,7 @@ def extract_bill_number(text: str, custom_pattern: Optional[str] = None) -> Opti
     return None
 
 
-def extract_contract_id(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
+def extract_contract_id(text: str, custom_pattern: Optional[str] = None, pdf_bytes: Optional[bytes] = None) -> Optional[str]:
     """Extract contract/client ID."""
     if custom_pattern:
         # Try custom pattern first
@@ -142,6 +276,12 @@ def extract_contract_id(text: str, custom_pattern: Optional[str] = None) -> Opti
                 return match.group(0).strip()
         except re.error:
             pass
+        # If pattern failed and we have PDF bytes, try position-based extraction as fallback
+        if pdf_bytes:
+            logger.info(f"[Contract ID] Trying position-based extraction as fallback...")
+            position_result = extract_value_by_label_position(pdf_bytes, "Cod client", max_distance=150.0)
+            if position_result:
+                return position_result
     # Default patterns
     contract_patterns = [
         r'(?:cod\s+cont\s+contract|cont\s+contract|cod\s+contract)[\s:]*([0-9]+)',
@@ -156,7 +296,37 @@ def extract_contract_id(text: str, custom_pattern: Optional[str] = None) -> Opti
     return None
 
 
-def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
+def convert_romanian_date_to_standard(romanian_date: str) -> Optional[str]:
+    """
+    Convert Romanian date format to standard format (DD/MM/YYYY).
+    Example: "11 Ianuarie 2026" -> "11/01/2026"
+    """
+    # Romanian month names mapping
+    month_map = {
+        'ianuarie': '01', 'februarie': '02', 'martie': '03', 'aprilie': '04',
+        'mai': '05', 'iunie': '06', 'iulie': '07', 'august': '08',
+        'septembrie': '09', 'octombrie': '10', 'noiembrie': '11', 'decembrie': '12'
+    }
+    
+    # Try to match Romanian date pattern: "DD Month YYYY" or "DD MonthName YYYY"
+    # Pattern: day (1-2 digits), month name, year (4 digits)
+    pattern = r'(\d{1,2})\s+([a-z]+)\s+(\d{4})'
+    match = re.search(pattern, romanian_date.lower().strip(), re.IGNORECASE)
+    
+    if match:
+        day, month_str, year = match.groups()
+        month_lower = month_str.lower()
+        
+        # Check if it's a Romanian month name
+        if month_lower in month_map:
+            month_num = month_map[month_lower]
+            day_padded = day.zfill(2)  # Ensure 2 digits
+            return f"{day_padded}/{month_num}/{year}"
+    
+    return None
+
+
+def extract_due_date(text: str, custom_pattern: Optional[str] = None, pdf_bytes: Optional[bytes] = None) -> Optional[str]:
     """Extract due date."""
     if custom_pattern:
         # Find context around "scaden" for debugging
@@ -170,6 +340,11 @@ def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optiona
             result = apply_pattern(text, custom_pattern, "due_date")
             if result:
                 logger.info(f"[Due Date] Extracted: {result}")
+                # Check if result is in Romanian date format and convert it
+                converted = convert_romanian_date_to_standard(result)
+                if converted:
+                    logger.info(f"[Due Date] Converted Romanian date '{result}' to '{converted}'")
+                    return converted
                 return result
             else:
                 # Try to see what's actually there
@@ -179,7 +354,23 @@ def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optiona
                 alt_result = apply_pattern(text, alt_pattern, "due_date_alt")
                 if alt_result:
                     logger.info(f"[Due Date] Extracted with alt pattern: {alt_result}")
+                    # Check if result is in Romanian date format and convert it
+                    converted = convert_romanian_date_to_standard(alt_result)
+                    if converted:
+                        logger.info(f"[Due Date] Converted Romanian date '{alt_result}' to '{converted}'")
+                        return converted
                     return alt_result
+                # If still no result and we have PDF bytes, try position-based extraction as fallback
+                elif pdf_bytes:
+                    logger.info(f"[Due Date] Trying position-based extraction as fallback...")
+                    position_result = extract_value_by_label_position(pdf_bytes, "Ultima zi de plată", max_distance=150.0)
+                    if position_result:
+                        # Check if result is in Romanian date format and convert it
+                        converted = convert_romanian_date_to_standard(position_result)
+                        if converted:
+                            logger.info(f"[Due Date] Converted Romanian date '{position_result}' to '{converted}'")
+                            return converted
+                        return position_result
         else:
             logger.warning(f"[Due Date] 'scaden' not found in text")
     # Default patterns for various date formats (handle newlines between label and date)
@@ -194,6 +385,11 @@ def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optiona
         if match:
             result = match.group(1).strip()
             logger.info(f"[Due Date] Extracted via default pattern: {result}")
+            # Check if result is in Romanian date format and convert it
+            converted = convert_romanian_date_to_standard(result)
+            if converted:
+                logger.info(f"[Due Date] Converted Romanian date '{result}' to '{converted}'")
+                return converted
             return result
     logger.warning(f"[Due Date] No due date found")
     return None
@@ -386,14 +582,17 @@ def parse_pdf_with_patterns(
     bill_number = extract_bill_number(
         text,
         matched_pattern.bill_number_pattern if matched_pattern else None,
+        pdf_bytes=pdf_bytes,  # Pass PDF bytes for position-based fallback
     )
     contract_id = extract_contract_id(
         text,
         matched_pattern.contract_id_pattern if matched_pattern else None,
+        pdf_bytes=pdf_bytes,  # Pass PDF bytes for position-based fallback
     )
     due_date = extract_due_date(
         text,
         matched_pattern.due_date_pattern if matched_pattern else None,
+        pdf_bytes=pdf_bytes,  # Pass PDF bytes for position-based fallback
     )
     if due_date:
         logger.info(f"[PDF Parser] Extracted due_date: {due_date}")
