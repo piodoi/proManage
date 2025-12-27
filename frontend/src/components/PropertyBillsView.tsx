@@ -76,17 +76,13 @@ export default function PropertyBillsView({
       const billSupplier = supplier || result.matched_pattern_supplier || 'PDF';
       const extractionPatternId = patternId || result.matched_pattern_id;
       
-      // Description should just be the supplier name (or with bill number if available)
-      // Only add bill number if it's a valid, non-empty string
-      const description = (result.bill_number && result.bill_number.trim() && result.bill_number.trim().length > 2)
-        ? `${billSupplier} - ${result.bill_number.trim()}`
-        : billSupplier;
+      // Description should just be the supplier name 
       
       const billData = {
         property_id: propertyId,
         renter_id: 'all', // Default to all/property
         bill_type: extractionPatternId ? 'utilities' : 'other',
-        description: description,
+        description: billSupplier,
         amount: result.amount || 0,
         due_date: dueDate,
         iban: result.iban,
