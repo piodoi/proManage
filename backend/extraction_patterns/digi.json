@@ -1,6 +1,6 @@
 {
   "supplier": "Digi",
-  "name": "Digi Bill",
+  "name": "Digi",
   "bill_type": "utilities",
   "vendor_hint": "Digi Romania",
   "iban_pattern": "(RO\\d{2}[A-Z0-9]{4,28})",

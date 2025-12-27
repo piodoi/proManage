@@ -1,6 +1,6 @@
 {
   "supplier": "Hidroelectrica",
-  "name": "Hidroelectrica Bill",
+  "name": "Hidroelectrica",
   "bill_type": "utilities",
   "vendor_hint": "HIDROELECTRICA",
   "iban_pattern": "Cont\\s+Bancar[\\s:]*RO\\d{2}[A-Z]{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}",

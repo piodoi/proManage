@@ -200,6 +200,12 @@ export default function PropertyBillsView({
                   const result = await api.billParser.parse(token, file, propertyId);
                   setPdfResult(result);
                   
+                  // Show supplier message if present (info message, not blocking)
+                  if (result.supplier_message && onError) {
+                    // Use onError as a general message handler - supplier messages are informational
+                    onError(result.supplier_message);
+                  }
+                  
                   // Check if pattern was matched
                   if (!result.matched_pattern_id) {
                     // No pattern matched - show pattern selection dialog

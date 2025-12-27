@@ -1451,12 +1451,52 @@ async def parse_bill_pdf(
             address_matches = False
             address_warning = f"Address mismatch detected (confidence: {address_confidence}%). The extracted address may not match this property."
     
+    # Auto-add supplier to property if matched pattern has a supplier
+    supplier_added = False
+    supplier_message = None
+    if result.matched_pattern_supplier:
+        # Initialize suppliers to ensure they exist in database
+        initialize_suppliers()
+        
+        # Find supplier by name (case-insensitive match)
+        all_suppliers = db.list_suppliers()
+        matched_supplier = None
+        for supplier in all_suppliers:
+            # Match on supplier name or extraction_pattern_supplier field
+            if (supplier.name and supplier.name.lower() == result.matched_pattern_supplier.lower()) or \
+               (supplier.extraction_pattern_supplier and supplier.extraction_pattern_supplier.lower() == result.matched_pattern_supplier.lower()):
+                matched_supplier = supplier
+                break
+        
+        if matched_supplier:
+            # Check if supplier is already added to property
+            existing = db.get_property_supplier_by_supplier(property_id, matched_supplier.id)
+            if not existing:
+                # Auto-add supplier to property
+                property_supplier = PropertySupplier(
+                    property_id=property_id,
+                    supplier_id=matched_supplier.id,
+                    username=None,
+                    password_hash=None,
+                )
+                db.save_property_supplier(property_supplier)
+                supplier_added = True
+                logger.info(f"[PDF Parse] Auto-added supplier '{matched_supplier.name}' to property {property_id}")
+            
+            # Add message about API capability if supplier has API support
+            if matched_supplier.has_api:
+                supplier_message = f"Supplier '{matched_supplier.name}' has been added to this property. Since this supplier supports API integration, you can configure your login credentials in the property settings to enable automatic bill fetching."
+            elif supplier_added:
+                supplier_message = f"Supplier '{matched_supplier.name}' has been added to this property."
+    
     return {
         **result.model_dump(),
         "address_matches": address_matches,
         "address_warning": address_warning,
         "address_confidence": address_confidence,
         "property_address": prop.address,
+        "supplier_added": supplier_added,
+        "supplier_message": supplier_message,
     }
 
 

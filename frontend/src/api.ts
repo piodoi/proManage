@@ -408,4 +408,6 @@ export type ExtractionResult = {
   address_warning?: string;
   address_confidence?: number;
   property_address?: string;
+  supplier_added?: boolean;
+  supplier_message?: string;
 };

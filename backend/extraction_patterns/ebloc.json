@@ -1,6 +1,6 @@
 {
   "supplier": "E-Bloc",
-  "name": "E-Bloc Bill",
+  "name": "E-Bloc",
   "bill_type": "utilities",
   "vendor_hint": "E-Bloc",
   "iban_pattern": "(RO\\d{2}[A-Z0-9]{4,28})",

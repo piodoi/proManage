@@ -1,6 +1,6 @@
 {
   "supplier": "Vodafone",
-  "name": "Vodafone Bill",
+  "name": "Vodafone",
   "bill_type": "utilities",
   "vendor_hint": "Vodafone",
   "iban_pattern": "(?:Transfer\\s+bancar|IBAN|Cont)[\\s:]*RO\\d{2}\\s*[A-Z]{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}",
