@@ -1,4 +1,6 @@
 import os
+import json
+from pathlib import Path
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Query
@@ -87,6 +89,121 @@ app.add_middleware(
 app.include_router(auth_router)
 
 PAYMENT_SERVICE_COMMISSION = float(os.getenv("PAYMENT_SERVICE_COMMISSION", "0.02"))
+
+
+def load_extraction_patterns_from_json():
+    """Load extraction patterns from JSON files in the extraction_patterns directory."""
+    patterns_dir = Path(__file__).parent.parent / "extraction_patterns"
+    if not patterns_dir.exists():
+        return
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    for json_file in patterns_dir.glob("*.json"):
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Check if pattern already exists (by supplier or name)
+            supplier = data.get('supplier')
+            name = data.get('name')
+            existing_patterns = db.list_extraction_patterns()
+            existing = None
+            for pattern in existing_patterns:
+                if (supplier and pattern.supplier == supplier) or (name and pattern.name == name):
+                    existing = pattern
+                    break
+            
+            # Create or update pattern
+            pattern_data = ExtractionPatternCreate(
+                name=data.get('name', ''),
+                bill_type=BillType(data.get('bill_type', 'utilities')),
+                supplier=data.get('supplier'),
+                vendor_hint=data.get('vendor_hint'),
+                iban_pattern=data.get('iban_pattern'),
+                amount_pattern=data.get('amount_pattern'),
+                address_pattern=data.get('address_pattern'),
+                bill_number_pattern=data.get('bill_number_pattern'),
+                contract_id_pattern=data.get('contract_id_pattern'),
+                due_date_pattern=data.get('due_date_pattern'),
+                business_name_pattern=data.get('business_name_pattern'),
+                bank_accounts=data.get('bank_accounts'),
+                priority=data.get('priority', 0),
+            )
+            
+            if existing:
+                # Update existing pattern
+                update_data = ExtractionPatternUpdate(
+                    supplier=pattern_data.supplier,
+                    vendor_hint=pattern_data.vendor_hint,
+                    iban_pattern=pattern_data.iban_pattern,
+                    amount_pattern=pattern_data.amount_pattern,
+                    address_pattern=pattern_data.address_pattern,
+                    bill_number_pattern=pattern_data.bill_number_pattern,
+                    contract_id_pattern=pattern_data.contract_id_pattern,
+                    due_date_pattern=pattern_data.due_date_pattern,
+                    business_name_pattern=pattern_data.business_name_pattern,
+                    bank_accounts=pattern_data.bank_accounts,
+                    priority=pattern_data.priority,
+                    enabled=data.get('enabled', True),
+                )
+                pattern = db.get_extraction_pattern(existing.id)
+                if pattern:
+                    if update_data.supplier is not None:
+                        pattern.supplier = update_data.supplier
+                    if update_data.vendor_hint is not None:
+                        pattern.vendor_hint = update_data.vendor_hint
+                    if update_data.iban_pattern is not None:
+                        pattern.iban_pattern = update_data.iban_pattern
+                    if update_data.amount_pattern is not None:
+                        pattern.amount_pattern = update_data.amount_pattern
+                    if update_data.address_pattern is not None:
+                        pattern.address_pattern = update_data.address_pattern
+                    if update_data.bill_number_pattern is not None:
+                        pattern.bill_number_pattern = update_data.bill_number_pattern
+                    if update_data.contract_id_pattern is not None:
+                        pattern.contract_id_pattern = update_data.contract_id_pattern
+                    if update_data.due_date_pattern is not None:
+                        pattern.due_date_pattern = update_data.due_date_pattern
+                    if update_data.business_name_pattern is not None:
+                        pattern.business_name_pattern = update_data.business_name_pattern
+                    if update_data.bank_accounts is not None:
+                        pattern.bank_accounts = update_data.bank_accounts
+                    if update_data.priority is not None:
+                        pattern.priority = update_data.priority
+                    if update_data.enabled is not None:
+                        pattern.enabled = update_data.enabled
+                    db.save_extraction_pattern(pattern)
+                    logger.info(f"Updated extraction pattern: {pattern.name}")
+            else:
+                # Create new pattern
+                pattern = ExtractionPattern(
+                    name=pattern_data.name,
+                    bill_type=pattern_data.bill_type,
+                    supplier=pattern_data.supplier,
+                    vendor_hint=pattern_data.vendor_hint,
+                    iban_pattern=pattern_data.iban_pattern,
+                    amount_pattern=pattern_data.amount_pattern,
+                    address_pattern=pattern_data.address_pattern,
+                    bill_number_pattern=pattern_data.bill_number_pattern,
+                    contract_id_pattern=pattern_data.contract_id_pattern,
+                    due_date_pattern=pattern_data.due_date_pattern,
+                    business_name_pattern=pattern_data.business_name_pattern,
+                    bank_accounts=pattern_data.bank_accounts,
+                    priority=pattern_data.priority,
+                    enabled=data.get('enabled', True),
+                )
+                db.save_extraction_pattern(pattern)
+                logger.info(f"Loaded extraction pattern: {pattern.name}")
+        except Exception as e:
+            logger.error(f"Error loading pattern from {json_file}: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Load extraction patterns from JSON files on startup."""
+    load_extraction_patterns_from_json()
 
 
 @app.get("/health")
@@ -944,11 +1061,16 @@ async def create_extraction_pattern(
     pattern = ExtractionPattern(
         name=data.name,
         bill_type=data.bill_type,
+        supplier=data.supplier,
         vendor_hint=data.vendor_hint,
         iban_pattern=data.iban_pattern,
         amount_pattern=data.amount_pattern,
         address_pattern=data.address_pattern,
         bill_number_pattern=data.bill_number_pattern,
+        contract_id_pattern=data.contract_id_pattern,
+        due_date_pattern=data.due_date_pattern,
+        business_name_pattern=data.business_name_pattern,
+        bank_accounts=data.bank_accounts,
         priority=data.priority,
     )
     db.save_extraction_pattern(pattern)
@@ -984,6 +1106,8 @@ async def update_extraction_pattern(
         pattern.address_pattern = data.address_pattern
     if data.bill_number_pattern is not None:
         pattern.bill_number_pattern = data.bill_number_pattern
+    if data.contract_id_pattern is not None:
+        pattern.contract_id_pattern = data.contract_id_pattern
     if data.priority is not None:
         pattern.priority = data.priority
     if data.enabled is not None:

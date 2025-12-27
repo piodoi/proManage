@@ -274,7 +274,7 @@ export default function PropertyBillsView({
               propertyBills.map((bill) => {
                 const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
                 return (
-                  <TableRow key={bill.id} className="border-slate-700 hover:bg-slate-900/50">
+                  <TableRow key={bill.id} className="border-slate-700">
                     <TableCell className="text-slate-300">{renter ? renter.name : 'All / Property'}</TableCell>
                     <TableCell className="text-slate-200">{bill.description}</TableCell>
                     <TableCell className="text-slate-300">{bill.bill_type}</TableCell>

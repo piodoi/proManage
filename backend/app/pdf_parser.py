@@ -77,6 +77,93 @@ def extract_bill_number(text: str, custom_pattern: Optional[str] = None) -> Opti
     return None
 
 
+def extract_contract_id(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
+    """Extract contract/client ID."""
+    if custom_pattern:
+        # Try custom pattern first
+        try:
+            match = re.search(custom_pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                # Return first non-empty group, or the full match if no groups
+                for i in range(1, len(match.groups()) + 1):
+                    if match.group(i):
+                        return match.group(i).strip()
+                return match.group(0).strip()
+        except re.error:
+            pass
+    # Default patterns
+    contract_patterns = [
+        r'(?:cod\s+cont\s+contract|cont\s+contract|cod\s+contract)[\s:]*([0-9]+)',
+        r'(?:cont\s+client|contract\s+id|client\s+id|client\s+number)[\s:]*([0-9]+)',
+        r'CONT\s+CONTRACT[:\s]+([0-9]+)',
+        r'([0-9]+)\s*\n?\s*Cod\s+Cont\s+Contract',  # Number before label
+    ]
+    for pattern in contract_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def extract_due_date(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
+    """Extract due date."""
+    if custom_pattern:
+        result = apply_pattern(text, custom_pattern)
+        if result:
+            return result.strip()
+    # Default patterns for various date formats
+    due_date_patterns = [
+        r'(?:data\s+scadenței|data\s+scadentei|due\s+date|scadență|scadenta)[\s:]*([0-9]{2}/[0-9]{2}/[0-9]{4})',
+        r'(?:data\s+scadenței|data\s+scadentei|due\s+date|scadență|scadenta)[\s:]*([0-9]{4}-[0-9]{2}-[0-9]{2})',
+        r'(?:data\s+scadenței|data\s+scadentei|due\s+date|scadență|scadenta)[\s:]*([0-9]{2}\.[0-9]{2}\.[0-9]{4})',
+    ]
+    for pattern in due_date_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def extract_business_name(text: str, custom_pattern: Optional[str] = None) -> Optional[str]:
+    """Extract business name for bank transfer."""
+    if custom_pattern:
+        result = apply_pattern(text, custom_pattern)
+        if result:
+            return result.strip()
+    # Default patterns
+    business_patterns = [
+        r'(?:beneficiar|payee|business\s+name|nume\s+firma)[\s:]*([A-Z][A-Za-z\s&\.]+(?:SA|S\.A\.|SRL|LTD))',
+    ]
+    for pattern in business_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def validate_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str]]) -> bool:
+    """Validate that all expected bank accounts (IBANs) are present in the text."""
+    if not expected_bank_accounts:
+        return True  # No validation needed if no bank accounts specified
+    
+    # Normalize IBANs for comparison (remove spaces)
+    text_ibans = set()
+    iban_matches = re.findall(r'RO\d{2}\s*[A-Z0-9]{4,30}', text, re.IGNORECASE)
+    for iban in iban_matches:
+        normalized = re.sub(r'\s+', '', iban.upper())
+        text_ibans.add(normalized)
+    
+    # Check if all expected IBANs are present
+    for bank_account in expected_bank_accounts:
+        expected_iban = bank_account.get('iban', '')
+        if expected_iban:
+            normalized_expected = re.sub(r'\s+', '', expected_iban.upper())
+            if normalized_expected not in text_ibans:
+                return False  # Missing expected IBAN
+    
+    return True  # All IBANs found
+
+
 def extract_addresses(text: str, custom_pattern: Optional[str] = None) -> list[str]:
     addresses = []
     if custom_pattern:
@@ -147,6 +234,28 @@ def parse_pdf_with_patterns(
         text,
         matched_pattern.bill_number_pattern if matched_pattern else None,
     )
+    contract_id = extract_contract_id(
+        text,
+        matched_pattern.contract_id_pattern if matched_pattern else None,
+    )
+    due_date = extract_due_date(
+        text,
+        matched_pattern.due_date_pattern if matched_pattern else None,
+    )
+    business_name = extract_business_name(
+        text,
+        matched_pattern.business_name_pattern if matched_pattern else None,
+    )
+    
+    # Validate bank accounts if pattern has them defined
+    is_valid = True
+    bank_accounts_list = []
+    if matched_pattern and matched_pattern.bank_accounts:
+        is_valid = validate_bank_accounts(text, matched_pattern.bank_accounts)
+        if is_valid:
+            bank_accounts_list = matched_pattern.bank_accounts
+        # If validation fails, matched_pattern_id and matched_pattern_name will be set to None
+    
     all_addresses = extract_addresses(
         text,
         matched_pattern.address_pattern if matched_pattern else None,
@@ -155,12 +264,16 @@ def parse_pdf_with_patterns(
     address = consumption_location or (all_addresses[0] if all_addresses else None)
     return ExtractionResult(
         iban=iban,
+        contract_id=contract_id,
         bill_number=bill_number,
         amount=amount,
+        due_date=due_date,
         address=address,
         consumption_location=consumption_location,
+        business_name=business_name,
         all_addresses=all_addresses,
-        matched_pattern_id=matched_pattern.id if matched_pattern else None,
-        matched_pattern_name=matched_pattern.name if matched_pattern else None,
+        bank_accounts=bank_accounts_list,
+        matched_pattern_id=matched_pattern.id if matched_pattern and is_valid else None,
+        matched_pattern_name=matched_pattern.name if matched_pattern and is_valid else None,
         raw_text=text,
     )

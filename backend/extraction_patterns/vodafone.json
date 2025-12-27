@@ -1,0 +1,30 @@
+{
+  "supplier": "Vodafone",
+  "name": "Vodafone Bill",
+  "bill_type": "utilities",
+  "vendor_hint": "Vodafone",
+  "iban_pattern": "(?:Transfer\\s+bancar|IBAN|Cont)[\\s:]*RO\\d{2}\\s*[A-Z]{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}",
+  "amount_pattern": "Total de plată \\(Lei\\)\\s*([0-9.,]+)",
+  "address_pattern": "Adresa de instalare:[\\s:]*([^\\n]+)",
+  "bill_number_pattern": "Seria și numărul facturii:[\\s]*([A-Z0-9\\-/]+)",
+  "business_name_pattern": "Vodafone Romania S\\.A\\.",
+  "contract_id_pattern": "Cont\\s+client[\\s:]*([0-9]+)",
+  "due_date_pattern": "Data\\s+scadenței[\\s:]*([0-9]{2}/[0-9]{2}/[0-9]{4})",
+  "bank_accounts": [
+    {"bank": "Citibank", "iban": "RO28CITI0000000824824444"},
+    {"bank": "ING Bank", "iban": "RO23INGB0001000000000222"},
+    {"bank": "BRD", "iban": "RO59BRDE450SV06697704500"},
+    {"bank": "Banca Transilvania", "iban": "RO33BTRL0000160100623500"},
+    {"bank": "BCR", "iban": "RO13RNCB0076006386030001"},
+    {"bank": "Alpha Bank", "iban": "RO90BUCU1111215939705RON"},
+    {"bank": "UniCredit Bank", "iban": "RO97BACX0000000030193313"},
+    {"bank": "Raiffeisen Bank", "iban": "RO09RZBR0000060002002020"},
+    {"bank": "Trezorerie", "iban": "RO29TREZ7005069XXX000710"},
+    {"bank": "First Bank", "iban": "RO58PIRB4204725405001000"},
+    {"bank": "CEC Bank", "iban": "RO38CECEB31545RON2206884"},
+    {"bank": "Garanti Bank", "iban": "RO43UGBI0000102007568RON"}
+  ],
+  "priority": 100,
+  "enabled": true
+}
+
