@@ -1,8 +1,11 @@
 import re
 from typing import Optional
 import fitz
+import logging
 
 from app.models import ExtractionPattern, ExtractionResult
+
+logger = logging.getLogger(__name__)
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -201,10 +204,30 @@ def extract_consumption_location(text: str) -> Optional[str]:
 def check_vendor_hint(text: str, vendor_hint: Optional[str]) -> bool:
     if not vendor_hint:
         return True
+    # More relaxed matching: check if vendor_hint appears anywhere in text (case-insensitive)
+    # This handles cases where vendor_hint is a simple word like "Vodafone"
+    vendor_hint_lower = vendor_hint.lower().strip()
+    text_lower = text.lower()
+    
+    # Log for debugging
+    logger.debug(f"[Vendor Hint Check] Looking for '{vendor_hint}' in text (first 200 chars: {text[:200]})")
+    
+    # First try simple substring match (most common case)
+    if vendor_hint_lower in text_lower:
+        logger.debug(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (substring match)")
+        return True
+    
+    # Fallback to regex if vendor_hint contains special characters
     try:
-        return bool(re.search(vendor_hint, text, re.IGNORECASE))
+        match = bool(re.search(re.escape(vendor_hint), text, re.IGNORECASE))
+        if match:
+            logger.debug(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (regex match)")
+        else:
+            logger.debug(f"[Vendor Hint Check] ✗ Did not find '{vendor_hint}' in text")
+        return match
     except re.error:
-        return vendor_hint.lower() in text.lower()
+        logger.debug(f"[Vendor Hint Check] ✗ Regex error for '{vendor_hint}'")
+        return False
 
 
 def parse_pdf_with_patterns(
@@ -218,10 +241,18 @@ def parse_pdf_with_patterns(
         reverse=True,
     )
     matched_pattern: Optional[ExtractionPattern] = None
+    logger.debug(f"[PDF Parser] Checking {len(sorted_patterns)} patterns for vendor hints")
+    logger.debug(f"[PDF Parser] Text preview (first 500 chars): {text[:500]}")
     for pattern in sorted_patterns:
+        logger.debug(f"[PDF Parser] Checking pattern: {pattern.name} (vendor_hint: '{pattern.vendor_hint}', supplier: '{pattern.supplier}')")
         if check_vendor_hint(text, pattern.vendor_hint):
             matched_pattern = pattern
+            logger.info(f"[PDF Parser] ✓ Matched pattern: {pattern.name} (supplier: {pattern.supplier})")
             break
+        else:
+            logger.debug(f"[PDF Parser] ✗ Pattern '{pattern.name}' did not match")
+    if not matched_pattern:
+        logger.warning(f"[PDF Parser] ✗ No pattern matched. Text preview (first 500 chars): {text[:500]}")
     iban = extract_iban(
         text,
         matched_pattern.iban_pattern if matched_pattern else None,

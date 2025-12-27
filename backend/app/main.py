@@ -1117,6 +1117,7 @@ async def parse_bill_pdf(
     # Check if extracted address matches property address
     address_matches = True
     address_warning = None
+    address_confidence = 100  # Default to 100% if no address to compare
     if result.address and prop.address:
         # Simple address matching - check if key parts match
         extracted_lower = result.address.lower()
@@ -1134,20 +1135,111 @@ async def parse_bill_pdf(
         normalized_extracted = normalize_address(extracted_lower)
         normalized_property = normalize_address(property_lower)
         
-        # Check if they're similar (either contains the other, or share significant words)
-        if normalized_extracted not in normalized_property and normalized_property not in normalized_extracted:
-            # Check for significant word overlap
-            extracted_words = set(w for w in normalized_extracted.split() if len(w) > 3)
-            property_words = set(w for w in normalized_property.split() if len(w) > 3)
-            common_words = extracted_words & property_words
-            if len(common_words) < 2:  # Need at least 2 significant words in common
-                address_matches = False
-                address_warning = f"Extracted address '{result.address}' does not match property address '{prop.address}'. Please verify this is the correct property."
+        # Calculate confidence score based on word matching
+        # Extract all words (including short ones like "nr", "ap", "sc") and numbers
+        def extract_all_tokens(addr: str) -> set:
+            # Extract words and numbers
+            tokens = set()
+            # Get all words (including short ones)
+            words = re.findall(r'\b[a-zăâîșț]+\b', addr, re.IGNORECASE)
+            tokens.update(w.lower() for w in words if w)
+            # Get all numbers
+            numbers = re.findall(r'\d+', addr)
+            tokens.update(numbers)
+            return tokens
+        
+        extracted_tokens = extract_all_tokens(normalized_extracted)
+        property_tokens = extract_all_tokens(normalized_property)
+        common_tokens = extracted_tokens & property_tokens
+        
+        # Also check for key address components
+        def extract_key_components(addr: str) -> dict:
+            components = {}
+            # Street name (first significant word, usually after common prefixes)
+            street_match = re.search(r'\b(strada|str|aleea|alee|bd|bulevardul|calea)\s+([a-zăâîșț]+)', addr, re.IGNORECASE)
+            if street_match:
+                components['street'] = street_match.group(2).lower()
+            # Number
+            nr_match = re.search(r'(?:nr|număr|numar)[\s\.:]*(\d+)', addr, re.IGNORECASE)
+            if nr_match:
+                components['number'] = nr_match.group(1)
+            # Block/Building
+            bl_match = re.search(r'\b(bl|bloc)[\s\.:]*([a-z0-9/]+)', addr, re.IGNORECASE)
+            if bl_match:
+                components['block'] = re.sub(r'[^a-z0-9]', '', bl_match.group(2).lower())
+            # Staircase/Scara
+            sc_match = re.search(r'\b(sc|scara|scara)[\s\.:]*([a-z0-9/]+)', addr, re.IGNORECASE)
+            if sc_match:
+                components['staircase'] = re.sub(r'[^a-z0-9]', '', sc_match.group(2).lower())
+            # Apartment
+            ap_match = re.search(r'\b(ap|apartament)[\s\.:]*(\d+)', addr, re.IGNORECASE)
+            if ap_match:
+                components['apartment'] = ap_match.group(2)
+            return components
+        
+        extracted_components = extract_key_components(extracted_lower)
+        property_components = extract_key_components(property_lower)
+        
+        # Count matching components
+        matching_components = 0
+        total_components = 0
+        for key in ['street', 'number', 'block', 'staircase', 'apartment']:
+            if key in extracted_components or key in property_components:
+                total_components += 1
+                if key in extracted_components and key in property_components:
+                    if extracted_components[key] == property_components[key]:
+                        matching_components += 1
+        
+        # Calculate confidence based on both token overlap and component matching
+        if not extracted_tokens or not property_tokens:
+            # If no tokens, check exact match
+            if normalized_extracted == normalized_property:
+                address_confidence = 100
+            else:
+                address_confidence = 0
+        else:
+            # Token overlap score (40% weight)
+            total_tokens = len(extracted_tokens | property_tokens)
+            token_score = 0
+            if total_tokens > 0:
+                token_score = (len(common_tokens) / total_tokens) * 40
+            
+            # Component matching score (60% weight)
+            component_score = 0
+            if total_components > 0:
+                component_score = (matching_components / total_components) * 60
+            else:
+                # If no components found, use token score with higher weight
+                component_score = token_score * 1.5
+            
+            # Bonus for substring match
+            substring_bonus = 0
+            if normalized_extracted in normalized_property or normalized_property in normalized_extracted:
+                substring_bonus = 10
+            
+            address_confidence = min(100, int(token_score + component_score + substring_bonus))
+        
+        # Log for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"[Address Match] Property: '{prop.address}'")
+        logger.debug(f"[Address Match] Extracted: '{result.address}'")
+        logger.debug(f"[Address Match] Common tokens: {common_tokens}")
+        logger.debug(f"[Address Match] Extracted components: {extracted_components}")
+        logger.debug(f"[Address Match] Property components: {property_components}")
+        logger.debug(f"[Address Match] Matching components: {matching_components}/{total_components}")
+        logger.debug(f"[Address Match] Confidence: {address_confidence}%")
+        
+        # Only show warning if confidence is below 90%
+        if address_confidence < 90:
+            address_matches = False
+            address_warning = f"Address mismatch detected (confidence: {address_confidence}%). The extracted address may not match this property."
     
     return {
         **result.model_dump(),
         "address_matches": address_matches,
         "address_warning": address_warning,
+        "address_confidence": address_confidence,
         "property_address": prop.address,
     }
 

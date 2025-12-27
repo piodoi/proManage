@@ -28,24 +28,42 @@ export default function AddressWarningDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-slate-300">
-          <p>{pdfResult?.address_warning}</p>
           {pdfResult && (
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="text-slate-400">Property Address:</span>
-                <div className="text-slate-200">{pdfResult.property_address || 'N/A'}</div>
+            <>
+              <div className="space-y-2">
+                <p className="text-slate-200">
+                  {pdfResult.address_warning || 'Address mismatch detected. Please verify this is the correct property.'}
+                </p>
+                {pdfResult.address_confidence !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Confidence Score:</span>
+                    <span className={`font-medium ${
+                      pdfResult.address_confidence >= 70 ? 'text-emerald-400' :
+                      pdfResult.address_confidence >= 40 ? 'text-yellow-400' :
+                      'text-red-400'
+                    }`}>
+                      {pdfResult.address_confidence}%
+                    </span>
+                  </div>
+                )}
               </div>
-              <div>
-                <span className="text-slate-400">Extracted Address:</span>
-                <div className="text-slate-200">{pdfResult.address || 'N/A'}</div>
-              </div>
+              <div className="space-y-2 text-sm border-t border-slate-700 pt-4">
+                <div>
+                  <span className="text-slate-400">Property Address:</span>
+                  <div className="text-slate-200 mt-1">{pdfResult.property_address || 'N/A'}</div>
+                </div>
+                <div>
+                  <span className="text-slate-400">Extracted Address:</span>
+                  <div className="text-slate-200 mt-1">{pdfResult.address || 'N/A'}</div>
+                </div>
                 {pdfResult.amount !== undefined && pdfResult.amount !== null && (
                   <div>
                     <span className="text-slate-400">Amount:</span>
-                    <div className="text-slate-200">{pdfResult.amount.toFixed(2)} RON</div>
+                    <div className="text-slate-200 mt-1">{pdfResult.amount.toFixed(2)} RON</div>
                   </div>
                 )}
-            </div>
+              </div>
+            </>
           )}
         </div>
         <DialogFooter>

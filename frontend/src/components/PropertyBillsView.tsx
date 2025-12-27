@@ -53,26 +53,37 @@ export default function PropertyBillsView({
     
     try {
       // Parse due date - try to convert from various formats
-      let dueDate = result.due_date || new Date().toISOString().split('T')[0];
-      // If it's in DD/MM/YYYY or DD.MM.YYYY format, convert to YYYY-MM-DD
-      if (dueDate.includes('/') || dueDate.includes('.')) {
-        const parts = dueDate.split(/[\/\.]/);
-        if (parts.length === 3) {
-          dueDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      // Only use default if due_date is truly not available (null, undefined, or empty string)
+      let dueDate: string;
+      if (result.due_date && result.due_date.trim()) {
+        dueDate = result.due_date.trim();
+        // If it's in DD/MM/YYYY or DD.MM.YYYY format, convert to YYYY-MM-DD
+        if (dueDate.includes('/') || dueDate.includes('.')) {
+          const parts = dueDate.split(/[\/\.]/);
+          if (parts.length === 3) {
+            // Assume DD/MM/YYYY or DD.MM.YYYY format
+            dueDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
         }
+      } else {
+        // Only default to today if no due_date was extracted
+        dueDate = new Date().toISOString().split('T')[0];
       }
       
       // Use supplier from matched pattern, or provided supplier, or fallback
       const billSupplier = supplier || result.matched_pattern_supplier || result.matched_pattern_name || 'PDF';
       const extractionPatternId = patternId || result.matched_pattern_id;
       
+      // Description should just be the supplier name (or with bill number if available)
+      const description = result.bill_number 
+        ? `${billSupplier} - ${result.bill_number}`
+        : billSupplier;
+      
       const billData = {
         property_id: propertyId,
         renter_id: 'all', // Default to all/property
         bill_type: extractionPatternId ? 'utilities' : 'other',
-        description: result.bill_number 
-          ? `Bill from ${billSupplier} - ${result.bill_number}`
-          : `Bill from ${billSupplier}`,
+        description: description,
         amount: result.amount || 0,
         due_date: dueDate,
         iban: result.iban,

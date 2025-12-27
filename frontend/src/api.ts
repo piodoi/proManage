@@ -368,5 +368,6 @@ export type ExtractionResult = {
   raw_text?: string;
   address_matches?: boolean;
   address_warning?: string;
+  address_confidence?: number;
   property_address?: string;
 };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
+import { useAuth } from '../App';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Building2, Settings } from 'lucide-react';
