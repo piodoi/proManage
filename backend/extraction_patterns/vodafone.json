@@ -4,7 +4,7 @@
   "bill_type": "utilities",
   "vendor_hint": "Vodafone",
   "iban_pattern": "(?:Transfer\\s+bancar|IBAN|Cont)[\\s:]*RO\\d{2}\\s*[A-Z]{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}\\s*\\d{4}",
-  "amount_pattern": "Total de plată \\(Lei\\)\\s*([0-9.,]+)",
+  "amount_pattern": "TVA\\s+[0-9.,]+%\\s+[0-9.,]+[\\s\\n]+Total\\s+factură\\s+curentă[\\s\\n]+([0-9.,]+)",
   "address_pattern": "Adresa de instalare:[\\s:]*([^\\n]+)",
   "bill_number_pattern": "Seria și numărul facturii:[\\s]*([A-Z0-9\\-/]+)",
   "business_name_pattern": "Vodafone Romania S\\.A\\.",

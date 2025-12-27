@@ -161,6 +161,7 @@ class ExtractionPattern(BaseModel):
     priority: int = 0
     enabled: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None  # Timestamp when pattern was last updated from JSON file
 
 
 class ExtractionPatternCreate(BaseModel):

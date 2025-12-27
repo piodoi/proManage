@@ -1,0 +1,17 @@
+﻿=== Searching for Total factura curenta ===
+Context: 
+Abonamente ┼ƒi extraop┼úiuni
+85,32
+Reduceri
+-48,48
+Total factur─â curent─â f─âr─â TVA
+36,84
+TVA 21,00%
+7,74
+Total factur─â curent─â
+44,58
+Anti frauda
+Vodafone nu va solicita sub niciun
+motiv prin SMS, apel sau e-mail date
+confidentiale, reincarcarea de cart
+Pattern 1 matched: 44,58

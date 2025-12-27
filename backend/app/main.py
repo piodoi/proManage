@@ -91,17 +91,26 @@ app.include_router(auth_router)
 PAYMENT_SERVICE_COMMISSION = float(os.getenv("PAYMENT_SERVICE_COMMISSION", "0.02"))
 
 
-def load_extraction_patterns_from_json():
-    """Load extraction patterns from JSON files in the extraction_patterns directory."""
+def load_extraction_patterns_from_json(force_update: bool = False) -> list[dict]:
+    """Load extraction patterns from JSON files in the extraction_patterns directory.
+    
+    Returns:
+        List of dictionaries with 'action' ('created' or 'updated'), 'pattern_name', and 'file_name'
+    """
     patterns_dir = Path(__file__).parent.parent / "extraction_patterns"
     if not patterns_dir.exists():
-        return
+        return []
     
     import logging
+    import os
     logger = logging.getLogger(__name__)
+    results = []
     
     for json_file in patterns_dir.glob("*.json"):
         try:
+            # Get file modification time
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(json_file))
+            
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
@@ -114,6 +123,17 @@ def load_extraction_patterns_from_json():
                 if (supplier and pattern.supplier == supplier) or (name and pattern.name == name):
                     existing = pattern
                     break
+            
+            # Check if JSON file is newer than existing pattern
+            should_update = True
+            if existing and existing.updated_at and not force_update:
+                # Only update if JSON file is newer than the pattern's updated_at
+                if file_mtime <= existing.updated_at:
+                    should_update = False
+                    logger.debug(f"Skipping {json_file.name} - JSON file is not newer than existing pattern")
+            
+            if not should_update:
+                continue
             
             # Create or update pattern
             pattern_data = ExtractionPatternCreate(
@@ -174,8 +194,16 @@ def load_extraction_patterns_from_json():
                         pattern.priority = update_data.priority
                     if update_data.enabled is not None:
                         pattern.enabled = update_data.enabled
+                    # Set updated_at to file modification time
+                    pattern.updated_at = file_mtime
                     db.save_extraction_pattern(pattern)
-                    logger.info(f"Updated extraction pattern: {pattern.name}")
+                    logger.info(f"Updated extraction pattern: {pattern.name} (from {json_file.name})")
+                    results.append({
+                        'action': 'updated',
+                        'pattern_name': pattern.name,
+                        'file_name': json_file.name,
+                        'supplier': pattern.supplier,
+                    })
             else:
                 # Create new pattern
                 pattern = ExtractionPattern(
@@ -193,17 +221,46 @@ def load_extraction_patterns_from_json():
                     bank_accounts=pattern_data.bank_accounts,
                     priority=pattern_data.priority,
                     enabled=data.get('enabled', True),
+                    updated_at=file_mtime,
                 )
                 db.save_extraction_pattern(pattern)
-                logger.info(f"Loaded extraction pattern: {pattern.name}")
+                logger.info(f"Loaded extraction pattern: {pattern.name} (from {json_file.name})")
+                results.append({
+                    'action': 'created',
+                    'pattern_name': pattern.name,
+                    'file_name': json_file.name,
+                    'supplier': pattern.supplier,
+                })
         except Exception as e:
             logger.error(f"Error loading pattern from {json_file}: {e}")
+            results.append({
+                'action': 'error',
+                'pattern_name': data.get('name', 'Unknown'),
+                'file_name': json_file.name,
+                'error': str(e),
+            })
+    
+    return results
 
 
 @app.on_event("startup")
 async def startup_event():
     """Load extraction patterns from JSON files on startup."""
     load_extraction_patterns_from_json()
+
+
+@app.post("/admin/refresh-patterns")
+async def refresh_extraction_patterns(
+    force: bool = Query(False, description="Force update even if JSON is not newer"),
+    _: TokenData = Depends(require_admin),
+):
+    """Manually refresh extraction patterns from JSON files."""
+    results = load_extraction_patterns_from_json(force_update=force)
+    return {
+        "status": "success",
+        "updated_count": len([r for r in results if r['action'] in ('created', 'updated')]),
+        "results": results,
+    }
 
 
 @app.get("/health")

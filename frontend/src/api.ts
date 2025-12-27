@@ -44,6 +44,8 @@ export const api = {
     deleteUser: (token: string, id: string) => request<{ status: string }>(`/admin/users/${id}`, { method: 'DELETE', token }),
     updateSubscription: (token: string, id: string, tier: number, expires?: string) =>
       request<User>(`/admin/users/${id}/subscription?tier=${tier}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
+    refreshPatterns: (token: string, force?: boolean) =>
+      request<{ status: string; updated_count: number; results: Array<{ action: string; pattern_name: string; file_name: string; supplier?: string; error?: string }> }>(`/admin/refresh-patterns${force ? '?force=true' : ''}`, { method: 'POST', token }),
   },
 
   properties: {
