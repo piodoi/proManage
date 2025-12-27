@@ -16,6 +16,7 @@ type LandlordViewProps = {
 };
 
 export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
+  const { user } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
@@ -121,7 +122,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 onOpenChange={setShowPropertyForm}
                 onSuccess={loadData}
                 onError={setError}
-                canAddProperty={subscription ? subscription.can_add_property : false}
+                canAddProperty={user?.role === 'admin' || (subscription ? subscription.can_add_property : false)}
               />
             </div>
           </div>
@@ -180,7 +181,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   onOpenChange={setShowPropertyForm}
                   onSuccess={loadData}
                   onError={setError}
-                  canAddProperty={subscription ? subscription.can_add_property : false}
+                  canAddProperty={user?.role === 'admin' || (subscription ? subscription.can_add_property : false)}
                 />
               </div>
             </div>

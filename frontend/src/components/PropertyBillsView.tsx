@@ -71,12 +71,15 @@ export default function PropertyBillsView({
       }
       
       // Use supplier from matched pattern, or provided supplier, or fallback
-      const billSupplier = supplier || result.matched_pattern_supplier || result.matched_pattern_name || 'PDF';
+      // Priority: provided supplier > matched_pattern_supplier > 'PDF'
+      // Note: We don't use matched_pattern_name as it's the pattern name, not the supplier
+      const billSupplier = supplier || result.matched_pattern_supplier || 'PDF';
       const extractionPatternId = patternId || result.matched_pattern_id;
       
       // Description should just be the supplier name (or with bill number if available)
-      const description = result.bill_number 
-        ? `${billSupplier} - ${result.bill_number}`
+      // Only add bill number if it's a valid, non-empty string
+      const description = (result.bill_number && result.bill_number.trim() && result.bill_number.trim().length > 2)
+        ? `${billSupplier} - ${result.bill_number.trim()}`
         : billSupplier;
       
       const billData = {

@@ -1112,7 +1112,28 @@ async def parse_bill_pdf(
     
     pdf_bytes = await file.read()
     patterns = db.list_extraction_patterns()
-    result = parse_pdf_with_patterns(pdf_bytes, patterns)
+    import logging
+    import sys
+    logger = logging.getLogger(__name__)
+    # Ensure logger has a handler and is set to INFO level
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    print(f"[PDF Parse] Starting PDF parse for property {property_id}, checking {len(patterns)} patterns", flush=True)
+    logger.info(f"[PDF Parse] Starting PDF parse for property {property_id}, checking {len(patterns)} patterns")
+    result, pattern_to_update = parse_pdf_with_patterns(pdf_bytes, patterns)
+    
+    # Update pattern in database if bank accounts changed
+    if pattern_to_update:
+        pattern_to_update.bank_accounts = result.bank_accounts
+        db.save_extraction_pattern(pattern_to_update)
+        print(f"[PDF Parse] Updated pattern '{pattern_to_update.name}' with new bank accounts", flush=True)
+        logger.info(f"[PDF Parse] Updated pattern '{pattern_to_update.name}' with new bank accounts")
+    
+    print(f"[PDF Parse] Pattern match result: {result.matched_pattern_id} (supplier: {result.matched_pattern_supplier})", flush=True)
+    logger.info(f"[PDF Parse] Pattern match result: {result.matched_pattern_id} (supplier: {result.matched_pattern_supplier})")
     
     # Check if extracted address matches property address
     address_matches = True

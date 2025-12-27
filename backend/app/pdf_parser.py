@@ -1,11 +1,18 @@
 import re
-from typing import Optional
+from typing import Optional, Tuple
 import fitz
 import logging
+import sys
 
 from app.models import ExtractionPattern, ExtractionResult
 
 logger = logging.getLogger(__name__)
+# Ensure logger has a handler
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -23,7 +30,14 @@ def apply_pattern(text: str, pattern: Optional[str]) -> Optional[str]:
     try:
         match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         if match:
-            return match.group(1) if match.groups() else match.group(0)
+            result = match.group(1) if match.groups() else match.group(0)
+            # Clean up the result
+            if result:
+                result = result.strip()
+                # For bill numbers, filter out very short results that are likely false matches
+                if len(result) < 3:
+                    return None
+            return result
     except re.error:
         pass
     return None
@@ -68,7 +82,11 @@ def extract_bill_number(text: str, custom_pattern: Optional[str] = None) -> Opti
     if custom_pattern:
         result = apply_pattern(text, custom_pattern)
         if result:
-            return result
+            # Clean up the result - remove leading/trailing whitespace and ensure it's meaningful
+            cleaned = result.strip()
+            # Filter out very short results that are likely false matches (like "re", "nr", etc.)
+            if len(cleaned) >= 3:  # At least 3 characters for a valid bill number
+                return cleaned
     bill_patterns = [
         r'(?:nr\.?\s*factura|numar\s*factura|invoice\s*(?:no|number)|bill\s*(?:no|number))[\s:]*([A-Z0-9\-/]+)',
         r'(?:factura|invoice|bill)[\s#:]*([A-Z0-9\-/]+)',
@@ -76,7 +94,10 @@ def extract_bill_number(text: str, custom_pattern: Optional[str] = None) -> Opti
     for pattern in bill_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            return match.group(1)
+            result = match.group(1).strip()
+            # Filter out very short results
+            if len(result) >= 3:
+                return result
     return None
 
 
@@ -144,10 +165,24 @@ def extract_business_name(text: str, custom_pattern: Optional[str] = None) -> Op
     return None
 
 
-def validate_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str]]) -> bool:
-    """Validate that all expected bank accounts (IBANs) are present in the text."""
+def sync_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str]]) -> tuple[bool, list[dict[str, str]]]:
+    """
+    Sync bank accounts: keep IBANs found in PDF, remove missing ones, add new ones.
+    Returns (is_valid, updated_bank_accounts_list)
+    """
     if not expected_bank_accounts:
-        return True  # No validation needed if no bank accounts specified
+        # No existing bank accounts, extract all from PDF
+        text_ibans = set()
+        iban_matches = re.findall(r'RO\d{2}\s*[A-Z0-9]{4,30}', text, re.IGNORECASE)
+        for iban in iban_matches:
+            normalized = re.sub(r'\s+', '', iban.upper())
+            text_ibans.add(normalized)
+        
+        new_accounts = [{"bank": "Unknown", "iban": iban} for iban in text_ibans]
+        if new_accounts:
+            print(f"[Bank Sync] Found {len(new_accounts)} new IBANs in PDF (no existing pattern)", flush=True)
+            logger.info(f"[Bank Sync] Found {len(new_accounts)} new IBANs in PDF")
+        return (True, new_accounts)
     
     # Normalize IBANs for comparison (remove spaces)
     text_ibans = set()
@@ -156,15 +191,83 @@ def validate_bank_accounts(text: str, expected_bank_accounts: list[dict[str, str
         normalized = re.sub(r'\s+', '', iban.upper())
         text_ibans.add(normalized)
     
-    # Check if all expected IBANs are present
-    for bank_account in expected_bank_accounts:
-        expected_iban = bank_account.get('iban', '')
-        if expected_iban:
-            normalized_expected = re.sub(r'\s+', '', expected_iban.upper())
-            if normalized_expected not in text_ibans:
-                return False  # Missing expected IBAN
+    print(f"[Bank Sync] Found {len(text_ibans)} IBANs in PDF", flush=True)
+    logger.info(f"[Bank Sync] Found {len(text_ibans)} IBANs in PDF")
     
-    return True  # All IBANs found
+    # Create a map of normalized IBAN -> bank_account for quick lookup
+    iban_to_account = {}
+    for account in expected_bank_accounts:
+        iban = account.get('iban', '')
+        if iban:
+            normalized = re.sub(r'\s+', '', iban.upper())
+            iban_to_account[normalized] = account
+    
+    # Keep accounts whose IBANs are found in PDF
+    updated_accounts = []
+    removed_accounts = []
+    for account in expected_bank_accounts:
+        iban = account.get('iban', '')
+        if iban:
+            normalized = re.sub(r'\s+', '', iban.upper())
+            if normalized in text_ibans:
+                updated_accounts.append(account)
+            else:
+                removed_accounts.append(f"{account.get('bank', 'Unknown')}: {normalized}")
+    
+    # Add new IBANs from PDF that aren't in the pattern
+    new_accounts = []
+    for iban in text_ibans:
+        if iban not in iban_to_account:
+            # Try to extract bank name from context around the IBAN
+            bank_name = "Unknown"
+            # Look for bank name before the IBAN (common pattern: "Bank Name\nIBAN")
+            iban_pos = text.upper().find(iban)
+            if iban_pos > 0:
+                # Look backwards for bank name (common Romanian banks)
+                context_before = text[max(0, iban_pos-100):iban_pos].upper()
+                bank_keywords = {
+                    'CITI': 'Citibank',
+                    'INGB': 'ING Bank',
+                    'BRDE': 'BRD',
+                    'BTRL': 'Banca Transilvania',
+                    'RNCB': 'BCR',
+                    'BUCU': 'Alpha Bank',
+                    'BACX': 'UniCredit Bank',
+                    'RZBR': 'Raiffeisen Bank',
+                    'TREZ': 'Trezorerie',
+                    'PIRB': 'First Bank',
+                    'CECE': 'CEC Bank',
+                    'UGBI': 'Garanti Bank',
+                }
+                for code, name in bank_keywords.items():
+                    if code in iban:
+                        bank_name = name
+                        break
+                    # Also check if bank name appears in context
+                    if name.upper().replace(' ', '') in context_before or name.upper() in context_before:
+                        bank_name = name
+                        break
+            
+            new_accounts.append({"bank": bank_name, "iban": iban})
+    
+    # Combine kept and new accounts
+    final_accounts = updated_accounts + new_accounts
+    
+    if removed_accounts:
+        print(f"[Bank Sync] Removed {len(removed_accounts)} IBANs not found in PDF: {removed_accounts[:3]}...", flush=True)
+        logger.info(f"[Bank Sync] Removed {len(removed_accounts)} IBANs not found in PDF")
+    
+    if new_accounts:
+        print(f"[Bank Sync] Added {len(new_accounts)} new IBANs from PDF", flush=True)
+        logger.info(f"[Bank Sync] Added {len(new_accounts)} new IBANs from PDF")
+    
+    if not removed_accounts and not new_accounts:
+        print(f"[Bank Sync] ✓ All {len(expected_bank_accounts)} IBANs match, no changes needed", flush=True)
+        logger.info(f"[Bank Sync] ✓ All {len(expected_bank_accounts)} IBANs match, no changes needed")
+    
+    # Valid if we have at least one account (either kept or new)
+    is_valid = len(final_accounts) > 0
+    return (is_valid, final_accounts)
 
 
 def extract_addresses(text: str, custom_pattern: Optional[str] = None) -> list[str]:
@@ -209,31 +312,36 @@ def check_vendor_hint(text: str, vendor_hint: Optional[str]) -> bool:
     vendor_hint_lower = vendor_hint.lower().strip()
     text_lower = text.lower()
     
-    # Log for debugging
-    logger.debug(f"[Vendor Hint Check] Looking for '{vendor_hint}' in text (first 200 chars: {text[:200]})")
+    # Log for debugging (using print and logger)
+    print(f"[Vendor Hint Check] Looking for '{vendor_hint}' in text (first 200 chars: {text[:200]})", flush=True)
+    logger.info(f"[Vendor Hint Check] Looking for '{vendor_hint}' in text (first 200 chars: {text[:200]})")
     
     # First try simple substring match (most common case)
     if vendor_hint_lower in text_lower:
-        logger.debug(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (substring match)")
+        print(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (substring match)", flush=True)
+        logger.info(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (substring match)")
         return True
     
     # Fallback to regex if vendor_hint contains special characters
     try:
         match = bool(re.search(re.escape(vendor_hint), text, re.IGNORECASE))
         if match:
-            logger.debug(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (regex match)")
+            print(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (regex match)", flush=True)
+            logger.info(f"[Vendor Hint Check] ✓ Found '{vendor_hint}' in text (regex match)")
         else:
-            logger.debug(f"[Vendor Hint Check] ✗ Did not find '{vendor_hint}' in text")
+            print(f"[Vendor Hint Check] ✗ Did not find '{vendor_hint}' in text", flush=True)
+            logger.info(f"[Vendor Hint Check] ✗ Did not find '{vendor_hint}' in text")
         return match
     except re.error:
-        logger.debug(f"[Vendor Hint Check] ✗ Regex error for '{vendor_hint}'")
+        print(f"[Vendor Hint Check] ✗ Regex error for '{vendor_hint}'", flush=True)
+        logger.info(f"[Vendor Hint Check] ✗ Regex error for '{vendor_hint}'")
         return False
 
 
 def parse_pdf_with_patterns(
     pdf_bytes: bytes,
     patterns: list[ExtractionPattern],
-) -> ExtractionResult:
+) -> Tuple[ExtractionResult, Optional[ExtractionPattern]]:
     text = extract_text_from_pdf(pdf_bytes)
     sorted_patterns = sorted(
         [p for p in patterns if p.enabled],
@@ -241,17 +349,23 @@ def parse_pdf_with_patterns(
         reverse=True,
     )
     matched_pattern: Optional[ExtractionPattern] = None
-    logger.debug(f"[PDF Parser] Checking {len(sorted_patterns)} patterns for vendor hints")
-    logger.debug(f"[PDF Parser] Text preview (first 500 chars): {text[:500]}")
+    print(f"[PDF Parser] Checking {len(sorted_patterns)} patterns for vendor hints", flush=True)
+    logger.info(f"[PDF Parser] Checking {len(sorted_patterns)} patterns for vendor hints")
+    print(f"[PDF Parser] Text preview (first 500 chars): {text[:500]}", flush=True)
+    logger.info(f"[PDF Parser] Text preview (first 500 chars): {text[:500]}")
     for pattern in sorted_patterns:
-        logger.debug(f"[PDF Parser] Checking pattern: {pattern.name} (vendor_hint: '{pattern.vendor_hint}', supplier: '{pattern.supplier}')")
+        print(f"[PDF Parser] Checking pattern: {pattern.name} (vendor_hint: '{pattern.vendor_hint}', supplier: '{pattern.supplier}')", flush=True)
+        logger.info(f"[PDF Parser] Checking pattern: {pattern.name} (vendor_hint: '{pattern.vendor_hint}', supplier: '{pattern.supplier}')")
         if check_vendor_hint(text, pattern.vendor_hint):
             matched_pattern = pattern
+            print(f"[PDF Parser] ✓ Matched pattern: {pattern.name} (supplier: {pattern.supplier})", flush=True)
             logger.info(f"[PDF Parser] ✓ Matched pattern: {pattern.name} (supplier: {pattern.supplier})")
             break
         else:
-            logger.debug(f"[PDF Parser] ✗ Pattern '{pattern.name}' did not match")
+            print(f"[PDF Parser] ✗ Pattern '{pattern.name}' did not match", flush=True)
+            logger.info(f"[PDF Parser] ✗ Pattern '{pattern.name}' did not match")
     if not matched_pattern:
+        print(f"[PDF Parser] ✗ No pattern matched. Text preview (first 500 chars): {text[:500]}", flush=True)
         logger.warning(f"[PDF Parser] ✗ No pattern matched. Text preview (first 500 chars): {text[:500]}")
     iban = extract_iban(
         text,
@@ -278,14 +392,29 @@ def parse_pdf_with_patterns(
         matched_pattern.business_name_pattern if matched_pattern else None,
     )
     
-    # Validate bank accounts if pattern has them defined
+    # Sync bank accounts if pattern has them defined
     is_valid = True
     bank_accounts_list = []
+    pattern_needs_update = False
     if matched_pattern and matched_pattern.bank_accounts:
-        is_valid = validate_bank_accounts(text, matched_pattern.bank_accounts)
-        if is_valid:
-            bank_accounts_list = matched_pattern.bank_accounts
-        # If validation fails, matched_pattern_id and matched_pattern_name will be set to None
+        print(f"[PDF Parser] Syncing bank accounts for pattern '{matched_pattern.name}'", flush=True)
+        logger.info(f"[PDF Parser] Syncing bank accounts for pattern '{matched_pattern.name}'")
+        is_valid, bank_accounts_list = sync_bank_accounts(text, matched_pattern.bank_accounts)
+        print(f"[PDF Parser] Bank sync result: {is_valid}, {len(bank_accounts_list)} accounts", flush=True)
+        logger.info(f"[PDF Parser] Bank sync result: {is_valid}, {len(bank_accounts_list)} accounts")
+        
+        # Check if bank_accounts_list differs from pattern's bank_accounts
+        if bank_accounts_list != matched_pattern.bank_accounts:
+            pattern_needs_update = True
+            print(f"[PDF Parser] Pattern bank accounts need update (was {len(matched_pattern.bank_accounts)}, now {len(bank_accounts_list)})", flush=True)
+            logger.info(f"[PDF Parser] Pattern bank accounts need update")
+    elif matched_pattern:
+        # No bank accounts in pattern, but we found some in PDF - add them
+        is_valid, bank_accounts_list = sync_bank_accounts(text, [])
+        if bank_accounts_list:
+            pattern_needs_update = True
+            print(f"[PDF Parser] Adding {len(bank_accounts_list)} new bank accounts to pattern", flush=True)
+            logger.info(f"[PDF Parser] Adding {len(bank_accounts_list)} new bank accounts to pattern")
     
     all_addresses = extract_addresses(
         text,
@@ -293,19 +422,28 @@ def parse_pdf_with_patterns(
     )
     consumption_location = extract_consumption_location(text)
     address = consumption_location or (all_addresses[0] if all_addresses else None)
-    return ExtractionResult(
-        iban=iban,
-        contract_id=contract_id,
-        bill_number=bill_number,
-        amount=amount,
-        due_date=due_date,
-        address=address,
-        consumption_location=consumption_location,
-        business_name=business_name,
-        all_addresses=all_addresses,
-        bank_accounts=bank_accounts_list,
-        matched_pattern_id=matched_pattern.id if matched_pattern and is_valid else None,
-        matched_pattern_name=matched_pattern.name if matched_pattern and is_valid else None,
-        matched_pattern_supplier=matched_pattern.supplier if matched_pattern and is_valid else None,
-        raw_text=text,
+    
+    # Return the pattern that needs updating (if bank accounts changed)
+    pattern_to_update = None
+    if pattern_needs_update and matched_pattern:
+        pattern_to_update = matched_pattern
+    
+    return (
+        ExtractionResult(
+            iban=iban,
+            contract_id=contract_id,
+            bill_number=bill_number,
+            amount=amount,
+            due_date=due_date,
+            address=address,
+            consumption_location=consumption_location,
+            business_name=business_name,
+            all_addresses=all_addresses,
+            bank_accounts=bank_accounts_list,
+            matched_pattern_id=matched_pattern.id if matched_pattern and is_valid else None,
+            matched_pattern_name=matched_pattern.name if matched_pattern and is_valid else None,
+            matched_pattern_supplier=matched_pattern.supplier if matched_pattern and is_valid else None,
+            raw_text=text,
+        ),
+        pattern_to_update
     )
