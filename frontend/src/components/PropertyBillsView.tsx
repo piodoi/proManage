@@ -42,7 +42,15 @@ export default function PropertyBillsView({
   const [showPatternSelection, setShowPatternSelection] = useState(false);
 
   const handleError = (err: unknown) => {
-    const message = err instanceof Error ? err.message : 'An error occurred';
+    console.error('[PropertyBillsView] Error:', err);
+    let message = 'An error occurred';
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (typeof err === 'string') {
+      message = err;
+    } else if (err && typeof err === 'object' && 'detail' in err) {
+      message = String((err as any).detail);
+    }
     if (onError) {
       onError(message);
     }
@@ -243,19 +251,30 @@ export default function PropertyBillsView({
               onClick={async () => {
                 if (!token) return;
                 try {
-                  // TODO: Implement utilities sync endpoint
-                  console.log('[Bills] Sync utilities for property:', propertyId);
-                  if (onError) {
-                    onError('Utilities sync functionality coming soon');
+                  console.log('[PropertyBillsView] Starting supplier sync for property:', propertyId);
+                  const result = await api.suppliers.sync(token, propertyId);
+                  console.log('[PropertyBillsView] Sync result:', result);
+                  if (result.errors && result.errors.length > 0) {
+                    handleError(result.errors.join(', '));
+                  } else if (result.status === 'no_suppliers') {
+                    handleError(result.message || 'No suppliers with API support configured');
+                  } else {
+                    if (onBillsChange) {
+                      onBillsChange();
+                    }
+                    if (onError) {
+                      onError(`Synced ${result.bills_created} bill(s) from suppliers`);
+                    }
                   }
                 } catch (err) {
+                  console.error('[PropertyBillsView] Sync error:', err);
                   handleError(err);
                 }
               }}
               className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
             >
               <Settings className="w-4 h-4 mr-1" />
-              Sync Utilities
+              Sync Bills
             </Button>
             <Dialog open={showBillForm} onOpenChange={(open) => {
               setShowBillForm(open);

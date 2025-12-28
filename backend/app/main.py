@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -1089,6 +1089,207 @@ async def get_ebloc_config(current_user: TokenData = Depends(require_landlord)):
         "password": password,
         "configured": True,
     }
+
+
+@app.post("/suppliers/sync/{property_id}")
+async def sync_supplier_bills(property_id: str, current_user: TokenData = Depends(require_landlord)):
+    """
+    Sync bills from all suppliers with API support configured for this property.
+    """
+    import logging
+    import asyncio
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"[Suppliers Sync] Starting sync for property {property_id}, user {current_user.user_id}")
+        
+        prop = db.get_property(property_id)
+        if not prop:
+            logger.error(f"[Suppliers Sync] Property {property_id} not found")
+            raise HTTPException(status_code=404, detail="Property not found")
+        if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+            logger.error(f"[Suppliers Sync] Access denied for property {property_id}, user {current_user.user_id}")
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get all property suppliers with API support and credentials
+        logger.info(f"[Suppliers Sync] Getting property suppliers for property {property_id}")
+        property_suppliers = db.list_property_suppliers(property_id)
+        logger.info(f"[Suppliers Sync] Found {len(property_suppliers)} property supplier(s)")
+        
+        suppliers_to_sync = []
+        for ps in property_suppliers:
+            supplier = db.get_supplier(ps.supplier_id)
+            if supplier:
+                logger.debug(f"[Suppliers Sync] Checking supplier {supplier.name}: has_api={supplier.has_api}, has_username={bool(ps.username)}, has_password={bool(ps.password_hash)}")
+                if supplier.has_api and ps.username and ps.password_hash:
+                    suppliers_to_sync.append((supplier, ps))
+        
+        logger.info(f"[Suppliers Sync] {len(suppliers_to_sync)} supplier(s) ready to sync")
+        
+        if not suppliers_to_sync:
+            logger.warning(f"[Suppliers Sync] No suppliers with API support and credentials for property {property_id}")
+            return {
+                "status": "no_suppliers",
+                "message": "No suppliers with API support and credentials configured for this property"
+            }
+        
+        # Find extraction pattern for supplier matching
+        all_patterns = db.list_extraction_patterns()
+        logger.debug(f"[Suppliers Sync] Loaded {len(all_patterns)} extraction patterns")
+        
+        bills_created = 0
+        errors = []
+        
+        for supplier, property_supplier in suppliers_to_sync:
+            try:
+                logger.info(f"[Suppliers Sync] Syncing {supplier.name} for property {property_id}")
+                # Decrypt credentials
+                username = decrypt_password(property_supplier.username)
+                password = decrypt_password(property_supplier.password_hash)
+                logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
+                
+                # Sync based on supplier name (run sync in thread pool since API is synchronous)
+                if supplier.name.lower() == "hidroelectrica":
+                    logger.info(f"[Suppliers Sync] Starting Hidroelectrica sync")
+                    bills_count = await asyncio.to_thread(
+                        _sync_hidroelectrica,
+                        property_id=property_id,
+                        username=username,
+                        password=password,
+                        supplier=supplier,
+                        patterns=all_patterns,
+                        logger=logger
+                    )
+                    bills_created += bills_count
+                    logger.info(f"[Suppliers Sync] Hidroelectrica sync completed: {bills_count} bill(s) created")
+                else:
+                    logger.warning(f"[Suppliers Sync] Supplier {supplier.name} API integration not yet implemented")
+                    errors.append(f"{supplier.name}: API integration not yet implemented")
+            
+            except Exception as e:
+                error_msg = f"Error syncing {supplier.name}: {str(e)}"
+                logger.error(f"[Suppliers Sync] {error_msg}", exc_info=True)
+                errors.append(error_msg)
+        
+        result = {
+            "status": "success",
+            "property_id": property_id,
+            "bills_created": bills_created,
+            "errors": errors if errors else None
+        }
+        logger.info(f"[Suppliers Sync] Sync completed for property {property_id}: {bills_created} bill(s) created, {len(errors)} error(s)")
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Suppliers Sync] Unexpected error in sync endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error syncing suppliers: {str(e)}")
+
+
+def _sync_hidroelectrica(
+    property_id: str,
+    username: str,
+    password: str,
+    supplier: Supplier,
+    patterns: List[ExtractionPattern],
+    logger: logging.Logger
+) -> int:
+    """Sync bills from Hidroelectrica API"""
+    from app.hidroelectrica_api import HidroelectricaAPI, HidroelectricaBill
+    
+    logger.info(f"[Hidroelectrica Sync] Starting sync for property {property_id}, username: {username}")
+    
+    # Find extraction pattern for Hidroelectrica
+    hidro_pattern = None
+    for pattern in patterns:
+        if pattern.supplier and pattern.supplier.lower() == "hidroelectrica":
+            hidro_pattern = pattern
+            logger.debug(f"[Hidroelectrica Sync] Found extraction pattern: {hidro_pattern.id}")
+            break
+    
+    if not hidro_pattern:
+        logger.warning(f"[Hidroelectrica Sync] No extraction pattern found for Hidroelectrica")
+    
+    api = HidroelectricaAPI(username, password)
+    bills_created = 0
+    
+    try:
+        logger.info(f"[Hidroelectrica Sync] Attempting login...")
+        api.login()
+        logger.info(f"[Hidroelectrica Sync] Login successful, fetching bills...")
+        bills = api.get_all_bills()
+        
+        logger.info(f"[Hidroelectrica Sync] Found {len(bills)} bill(s) for property {property_id}")
+        
+        for hidro_bill in bills:
+            # Check if bill already exists (by bill_number or amount + due_date)
+            existing_bills = db.list_bills(property_id=property_id)
+            
+            # Find existing bill by bill_number
+            existing = None
+            if hidro_bill.bill_number:
+                existing = next(
+                    (b for b in existing_bills 
+                     if b.bill_number == hidro_bill.bill_number 
+                     and b.bill_type == BillType.UTILITIES),
+                    None
+                )
+            
+            # If not found by bill_number, try by amount and due_date (within 5 days)
+            if not existing and hidro_bill.due_date:
+                for b in existing_bills:
+                    if (b.bill_type == BillType.UTILITIES and 
+                        b.description == supplier.name and
+                        abs(b.amount - hidro_bill.amount) < 0.01):
+                        # Check if due_date is close (within 5 days)
+                        if b.due_date:
+                            days_diff = abs((b.due_date - hidro_bill.due_date).days)
+                            if days_diff <= 5:
+                                existing = b
+                                break
+            
+            if existing:
+                logger.debug(f"[Hidroelectrica Sync] Bill {hidro_bill.bill_number} already exists, skipping")
+                continue
+            
+            # Determine due date
+            due_date = hidro_bill.due_date if hidro_bill.due_date else datetime.utcnow()
+            
+            # Determine bill status
+            bill_status = BillStatus.PENDING
+            if due_date < datetime.utcnow():
+                bill_status = BillStatus.OVERDUE
+            
+            logger.debug(f"[Hidroelectrica Sync] Creating bill: number={hidro_bill.bill_number}, amount={hidro_bill.amount}, due_date={due_date}")
+            
+            # Create bill
+            bill = Bill(
+                property_id=property_id,
+                renter_id=None,  # Applies to all renters
+                bill_type=BillType.UTILITIES,
+                description=supplier.name,
+                amount=hidro_bill.amount,
+                due_date=due_date,
+                iban=hidro_bill.iban,
+                bill_number=hidro_bill.bill_number,
+                extraction_pattern_id=hidro_pattern.id if hidro_pattern else None,
+                contract_id=hidro_bill.account_number,  # Use account number as contract ID
+                status=bill_status
+            )
+            db.save_bill(bill)
+            bills_created += 1
+            logger.info(f"[Hidroelectrica Sync] Created bill {bill.id} for property {property_id}: {supplier.name} - {hidro_bill.amount} RON")
+    
+    except Exception as e:
+        logger.error(f"[Hidroelectrica Sync] Error during sync: {e}", exc_info=True)
+        raise
+    finally:
+        api.close()
+        logger.debug(f"[Hidroelectrica Sync] API connection closed")
+    
+    logger.info(f"[Hidroelectrica Sync] Sync completed: {bills_created} bill(s) created")
+    return bills_created
 
 
 @app.post("/ebloc/sync/{property_id}")

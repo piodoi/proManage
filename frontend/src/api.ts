@@ -14,16 +14,31 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || 'Request failed');
+  
+  try {
+    console.log(`[API] ${method} ${endpoint}`);
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      const errorMsg = error.detail || error.message || `HTTP ${response.status}: ${response.statusText}`;
+      console.error(`[API] Error ${method} ${endpoint}:`, errorMsg, error);
+      throw new Error(errorMsg);
+    }
+    
+    return response.json();
+  } catch (err) {
+    if (err instanceof Error) {
+      console.error(`[API] Exception ${method} ${endpoint}:`, err.message, err);
+      throw err;
+    }
+    console.error(`[API] Unexpected error ${method} ${endpoint}:`, err);
+    throw new Error(`Unexpected error: ${String(err)}`);
   }
-  return response.json();
 }
 
 export const api = {
@@ -62,6 +77,7 @@ export const api = {
     addToProperty: (token: string, propertyId: string, data: PropertySupplierCreate) => request<PropertySupplier>('/properties/' + propertyId + '/suppliers', { method: 'POST', body: data, token }),
     updateForProperty: (token: string, propertyId: string, propertySupplierId: string, data: PropertySupplierUpdate) => request<PropertySupplier>(`/properties/${propertyId}/suppliers/${propertySupplierId}`, { method: 'PUT', body: data, token }),
     removeFromProperty: (token: string, propertyId: string, propertySupplierId: string) => request<{ status: string }>(`/properties/${propertyId}/suppliers/${propertySupplierId}`, { method: 'DELETE', token }),
+    sync: (token: string, propertyId: string) => request<{ status: string; property_id: string; bills_created: number; errors?: string[]; message?: string }>(`/suppliers/sync/${propertyId}`, { method: 'POST', token }),
   },
 
 
