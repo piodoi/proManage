@@ -20,7 +20,7 @@ from app.models import (
     RenterCreate, RenterUpdate, BillCreate, BillUpdate, PaymentCreate,
     EmailConfigCreate, EblocConfigCreate, TokenData,
     ExtractionPatternCreate, ExtractionPatternUpdate,
-    SupplierCreate, PropertySupplierCreate, PropertySupplierUpdate,
+    SupplierCreate, SupplierUpdate, PropertySupplierCreate, PropertySupplierUpdate,
 )
 from app.auth import (
     require_auth, require_admin, require_landlord,
@@ -462,10 +462,9 @@ def initialize_suppliers():
     for supplier_data in pattern_suppliers.values():
         existing = db.get_supplier_by_name(supplier_data["name"])
         if existing:
-            # Update existing supplier if API status changed
-            if existing.has_api != supplier_data["has_api"]:
-                existing.has_api = supplier_data["has_api"]
-                db.save_supplier(existing)
+            # Don't overwrite existing supplier's has_api - preserve manual changes
+            # Only create new suppliers with the default has_api value
+            pass
         else:
             # Create new supplier
             supplier = Supplier(**supplier_data)
@@ -479,6 +478,127 @@ async def list_suppliers(current_user: TokenData = Depends(require_landlord)):
     initialize_suppliers()
     suppliers = db.list_suppliers()
     return suppliers
+
+
+@app.get("/admin/suppliers")
+async def admin_list_suppliers(current_user: TokenData = Depends(require_admin)):
+    """List all suppliers (admin only)"""
+    # Initialize suppliers to ensure new ones from patterns are added, but don't overwrite manual changes
+    initialize_suppliers()
+    suppliers = db.list_suppliers()
+    return suppliers
+
+
+@app.post("/admin/suppliers", status_code=status.HTTP_201_CREATED)
+async def admin_create_supplier(
+    data: SupplierCreate, current_user: TokenData = Depends(require_admin)
+):
+    """Create a new supplier (admin only)"""
+    # Check if supplier with same name already exists
+    existing = db.get_supplier_by_name(data.name)
+    if existing:
+        raise HTTPException(status_code=400, detail="Supplier with this name already exists")
+    
+    supplier = Supplier(
+        name=data.name,
+        has_api=data.has_api,
+        bill_type=data.bill_type,
+        extraction_pattern_supplier=data.extraction_pattern_supplier,
+    )
+    db.save_supplier(supplier)
+    return supplier
+
+
+@app.put("/admin/suppliers/{supplier_id}")
+async def admin_update_supplier(
+    supplier_id: str, data: SupplierUpdate, current_user: TokenData = Depends(require_admin)
+):
+    """Update a supplier (admin only)"""
+    supplier = db.get_supplier(supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    
+    # Check name uniqueness if name is being changed
+    if data.name is not None and data.name != supplier.name:
+        existing = db.get_supplier_by_name(data.name)
+        if existing:
+            raise HTTPException(status_code=400, detail="Supplier with this name already exists")
+        supplier.name = data.name
+    
+    if data.has_api is not None:
+        supplier.has_api = data.has_api
+    if data.bill_type is not None:
+        supplier.bill_type = data.bill_type
+    if data.extraction_pattern_supplier is not None:
+        supplier.extraction_pattern_supplier = data.extraction_pattern_supplier
+    
+    db.save_supplier(supplier)
+    return supplier
+
+
+@app.get("/admin/suppliers/{supplier_id}/properties")
+async def admin_get_supplier_properties(
+    supplier_id: str, current_user: TokenData = Depends(require_admin)
+):
+    """Get all properties using this supplier (admin only)"""
+    supplier = db.get_supplier(supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    
+    property_suppliers = db.list_property_suppliers_by_supplier(supplier_id)
+    result = []
+    for ps in property_suppliers:
+        prop = db.get_property(ps.property_id)
+        if prop:
+            result.append({
+                "property_id": prop.id,
+                "property_name": prop.name,
+                "property_address": prop.address,
+                "property_supplier_id": ps.id,
+            })
+    return result
+
+
+@app.delete("/admin/suppliers/{supplier_id}")
+async def admin_delete_supplier(
+    supplier_id: str,
+    remove_property_references: bool = Query(False, description="Also remove all property-supplier references"),
+    current_user: TokenData = Depends(require_admin)
+):
+    """Delete a supplier (admin only)"""
+    supplier = db.get_supplier(supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    
+    # Check if supplier is used by any properties
+    property_suppliers = db.list_property_suppliers_by_supplier(supplier_id)
+    
+    if property_suppliers and not remove_property_references:
+        # Return information about connected properties without deleting
+        properties_info = []
+        for ps in property_suppliers:
+            prop = db.get_property(ps.property_id)
+            if prop:
+                properties_info.append({
+                    "property_id": prop.id,
+                    "property_name": prop.name,
+                    "property_address": prop.address,
+                    "property_supplier_id": ps.id,
+                })
+        # Return 400 with a message - frontend should call getProperties separately to show them
+        raise HTTPException(
+            status_code=400,
+            detail=f"Supplier is used by {len(property_suppliers)} property/properties. Use getProperties endpoint to see details, or set remove_property_references=true to delete them as well."
+        )
+    
+    # Remove property-supplier references if requested
+    if remove_property_references:
+        for ps in property_suppliers:
+            db.delete_property_supplier(ps.id)
+    
+    # Delete the supplier
+    db.delete_supplier(supplier_id)
+    return {"status": "deleted"}
 
 
 @app.get("/properties/{property_id}/suppliers")

@@ -332,6 +332,13 @@ class SupplierCreate(BaseModel):
     extraction_pattern_supplier: Optional[str] = None
 
 
+class SupplierUpdate(BaseModel):
+    name: Optional[str] = None
+    has_api: Optional[bool] = None
+    bill_type: Optional[BillType] = None
+    extraction_pattern_supplier: Optional[str] = None
+
+
 class PropertySupplierCreate(BaseModel):
     supplier_id: str
     username: Optional[str] = None

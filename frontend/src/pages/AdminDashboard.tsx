@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-import { api, User } from '../api';
+import { api, User, Supplier, SupplierCreate, SupplierUpdate } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, RefreshCw, Wrench } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, RefreshCw, Wrench, Package } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
@@ -31,9 +31,24 @@ export default function AdminDashboard() {
   const [refreshingPatterns, setRefreshingPatterns] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [refreshResults, setRefreshResults] = useState<Array<{ action: string; pattern_name: string; file_name: string; supplier?: string; error?: string }>>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [showSupplierCreate, setShowSupplierCreate] = useState(false);
+  const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
+  const [deleteSupplier, setDeleteSupplier] = useState<Supplier | null>(null);
+  const [supplierProperties, setSupplierProperties] = useState<Array<{ property_id: string; property_name: string; property_address: string; property_supplier_id: string }>>([]);
+  const [supplierForm, setSupplierForm] = useState<SupplierCreate>({
+    name: '',
+    has_api: false,
+    bill_type: 'utilities',
+    extraction_pattern_supplier: undefined,
+  });
 
   useEffect(() => {
     loadUsers();
+    if (token) {
+      loadSuppliers();
+    }
   }, [token, currentPage]);
 
   const loadUsers = async () => {
@@ -111,6 +126,89 @@ export default function AdminDashboard() {
     setEditUser(user);
     setFormData({ email: user.email, name: user.name, role: user.role, password: '' });
   };
+
+  const loadSuppliers = async () => {
+    if (!token) return;
+    setLoadingSuppliers(true);
+    try {
+      const data = await api.admin.suppliers.list(token);
+      setSuppliers(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load suppliers');
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
+  const handleSupplierCreate = async () => {
+    if (!token) return;
+    try {
+      await api.admin.suppliers.create(token, supplierForm);
+      setShowSupplierCreate(false);
+      setSupplierForm({ name: '', has_api: false, bill_type: 'utilities', extraction_pattern_supplier: undefined });
+      loadSuppliers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create supplier');
+    }
+  };
+
+  const handleSupplierUpdate = async () => {
+    if (!token || !editSupplier) return;
+    try {
+      const updateData: SupplierUpdate = {
+        name: supplierForm.name || undefined,
+        has_api: supplierForm.has_api,
+        bill_type: supplierForm.bill_type,
+        extraction_pattern_supplier: supplierForm.extraction_pattern_supplier || undefined,
+      };
+      await api.admin.suppliers.update(token, editSupplier.id, updateData);
+      setEditSupplier(null);
+      setSupplierForm({ name: '', has_api: false, bill_type: 'utilities', extraction_pattern_supplier: undefined });
+      loadSuppliers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update supplier');
+    }
+  };
+
+  const handleSupplierDelete = async (removeReferences: boolean = false) => {
+    if (!token || !deleteSupplier) return;
+    try {
+      await api.admin.suppliers.delete(token, deleteSupplier.id, removeReferences);
+      setDeleteSupplier(null);
+      setSupplierProperties([]);
+      loadSuppliers();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to delete supplier';
+      // Check if error contains properties list - in this case we need to parse it from the error response
+      // The backend returns a structured error, but FastAPI converts it to a string
+      // We'll need to handle this differently - the error should already be caught and properties loaded
+      setError(errMsg);
+    }
+  };
+
+  const openSupplierEdit = (supplier: Supplier) => {
+    setEditSupplier(supplier);
+    setSupplierForm({
+      name: supplier.name,
+      has_api: supplier.has_api,
+      bill_type: supplier.bill_type,
+      extraction_pattern_supplier: supplier.extraction_pattern_supplier || undefined,
+    });
+  };
+
+  const openSupplierDelete = async (supplier: Supplier) => {
+    if (!token) return;
+    setDeleteSupplier(supplier);
+    setSupplierProperties([]);
+    try {
+      const props = await api.admin.suppliers.getProperties(token, supplier.id);
+      setSupplierProperties(props);
+    } catch (err) {
+      // Ignore error, properties list might be empty
+      setSupplierProperties([]);
+    }
+  };
+
 
   if (showBillParser) {
     return (
@@ -233,6 +331,255 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Suppliers Management Section */}
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-slate-100 flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Suppliers Management
+                </CardTitle>
+                <Dialog open={showSupplierCreate} onOpenChange={setShowSupplierCreate}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Supplier
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="text-slate-100">Create Supplier</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-slate-300">Name *</Label>
+                        <Input
+                          value={supplierForm.name}
+                          onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+                          className="bg-slate-700 border-slate-600 text-slate-100"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-slate-300">Bill Type *</Label>
+                        <Select 
+                          value={supplierForm.bill_type} 
+                          onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}
+                        >
+                          <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-700 border-slate-600">
+                            <SelectItem value="utilities">Utilities</SelectItem>
+                            <SelectItem value="rent">Rent</SelectItem>
+                            <SelectItem value="ebloc">E-Bloc</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-slate-300">Extraction Pattern Supplier Name</Label>
+                        <Input
+                          value={supplierForm.extraction_pattern_supplier || ''}
+                          onChange={(e) => setSupplierForm({ ...supplierForm, extraction_pattern_supplier: e.target.value || undefined })}
+                          className="bg-slate-700 border-slate-600 text-slate-100"
+                          placeholder="Optional: Name used in extraction patterns"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={supplierForm.has_api}
+                          onChange={(e) => setSupplierForm({ ...supplierForm, has_api: e.target.checked })}
+                          className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <Label className="text-slate-300">Has API Integration</Label>
+                      </div>
+                      <DialogFooter>
+                        <Button onClick={() => setShowSupplierCreate(false)} variant="outline" className="bg-slate-700 text-slate-100 hover:bg-slate-600">
+                          Cancel
+                        </Button>
+                        <Button onClick={handleSupplierCreate} className="bg-emerald-600 hover:bg-emerald-700">
+                          Create
+                        </Button>
+                      </DialogFooter>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                {loadingSuppliers ? (
+                  <div className="text-slate-400 text-center py-4">Loading suppliers...</div>
+                ) : suppliers.length === 0 ? (
+                  <div className="text-slate-400 text-center py-4">No suppliers found</div>
+                ) : (
+                  <div className={suppliers.length > 10 ? "max-h-96 overflow-y-auto" : ""}>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-slate-700">
+                          <TableHead className="text-slate-300">Name</TableHead>
+                          <TableHead className="text-slate-300">Bill Type</TableHead>
+                          <TableHead className="text-slate-300">Has API</TableHead>
+                          <TableHead className="text-slate-300">Extraction Pattern</TableHead>
+                          <TableHead className="text-slate-300">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {suppliers.map((supplier) => (
+                          <TableRow key={supplier.id} className="border-slate-700">
+                            <TableCell className="text-slate-100">{supplier.name}</TableCell>
+                            <TableCell className="text-slate-300 capitalize">{supplier.bill_type}</TableCell>
+                            <TableCell className="text-slate-300">
+                              {supplier.has_api ? 'Yes' : 'No'}
+                            </TableCell>
+                            <TableCell className="text-slate-300 text-sm">
+                              {supplier.extraction_pattern_supplier || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openSupplierEdit(supplier)}
+                                  className="text-slate-400 hover:text-slate-100"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openSupplierDelete(supplier)}
+                                  className="text-red-400 hover:text-red-300"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Edit Supplier Dialog */}
+            <Dialog open={!!editSupplier} onOpenChange={(open) => !open && setEditSupplier(null)}>
+              <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-slate-100">Edit Supplier</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-slate-300">Name *</Label>
+                    <Input
+                      value={supplierForm.name}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Bill Type *</Label>
+                    <Select 
+                      value={supplierForm.bill_type} 
+                      onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}
+                    >
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectItem value="utilities">Utilities</SelectItem>
+                        <SelectItem value="rent">Rent</SelectItem>
+                        <SelectItem value="ebloc">E-Bloc</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Extraction Pattern Supplier Name</Label>
+                    <Input
+                      value={supplierForm.extraction_pattern_supplier || ''}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, extraction_pattern_supplier: e.target.value || undefined })}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                      placeholder="Optional: Name used in extraction patterns"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={supplierForm.has_api}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, has_api: e.target.checked })}
+                      className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <Label className="text-slate-300">Has API Integration</Label>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={() => setEditSupplier(null)} variant="outline" className="bg-slate-700 text-slate-100 hover:bg-slate-600">
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSupplierUpdate} className="bg-emerald-600 hover:bg-emerald-700">
+                      Update
+                    </Button>
+                  </DialogFooter>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete Supplier Confirmation Dialog */}
+            <Dialog open={!!deleteSupplier} onOpenChange={(open) => !open && setDeleteSupplier(null)}>
+              <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-slate-100">Delete Supplier</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-slate-300">
+                    Are you sure you want to delete <strong className="text-slate-100">{deleteSupplier?.name}</strong>?
+                  </p>
+                  {supplierProperties.length > 0 && (
+                    <div>
+                      <p className="text-slate-300 mb-2">
+                        This supplier is connected to {supplierProperties.length} property/properties:
+                      </p>
+                      <div className="max-h-48 overflow-y-auto bg-slate-700/50 rounded p-3 space-y-1">
+                        {supplierProperties.map((prop) => (
+                          <div key={prop.property_id} className="text-slate-200 text-sm">
+                            • {prop.property_name} - {prop.property_address}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-slate-400 text-sm mt-2">
+                        You can choose to also remove all property-supplier references.
+                      </p>
+                    </div>
+                  )}
+                  <DialogFooter className="flex-col gap-2 sm:flex-row">
+                    <Button 
+                      onClick={() => setDeleteSupplier(null)} 
+                      variant="outline" 
+                      className="bg-slate-700 text-slate-100 hover:bg-slate-600 w-full sm:w-auto"
+                    >
+                      Cancel
+                    </Button>
+                    {supplierProperties.length > 0 && (
+                      <Button 
+                        onClick={() => handleSupplierDelete(false)} 
+                        className="bg-yellow-600 hover:bg-yellow-700 w-full sm:w-auto"
+                      >
+                        Delete Supplier Only
+                      </Button>
+                    )}
+                    <Button 
+                      onClick={() => handleSupplierDelete(true)} 
+                      className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                    >
+                      {supplierProperties.length > 0 ? 'Delete Supplier & References' : 'Delete'}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader>

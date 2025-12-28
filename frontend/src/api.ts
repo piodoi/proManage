@@ -61,6 +61,15 @@ export const api = {
       request<User>(`/admin/users/${id}/subscription?tier=${tier}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
     refreshPatterns: (token: string, force?: boolean) =>
       request<{ status: string; updated_count: number; results: Array<{ action: string; pattern_name: string; file_name: string; supplier?: string; error?: string }> }>(`/admin/refresh-patterns${force ? '?force=true' : ''}`, { method: 'POST', token }),
+    suppliers: {
+      list: (token: string) => request<Supplier[]>('/admin/suppliers', { token }),
+      create: (token: string, data: SupplierCreate) => request<Supplier>('/admin/suppliers', { method: 'POST', body: data, token }),
+      update: (token: string, id: string, data: SupplierUpdate) => request<Supplier>(`/admin/suppliers/${id}`, { method: 'PUT', body: data, token }),
+      delete: (token: string, id: string, removePropertyReferences?: boolean) => 
+        request<{ status: string }>(`/admin/suppliers/${id}${removePropertyReferences ? '?remove_property_references=true' : ''}`, { method: 'DELETE', token }),
+      getProperties: (token: string, id: string) => 
+        request<Array<{ property_id: string; property_name: string; property_address: string; property_supplier_id: string }>>(`/admin/suppliers/${id}/properties`, { token }),
+    },
   },
 
   properties: {
@@ -191,6 +200,20 @@ export type Supplier = {
   bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
   extraction_pattern_supplier?: string;
   created_at: string;
+};
+
+export type SupplierCreate = {
+  name: string;
+  has_api: boolean;
+  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  extraction_pattern_supplier?: string;
+};
+
+export type SupplierUpdate = {
+  name?: string;
+  has_api?: boolean;
+  bill_type?: 'rent' | 'utilities' | 'ebloc' | 'other';
+  extraction_pattern_supplier?: string;
 };
 
 export type PropertySupplier = {

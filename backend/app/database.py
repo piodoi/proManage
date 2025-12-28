@@ -552,6 +552,14 @@ class Database:
             )
             conn.commit()
             return result.rowcount > 0
+    
+    def list_property_suppliers_by_supplier(self, supplier_id: str) -> list[PropertySupplier]:
+        """Get all property-supplier relationships for a given supplier"""
+        with engine.connect() as conn:
+            results = conn.execute(
+                property_suppliers_table.select().where(property_suppliers_table.c.supplier_id == supplier_id)
+            ).fetchall()
+            return [_deserialize(PropertySupplier, r.data) for r in results]
 
 
 db = Database()
