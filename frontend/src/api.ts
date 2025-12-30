@@ -61,6 +61,8 @@ export const api = {
       request<User>(`/admin/users/${id}/subscription?tier=${tier}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
     refreshPatterns: (token: string, force?: boolean) =>
       request<{ status: string; updated_count: number; results: Array<{ action: string; pattern_name: string; file_name: string; supplier?: string; error?: string }> }>(`/admin/refresh-patterns${force ? '?force=true' : ''}`, { method: 'POST', token }),
+    testScraper: (token: string, supplierName: string, username: string, password: string, loginOnly?: boolean) =>
+      request<{ supplier_name: string; config_loaded: boolean; login_success: boolean; bills_found: number; bills: Array<any>; error?: string }>(`/admin/test-scraper?supplier_name=${encodeURIComponent(supplierName)}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}${loginOnly ? '&login_only=true' : ''}`, { method: 'POST', token }),
     suppliers: {
       list: (token: string) => request<Supplier[]>('/admin/suppliers', { token }),
       create: (token: string, data: SupplierCreate) => request<Supplier>('/admin/suppliers', { method: 'POST', body: data, token }),

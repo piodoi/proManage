@@ -253,22 +253,28 @@ export default function PropertyBillsView({
                 try {
                   console.log('[PropertyBillsView] Starting supplier sync for property:', propertyId);
                   const result = await api.suppliers.sync(token, propertyId);
-                  console.log('[PropertyBillsView] Sync result:', result);
                   if (result.errors && result.errors.length > 0) {
-                    handleError(result.errors.join(', '));
+                    const errorMsg = result.errors.join('; ');
+                    if (onError) {
+                      onError(errorMsg);
+                    }
                   } else if (result.status === 'no_suppliers') {
-                    handleError(result.message || 'No suppliers with API support configured');
+                    if (onError) {
+                      onError(result.message || 'No suppliers with API support configured');
+                    }
                   } else {
                     if (onBillsChange) {
                       onBillsChange();
                     }
                     if (onError) {
-                      onError(`Synced ${result.bills_created} bill(s) from suppliers`);
+                      onError(`Successfully synced ${result.bills_created} bill(s) from suppliers`);
                     }
                   }
                 } catch (err) {
-                  console.error('[PropertyBillsView] Sync error:', err);
-                  handleError(err);
+                  const errorMsg = err instanceof Error ? err.message : String(err);
+                  if (onError) {
+                    onError(`Failed to sync bills: ${errorMsg}`);
+                  }
                 }
               }}
               className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"

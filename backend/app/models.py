@@ -321,6 +321,7 @@ class PropertySupplier(BaseModel):
     supplier_id: str  # Reference to Supplier.id
     username: Optional[str] = None  # Encrypted username for API access
     password_hash: Optional[str] = None  # Encrypted password for API access
+    contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property (filled on first scrape)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

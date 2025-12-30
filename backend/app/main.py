@@ -269,6 +269,72 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/admin/test-scraper")
+async def test_scraper_endpoint(
+    supplier_name: str = Query(...),
+    username: str = Query(...),
+    password: str = Query(...),
+    login_only: bool = Query(False),
+    current_user: TokenData = Depends(require_admin)
+):
+    """
+    Test scraper configuration for a supplier (admin only).
+    Useful for debugging scraper configs before integrating them.
+    """
+    from app.web_scraper import WebScraper, load_scraper_config
+    
+    logger.info(f"[Test Scraper] Testing {supplier_name} scraper")
+    
+    config = load_scraper_config(supplier_name)
+    if not config:
+        raise HTTPException(status_code=404, detail=f"Scraper config not found for {supplier_name}")
+    
+    scraper = WebScraper(config, save_html_dumps=True)  # Enable HTML dumps for debugging
+    result = {
+        "supplier_name": supplier_name,
+        "config_loaded": True,
+        "login_success": False,
+        "bills_found": 0,
+        "bills": [],
+        "error": None
+    }
+    
+    try:
+        # Test login
+        logged_in = await scraper.login(username, password)
+        result["login_success"] = logged_in
+        
+        if not logged_in:
+            result["error"] = "Login failed - check credentials and login_success_indicator in config"
+            return result
+        
+        if login_only:
+            return result
+        
+        # Test getting bills
+        bills = await scraper.get_bills()
+        result["bills_found"] = len(bills)
+        
+        for bill in bills:
+            result["bills"].append({
+                "bill_number": bill.bill_number,
+                "amount": bill.amount,
+                "due_date": bill.due_date.isoformat() if bill.due_date else None,
+                "pdf_url": bill.pdf_url,
+                "has_pdf": bool(bill.pdf_content),
+                "pdf_size": len(bill.pdf_content) if bill.pdf_content else 0,
+            })
+        
+    except Exception as e:
+        logger.error(f"[Test Scraper] Error: {e}", exc_info=True)
+        result["error"] = str(e)
+    
+    finally:
+        await scraper.close()
+    
+    return result
+
+
 @app.get("/admin/users")
 async def list_users(
     page: int = 1,
@@ -650,9 +716,23 @@ async def create_property_supplier(
     if existing:
         raise HTTPException(status_code=400, detail="Supplier already configured for this property")
     
-    # Encrypt credentials if provided
+    # Check if same supplier exists for other properties of the same user - copy credentials
     username = None
     password_hash = None
+    if not data.username or not data.password:
+        # Try to find credentials from another property of the same user
+        user_properties = db.list_properties(landlord_id=prop.landlord_id)
+        for user_prop in user_properties:
+            if user_prop.id != property_id:
+                existing_ps = db.get_property_supplier_by_supplier(user_prop.id, data.supplier_id)
+                if existing_ps and existing_ps.username and existing_ps.password_hash:
+                    # Copy credentials from existing property supplier
+                    username = existing_ps.username
+                    password_hash = existing_ps.password_hash
+                    logger.info(f"[Property Supplier] Copied credentials from property {user_prop.id} for supplier {supplier.name}")
+                    break
+    
+    # Use provided credentials if available, otherwise use copied ones
     if data.username:
         username = encrypt_password(data.username)
     if data.password:
@@ -1239,18 +1319,18 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
         suppliers_to_sync = []
         for ps in property_suppliers:
             supplier = db.get_supplier(ps.supplier_id)
-            if supplier:
+            if supplier and ps.username and ps.password_hash:
                 logger.debug(f"[Suppliers Sync] Checking supplier {supplier.name}: has_api={supplier.has_api}, has_username={bool(ps.username)}, has_password={bool(ps.password_hash)}")
-                if supplier.has_api and ps.username and ps.password_hash:
-                    suppliers_to_sync.append((supplier, ps))
+                # Include all suppliers with credentials (API or scraper)
+                suppliers_to_sync.append((supplier, ps))
         
         logger.info(f"[Suppliers Sync] {len(suppliers_to_sync)} supplier(s) ready to sync")
         
         if not suppliers_to_sync:
-            logger.warning(f"[Suppliers Sync] No suppliers with API support and credentials for property {property_id}")
+            logger.warning(f"[Suppliers Sync] No suppliers with credentials configured for property {property_id}")
             return {
                 "status": "no_suppliers",
-                "message": "No suppliers with API support and credentials configured for this property"
+                "message": "No suppliers with credentials configured for this property"
             }
         
         # Find extraction pattern for supplier matching
@@ -1268,28 +1348,35 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                 password = decrypt_password(property_supplier.password_hash)
                 logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
                 
-                # Sync based on supplier name (run sync in thread pool since API is synchronous)
-                if supplier.name.lower() == "hidroelectrica":
-                    logger.info(f"[Suppliers Sync] Starting Hidroelectrica sync")
-                    bills_count = await asyncio.to_thread(
-                        _sync_hidroelectrica,
+                # Sync based on supplier capabilities
+                if supplier.has_api:
+                    # Use API if available (for now, only Hidroelectrica had API, but it's gone)
+                    # Future: implement API sync here
+                    logger.warning(f"[Suppliers Sync] Supplier {supplier.name} has API flag but API integration not implemented")
+                    errors.append(f"{supplier.name}: API integration not yet implemented")
+                else:
+                    # Use web scraper for suppliers without API
+                    logger.info(f"[Suppliers Sync] Starting {supplier.name} scraper sync")
+                    bills_count = await _sync_supplier_scraper(
                         property_id=property_id,
                         username=username,
                         password=password,
                         supplier=supplier,
                         patterns=all_patterns,
-                        logger=logger
+                        logger=logger,
+                        property_supplier_id=property_supplier.id,
+                        save_html_dumps=True  # Enable HTML dumps for debugging
                     )
                     bills_created += bills_count
-                    logger.info(f"[Suppliers Sync] Hidroelectrica sync completed: {bills_count} bill(s) created")
-                else:
-                    logger.warning(f"[Suppliers Sync] Supplier {supplier.name} API integration not yet implemented")
-                    errors.append(f"{supplier.name}: API integration not yet implemented")
+                    logger.info(f"[Suppliers Sync] {supplier.name} sync completed: {bills_count} bill(s) created")
             
             except Exception as e:
-                error_msg = f"Error syncing {supplier.name}: {str(e)}"
-                logger.error(f"[Suppliers Sync] {error_msg}", exc_info=True)
-                errors.append(error_msg)
+                # Extract clean error message (avoid duplicate logging)
+                error_msg = str(e)
+                # Only log if it's not already logged in the sync function
+                if "Hidroelectrica" not in error_msg or "Sync" not in error_msg:
+                    logger.error(f"[Suppliers Sync] Error syncing {supplier.name}: {error_msg}")
+                errors.append(f"{supplier.name}: {error_msg}")
         
         result = {
             "status": "success",
@@ -1307,108 +1394,168 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
         raise HTTPException(status_code=500, detail=f"Error syncing suppliers: {str(e)}")
 
 
-def _sync_hidroelectrica(
+async def _sync_supplier_scraper(
     property_id: str,
     username: str,
     password: str,
     supplier: Supplier,
     patterns: List[ExtractionPattern],
-    logger: logging.Logger
+    logger: logging.Logger,
+    property_supplier_id: str, # Added to update contract_id
+    save_html_dumps: bool = False  # Enable HTML dumps for debugging
 ) -> int:
-    """Sync bills from Hidroelectrica API"""
-    from app.hidroelectrica_api import HidroelectricaAPI, HidroelectricaBill
+    """Sync bills from supplier using web scraper"""
+    from app.web_scraper import WebScraper, load_scraper_config, ScrapedBill
+    from app.pdf_parser import parse_pdf_with_patterns
     
-    logger.info(f"[Hidroelectrica Sync] Starting sync for property {property_id}, username: {username}")
+    logger.info(f"[{supplier.name} Scraper] Starting sync for property {property_id}")
     
-    # Find extraction pattern for Hidroelectrica
-    hidro_pattern = None
+    # Load scraper configuration
+    config = load_scraper_config(supplier.name)
+    if not config:
+        raise Exception(f"No scraper configuration found for {supplier.name}")
+    
+    # Find extraction pattern
+    supplier_pattern = None
     for pattern in patterns:
-        if pattern.supplier and pattern.supplier.lower() == "hidroelectrica":
-            hidro_pattern = pattern
-            logger.debug(f"[Hidroelectrica Sync] Found extraction pattern: {hidro_pattern.id}")
+        if pattern.supplier and pattern.supplier.lower() == supplier.name.lower():
+            supplier_pattern = pattern
             break
     
-    if not hidro_pattern:
-        logger.warning(f"[Hidroelectrica Sync] No extraction pattern found for Hidroelectrica")
-    
-    api = HidroelectricaAPI(username, password)
+    scraper = WebScraper(config, save_html_dumps=save_html_dumps)
     bills_created = 0
     
+    # Get property supplier to check/update contract_id
+    property_supplier = db.get_property_supplier(property_supplier_id)
+    contract_id_filter = property_supplier.contract_id if property_supplier else None
+    contract_id_to_save = None
+    
     try:
-        logger.info(f"[Hidroelectrica Sync] Attempting login...")
-        api.login()
-        logger.info(f"[Hidroelectrica Sync] Login successful, fetching bills...")
-        bills = api.get_all_bills()
+        # Login
+        logged_in = await scraper.login(username, password)
+        if not logged_in:
+            raise Exception(f"Failed to login to {supplier.name}")
         
-        logger.info(f"[Hidroelectrica Sync] Found {len(bills)} bill(s) for property {property_id}")
+        # Get bills
+        scraped_bills = await scraper.get_bills()
+        logger.info(f"[{supplier.name} Scraper] Found {len(scraped_bills)} bill(s)")
         
-        for hidro_bill in bills:
-            # Check if bill already exists (by bill_number or amount + due_date)
-            existing_bills = db.list_bills(property_id=property_id)
-            
-            # Find existing bill by bill_number
+        existing_bills = db.list_bills(property_id=property_id)
+        
+        for scraped_bill in scraped_bills:
+            # Check if bill already exists
             existing = None
-            if hidro_bill.bill_number:
+            if scraped_bill.bill_number:
                 existing = next(
                     (b for b in existing_bills 
-                     if b.bill_number == hidro_bill.bill_number 
-                     and b.bill_type == BillType.UTILITIES),
+                     if b.bill_number == scraped_bill.bill_number 
+                     and b.bill_type == supplier.bill_type),
                     None
                 )
             
             # If not found by bill_number, try by amount and due_date (within 5 days)
-            if not existing and hidro_bill.due_date:
+            if not existing and scraped_bill.due_date and scraped_bill.amount:
                 for b in existing_bills:
-                    if (b.bill_type == BillType.UTILITIES and 
+                    if (b.bill_type == supplier.bill_type and 
                         b.description == supplier.name and
-                        abs(b.amount - hidro_bill.amount) < 0.01):
-                        # Check if due_date is close (within 5 days)
+                        abs(b.amount - scraped_bill.amount) < 0.01):
                         if b.due_date:
-                            days_diff = abs((b.due_date - hidro_bill.due_date).days)
+                            days_diff = abs((b.due_date - scraped_bill.due_date).days)
                             if days_diff <= 5:
                                 existing = b
                                 break
             
             if existing:
-                logger.debug(f"[Hidroelectrica Sync] Bill {hidro_bill.bill_number} already exists, skipping")
+                logger.debug(f"[{supplier.name} Scraper] Bill {scraped_bill.bill_number} already exists, skipping")
                 continue
             
-            # Determine due date
-            due_date = hidro_bill.due_date if hidro_bill.due_date else datetime.utcnow()
+            # If we have PDF content, parse it to extract more details
+            iban = scraped_bill.raw_data.get("iban") if scraped_bill.raw_data else None
+            bill_number = scraped_bill.bill_number
+            amount = scraped_bill.amount
+            due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
+            extracted_contract_id = None
+            
+            if scraped_bill.pdf_content and supplier_pattern:
+                try:
+                    # Parse PDF to extract additional information
+                    pdf_result = parse_pdf_with_patterns(
+                        scraped_bill.pdf_content,
+                        patterns=[supplier_pattern],
+                        property_id=property_id
+                    )
+                    
+                    # Use parsed data if available, otherwise use scraped data
+                    if pdf_result.iban:
+                        iban = pdf_result.iban
+                    if pdf_result.bill_number:
+                        bill_number = pdf_result.bill_number
+                    if pdf_result.amount:
+                        amount = pdf_result.amount
+                    if pdf_result.contract_id:
+                        extracted_contract_id = pdf_result.contract_id
+                    if pdf_result.due_date:
+                        try:
+                            # Parse due_date string to datetime
+                            if '/' in pdf_result.due_date:
+                                parts = pdf_result.due_date.split('/')
+                                if len(parts) == 3:
+                                    due_date = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
+                            elif '.' in pdf_result.due_date:
+                                parts = pdf_result.due_date.split('.')
+                                if len(parts) == 3:
+                                    due_date = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
+                        except:
+                            pass  # Keep scraped due_date if parsing fails
+                except Exception as e:
+                    logger.warning(f"[{supplier.name} Scraper] Error parsing PDF: {e}")
+            
+            # Filter by contract_id if specified
+            if contract_id_filter and extracted_contract_id:
+                if extracted_contract_id != contract_id_filter:
+                    logger.debug(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch: {extracted_contract_id} != {contract_id_filter}")
+                    continue
+            
+            # Save contract_id if we extracted it and it's not set yet
+            if extracted_contract_id and not contract_id_to_save:
+                contract_id_to_save = extracted_contract_id
             
             # Determine bill status
             bill_status = BillStatus.PENDING
             if due_date < datetime.utcnow():
                 bill_status = BillStatus.OVERDUE
             
-            logger.debug(f"[Hidroelectrica Sync] Creating bill: number={hidro_bill.bill_number}, amount={hidro_bill.amount}, due_date={due_date}")
-            
             # Create bill
             bill = Bill(
                 property_id=property_id,
-                renter_id=None,  # Applies to all renters
-                bill_type=BillType.UTILITIES,
+                renter_id=None,
+                bill_type=supplier.bill_type,
                 description=supplier.name,
-                amount=hidro_bill.amount,
+                amount=amount or 0.0,
                 due_date=due_date,
-                iban=hidro_bill.iban,
-                bill_number=hidro_bill.bill_number,
-                extraction_pattern_id=hidro_pattern.id if hidro_pattern else None,
-                contract_id=hidro_bill.account_number,  # Use account number as contract ID
+                iban=iban,
+                bill_number=bill_number,
+                extraction_pattern_id=supplier_pattern.id if supplier_pattern else None,
+                contract_id=extracted_contract_id,
                 status=bill_status
             )
             db.save_bill(bill)
             bills_created += 1
-            logger.info(f"[Hidroelectrica Sync] Created bill {bill.id} for property {property_id}: {supplier.name} - {hidro_bill.amount} RON")
+            logger.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
+        
+        # Save contract_id if we extracted it and property_supplier doesn't have it yet
+        if contract_id_to_save and property_supplier and not property_supplier.contract_id:
+            property_supplier.contract_id = contract_id_to_save
+            db.save_property_supplier(property_supplier)
+            logger.info(f"[{supplier.name} Scraper] Saved contract_id {contract_id_to_save} to property supplier")
     
     except Exception as e:
-        logger.error(f"[Hidroelectrica Sync] Error during sync: {e}", exc_info=True)
-        raise
+        error_msg = str(e)
+        logger.error(f"[{supplier.name} Scraper] Error during sync: {error_msg}", exc_info=True)
+        raise Exception(error_msg)
     finally:
-        api.close()
-        logger.debug(f"[Hidroelectrica Sync] API connection closed")
+        await scraper.close()
     
-    logger.info(f"[Hidroelectrica Sync] Sync completed: {bills_created} bill(s) created")
     return bills_created
 
 
