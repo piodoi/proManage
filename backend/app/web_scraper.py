@@ -26,6 +26,7 @@ class ScrapedBill:
     issue_date: Optional[datetime] = None
     period_from: Optional[datetime] = None
     period_to: Optional[datetime] = None
+    contract_id: Optional[str] = None
     pdf_url: Optional[str] = None
     pdf_content: Optional[bytes] = None
     raw_data: Optional[Dict] = None
@@ -56,6 +57,8 @@ class ScraperConfig:
     bill_number_selector: Optional[str] = None
     bill_amount_selector: Optional[str] = None
     bill_due_date_selector: Optional[str] = None
+    bill_issue_date_selector: Optional[str] = None
+    bill_contract_id_selector: Optional[str] = None
     bill_pdf_link_selector: Optional[str] = None
     
     # Custom extraction functions (as string patterns or regex)
@@ -271,7 +274,7 @@ class WebScraper:
                 bills_container = soup.select_one(self.config.bills_list_selector)
             else:
                 # Try to find common bill list containers
-                for selector in ["table", ".bills", "#bills", ".invoices", "#invoices"]:
+                for selector in ["table", ".bills", "#bills", ".invoices", "#invoices", "#data-table"]:
                     bills_container = soup.select_one(selector)
                     if bills_container:
                         break
@@ -289,10 +292,12 @@ class WebScraper:
             
             logger.info(f"[{self.config.supplier_name} Scraper] Found {len(bill_items)} bill items")
             
-            for item in bill_items:
-                bill = await self._extract_bill_from_item(item, str(response.url))
+            for idx, item in enumerate(bill_items):
+                # Use Playwright page for extraction if available (for JavaScript links)
+                bill = await self._extract_bill_from_item(item, self.page.url if self.page else None)
                 if bill:
                     bills.append(bill)
+                    logger.debug(f"[{self.config.supplier_name} Scraper] Extracted bill #{idx+1}: {bill.bill_number}, amount: {bill.amount}, contract: {bill.contract_id}")
             
         except Exception as e:
             logger.error(f"[{self.config.supplier_name} Scraper] Error scraping bills: {e}", exc_info=True)
@@ -304,6 +309,12 @@ class WebScraper:
         try:
             bill = ScrapedBill()
             
+            # Extract contract_id
+            if self.config.bill_contract_id_selector:
+                elem = item.select_one(self.config.bill_contract_id_selector)
+                if elem:
+                    bill.contract_id = elem.get_text(strip=True)
+            
             # Extract bill number
             if self.config.bill_number_selector:
                 elem = item.select_one(self.config.bill_number_selector)
@@ -314,6 +325,13 @@ class WebScraper:
                 match = re.search(self.config.bill_number_pattern, text)
                 if match:
                     bill.bill_number = match.group(1) if match.groups() else match.group(0)
+            
+            # Extract issue date
+            if self.config.bill_issue_date_selector:
+                elem = item.select_one(self.config.bill_issue_date_selector)
+                if elem:
+                    date_text = elem.get_text(strip=True)
+                    bill.issue_date = self._parse_date(date_text)
             
             # Extract amount
             if self.config.bill_amount_selector:
@@ -341,18 +359,40 @@ class WebScraper:
                     date_text = match.group(1) if match.groups() else match.group(0)
                     bill.due_date = self._parse_date(date_text)
             
-            # Extract PDF link
+            # Extract PDF link - handle JavaScript onclick links
+            pdf_link_elem = None
             if self.config.bill_pdf_link_selector:
-                link_elem = item.select_one(self.config.bill_pdf_link_selector)
-                if link_elem:
-                    href = link_elem.get("href", "")
-                    if href:
+                pdf_link_elem = item.select_one(self.config.bill_pdf_link_selector)
+            
+            # If no selector found, try to find any link with onclick containing BillClick
+            if not pdf_link_elem:
+                pdf_link_elem = item.find("a", onclick=re.compile(r"BillClick", re.I))
+            
+            if pdf_link_elem:
+                # Check if it's a JavaScript link (onclick)
+                onclick = pdf_link_elem.get("onclick", "")
+                if onclick and "BillClick" in onclick:
+                    # Extract the parameter from BillClick('...')
+                    import re
+                    match = re.search(r"BillClick\('([^']+)'\)", onclick)
+                    if match:
+                        bill_params = match.group(1)
+                        # Store the params for later use - we'll call BillClick via Playwright
+                        bill.pdf_url = f"javascript:BillClick('{bill_params}')"
+                        # Download PDF by calling the JavaScript function
+                        await self._download_pdf_via_javascript(bill, bill_params)
+                else:
+                    # Regular href link
+                    href = pdf_link_elem.get("href", "")
+                    if href and href != "javascript:":
                         if href.startswith("http"):
                             bill.pdf_url = href
                         else:
                             bill.pdf_url = f"{self.config.base_url}{href}"
+                        # Download PDF
+                        await self._download_pdf_from_url(bill)
             
-            # Try to find any PDF link in the item
+            # Try to find any PDF link in the item (fallback)
             if not bill.pdf_url:
                 pdf_link = item.find("a", href=re.compile(r"\.pdf", re.I))
                 if pdf_link:
@@ -368,23 +408,81 @@ class WebScraper:
                             bill.pdf_url = urljoin(base_url, href)
                         else:
                             bill.pdf_url = f"{self.config.base_url}/{href}"
-            
-            # Download PDF if URL found
-            if bill.pdf_url:
-                try:
-                    # Use Playwright to download PDF
-                    pdf_response = await self.page.request.get(bill.pdf_url)
-                    if pdf_response.status == 200:
-                        bill.pdf_content = await pdf_response.body()
-                        logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF: {len(bill.pdf_content)} bytes")
-                except Exception as e:
-                    logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF from {bill.pdf_url}: {e}")
+                    await self._download_pdf_from_url(bill)
             
             return bill if bill.bill_number or bill.amount else None
         
         except Exception as e:
-            logger.warning(f"[{self.config.supplier_name} Scraper] Error extracting bill: {e}")
+            logger.warning(f"[{self.config.supplier_name} Scraper] Error extracting bill: {e}", exc_info=True)
             return None
+    
+    async def _download_pdf_via_javascript(self, bill: ScrapedBill, bill_params: str):
+        """Download PDF by calling JavaScript BillClick function"""
+        try:
+            # Call BillClick function via Playwright
+            # The function likely opens a modal or makes an AJAX call
+            # We'll intercept the network request for the PDF
+            pdf_content = None
+            
+            # Set up response listener to catch PDF download
+            async with self.page.expect_response(lambda response: "pdf" in response.url.lower() or response.headers.get("content-type", "").startswith("application/pdf")) as response_info:
+                # Call the BillClick function
+                await self.page.evaluate(f"BillClick('{bill_params}')")
+            
+            response = await response_info.value
+            if response.status == 200:
+                bill.pdf_content = await response.body()
+                bill.pdf_url = response.url
+                logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF via JavaScript: {len(bill.pdf_content)} bytes")
+                
+                # Save PDF temporarily for debugging
+                if self.save_html_dumps and bill.pdf_content:
+                    await self._save_pdf_dump(bill)
+        except Exception as e:
+            logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF via JavaScript: {e}")
+            # Try alternative: look for PDF in modal or iframe
+            try:
+                # Wait for modal to appear
+                await self.page.wait_for_selector("#pdfpopupmodal", timeout=5000)
+                # Look for PDF embed or iframe
+                pdf_iframe = await self.page.query_selector("#pdfpopupmodal embed, #pdfpopupmodal iframe")
+                if pdf_iframe:
+                    pdf_src = await pdf_iframe.get_attribute("src")
+                    if pdf_src:
+                        bill.pdf_url = pdf_src
+                        await self._download_pdf_from_url(bill)
+            except:
+                pass
+    
+    async def _download_pdf_from_url(self, bill: ScrapedBill):
+        """Download PDF from a direct URL"""
+        try:
+            pdf_response = await self.page.request.get(bill.pdf_url)
+            if pdf_response.status == 200:
+                bill.pdf_content = await pdf_response.body()
+                logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF: {len(bill.pdf_content)} bytes")
+                
+                # Save PDF temporarily for debugging
+                if self.save_html_dumps and bill.pdf_content:
+                    await self._save_pdf_dump(bill)
+        except Exception as e:
+            logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF from {bill.pdf_url}: {e}")
+    
+    async def _save_pdf_dump(self, bill: ScrapedBill):
+        """Save PDF to file for debugging"""
+        try:
+            dump_dir = Path(__file__).parent.parent / "scraper_dumps"
+            dump_dir.mkdir(exist_ok=True)
+            self.dump_counter += 1
+            filename = f"{self.config.supplier_name.lower()}_{self.dump_counter:02d}_bill_{bill.bill_number or 'unknown'}.pdf"
+            dump_file = dump_dir / filename
+            with open(dump_file, 'wb') as f:
+                f.write(bill.pdf_content)
+            abs_path = dump_file.resolve()
+            print(f"[SAVED] PDF dump: {abs_path}", flush=True)
+            logger.info(f"[{self.config.supplier_name} Scraper] Saved PDF dump: {abs_path}")
+        except Exception as e:
+            logger.warning(f"[{self.config.supplier_name} Scraper] Failed to save PDF dump: {e}")
     
     def _parse_amount(self, text: str) -> Optional[float]:
         """Parse amount from text"""
