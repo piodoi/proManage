@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
+# Removed event loop policy setting - let uvicorn handle it
+
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -31,6 +33,8 @@ from app.pdf_parser import parse_pdf_with_patterns
 from app.routes import auth_router
 
 load_dotenv()
+
+# Fix for Playwright on Windows - ensure we use SelectorEventLoop
 
 # Encryption key for e-bloc passwords (in production, use a secure key from env)
 # Fernet keys must be 32 bytes when base64-decoded (44 characters when base64-encoded)
@@ -1347,6 +1351,9 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                 username = decrypt_password(property_supplier.username)
                 password = decrypt_password(property_supplier.password_hash)
                 logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
+                # Log clear credentials for Hidroelectrica debugging
+                if supplier.name.lower() == "hidroelectrica":
+                    logger.info(f"[Suppliers Sync] {supplier.name} credentials - Username: {username}, Password: {password}")
                 
                 # Sync based on supplier capabilities
                 if supplier.has_api:
@@ -1357,16 +1364,47 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                 else:
                     # Use web scraper for suppliers without API
                     logger.info(f"[Suppliers Sync] Starting {supplier.name} scraper sync")
-                    bills_count = await _sync_supplier_scraper(
-                        property_id=property_id,
-                        username=username,
-                        password=password,
-                        supplier=supplier,
-                        patterns=all_patterns,
-                        logger=logger,
-                        property_supplier_id=property_supplier.id,
-                        save_html_dumps=True  # Enable HTML dumps for debugging
-                    )
+                    
+                    # Check if we need Playwright (for JavaScript-heavy sites)
+                    from app.web_scraper import load_scraper_config
+                    config = load_scraper_config(supplier.name)
+                    if config and config.requires_js:
+                        # On Windows, use sync API in thread executor
+                        import platform
+                        if platform.system() == 'Windows':
+                            logger.info(f"[Suppliers Sync] Using sync API scraper for {supplier.name} (Windows + requires_js=True)")
+                            bills_count = await asyncio.to_thread(
+                                _run_sync_supplier_scraper_in_thread,
+                                property_id=property_id,
+                                username=username,
+                                password=password,
+                                supplier=supplier,
+                                patterns=all_patterns,
+                                property_supplier_id=property_supplier.id,
+                                save_html_dumps=True
+                            )
+                        else:
+                            bills_count = await _sync_supplier_scraper(
+                                property_id=property_id,
+                                username=username,
+                                password=password,
+                                supplier=supplier,
+                                patterns=all_patterns,
+                                logger=logger,
+                                property_supplier_id=property_supplier.id,
+                                save_html_dumps=True
+                            )
+                    else:
+                        bills_count = await _sync_supplier_scraper(
+                            property_id=property_id,
+                            username=username,
+                            password=password,
+                            supplier=supplier,
+                            patterns=all_patterns,
+                            logger=logger,
+                            property_supplier_id=property_supplier.id,
+                            save_html_dumps=True  # Enable HTML dumps for debugging
+                        )
                     bills_created += bills_count
                     logger.info(f"[Suppliers Sync] {supplier.name} sync completed: {bills_count} bill(s) created")
             
@@ -1379,7 +1417,8 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                 errors.append(f"{supplier.name}: {error_msg}")
         
         # Check if any supplier has multiple contracts (after sync)
-        from app.web_scraper import load_scraper_config
+        # Note: We can't access PDF content from saved Bill objects, so addresses are not available here
+        # Addresses would need to be stored in Bill objects during sync if needed
         multiple_contracts_info = {}
         for supplier, property_supplier in suppliers_to_sync:
             config = load_scraper_config(supplier.name)
@@ -1392,24 +1431,8 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                         if bill.contract_id not in supplier_contracts:
                             supplier_contracts[bill.contract_id] = {
                                 "contract_id": bill.contract_id,
-                                "address": None
+                                "address": None  # Address not stored in Bill objects
                             }
-                            # Try to get address from PDF if available
-                            if bill.pdf_content:
-                                try:
-                                    supplier_pattern = next((p for p in all_patterns if p.supplier and p.supplier.lower() == supplier.name.lower()), None)
-                                    if supplier_pattern:
-                                        from app.pdf_parser import parse_pdf_with_patterns
-                                        pdf_result = parse_pdf_with_patterns(
-                                            bill.pdf_content,
-                                            patterns=[supplier_pattern],
-                                            property_id=property_id
-                                        )
-                                        address = pdf_result.address or pdf_result.consumption_location
-                                        if address:
-                                            supplier_contracts[bill.contract_id]["address"] = address
-                                except:
-                                    pass
                 
                 if len(supplier_contracts) > 1:
                     multiple_contracts_info[supplier.id] = {
@@ -1434,6 +1457,183 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
         raise HTTPException(status_code=500, detail=f"Error syncing suppliers: {str(e)}")
 
 
+def _run_sync_supplier_scraper_in_thread(
+    property_id: str,
+    username: str,
+    password: str,
+    supplier: Supplier,
+    patterns: List[ExtractionPattern],
+    property_supplier_id: str,
+    save_html_dumps: bool = False
+) -> int:
+    """Run scraper sync using Playwright sync API in a thread (for Windows compatibility)"""
+    import logging
+    
+    # Import Playwright sync version for thread execution
+    from app.web_scraper_sync import WebScraperSync
+    from app.web_scraper import load_scraper_config, ScrapedBill
+    from app.pdf_parser import parse_pdf_with_patterns
+    from datetime import datetime
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"[{supplier.name} Scraper] Starting sync (sync API) for property {property_id}")
+    
+    # Load scraper configuration
+    config = load_scraper_config(supplier.name)
+    if not config:
+        logger.warning(f"[{supplier.name} Scraper] No scraper configuration found for {supplier.name}, skipping")
+        return 0
+    
+    # Find extraction pattern
+    supplier_pattern = None
+    for pattern in patterns:
+        if pattern.supplier and pattern.supplier.lower() == supplier.name.lower():
+            supplier_pattern = pattern
+            break
+    
+    scraper = WebScraperSync(config, save_html_dumps=save_html_dumps)
+    bills_created = 0
+    
+    # Get property supplier to check/update contract_id
+    property_supplier = db.get_property_supplier(property_supplier_id)
+    contract_id_filter = property_supplier.contract_id if property_supplier else None
+    contract_id_to_save = None
+    
+    # Track all unique contracts found (for multiple contracts support)
+    found_contracts = set()
+    
+    try:
+        # Login (sync version)
+        logged_in = scraper.login(username, password)
+        if not logged_in:
+            raise Exception(f"Failed to login to {supplier.name}")
+        
+        # Get bills (sync version)
+        scraped_bills = scraper.get_bills()
+        logger.info(f"[{supplier.name} Scraper] Found {len(scraped_bills)} bill(s)")
+        
+        existing_bills = db.list_bills(property_id=property_id)
+        
+        for scraped_bill in scraped_bills:
+            # Check if bill already exists (same logic as async version)
+            existing = None
+            if scraped_bill.bill_number:
+                existing = next(
+                    (b for b in existing_bills 
+                     if b.bill_number == scraped_bill.bill_number 
+                     and b.bill_type == supplier.bill_type),
+                    None
+                )
+            
+            if not existing and scraped_bill.due_date and scraped_bill.amount:
+                for b in existing_bills:
+                    if (b.bill_type == supplier.bill_type and 
+                        b.description == supplier.name and
+                        abs(b.amount - scraped_bill.amount) < 0.01):
+                        if b.due_date:
+                            days_diff = abs((b.due_date - scraped_bill.due_date).days)
+                            if days_diff <= 5:
+                                existing = b
+                                break
+            
+            if existing:
+                logger.debug(f"[{supplier.name} Scraper] Bill {scraped_bill.bill_number} already exists, skipping")
+                continue
+            
+            # Extract data from scraped bill
+            iban = scraped_bill.raw_data.get("iban") if scraped_bill.raw_data else None
+            bill_number = scraped_bill.bill_number
+            amount = scraped_bill.amount
+            due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
+            extracted_contract_id = scraped_bill.contract_id
+            
+            # Parse PDF if available
+            if scraped_bill.pdf_content and supplier_pattern:
+                try:
+                    pdf_result = parse_pdf_with_patterns(
+                        scraped_bill.pdf_content,
+                        patterns=[supplier_pattern],
+                        property_id=property_id
+                    )
+                    
+                    if pdf_result.iban:
+                        iban = pdf_result.iban
+                    if pdf_result.bill_number:
+                        bill_number = pdf_result.bill_number
+                    if pdf_result.amount:
+                        amount = pdf_result.amount
+                    if pdf_result.contract_id and not extracted_contract_id:
+                        extracted_contract_id = pdf_result.contract_id
+                    if pdf_result.due_date:
+                        try:
+                            if '/' in pdf_result.due_date:
+                                parts = pdf_result.due_date.split('/')
+                                if len(parts) == 3:
+                                    due_date = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
+                            elif '.' in pdf_result.due_date:
+                                parts = pdf_result.due_date.split('.')
+                                if len(parts) == 3:
+                                    due_date = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
+                        except:
+                            pass
+                except Exception as e:
+                    logger.warning(f"[{supplier.name} Scraper] Error parsing PDF: {e}")
+            
+            # Track contract_id for multiple contracts support
+            if extracted_contract_id:
+                found_contracts.add(extracted_contract_id)
+            
+            # Filter by contract_id if specified
+            if contract_id_filter and extracted_contract_id:
+                if extracted_contract_id != contract_id_filter:
+                    logger.debug(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch: {extracted_contract_id} != {contract_id_filter}")
+                    continue
+            
+            # Save contract_id if we extracted it and it's not set yet
+            if extracted_contract_id and not contract_id_to_save:
+                contract_id_to_save = extracted_contract_id
+            
+            # Determine bill status
+            from app.models import BillStatus
+            bill_status = BillStatus.PENDING
+            if due_date < datetime.utcnow():
+                bill_status = BillStatus.OVERDUE
+            
+            # Create bill
+            from app.models import Bill
+            bill = Bill(
+                property_id=property_id,
+                renter_id=None,
+                bill_type=supplier.bill_type,
+                description=supplier.name,
+                amount=amount or 0.0,
+                due_date=due_date,
+                iban=iban,
+                bill_number=bill_number,
+                extraction_pattern_id=supplier_pattern.id if supplier_pattern else None,
+                contract_id=extracted_contract_id,
+                status=bill_status
+            )
+            db.save_bill(bill)
+            bills_created += 1
+            logger.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
+        
+        # Save contract_id if we extracted it and property_supplier doesn't have it yet
+        if contract_id_to_save and property_supplier and not property_supplier.contract_id:
+            property_supplier.contract_id = contract_id_to_save
+            db.save_property_supplier(property_supplier)
+            logger.info(f"[{supplier.name} Scraper] Saved contract_id {contract_id_to_save} to property supplier")
+    
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"[{supplier.name} Scraper] Error during sync: {error_msg}", exc_info=True)
+        raise Exception(error_msg)
+    finally:
+        scraper.close()
+    
+    return bills_created
+
+
 async def _sync_supplier_scraper(
     property_id: str,
     username: str,
@@ -1453,7 +1653,8 @@ async def _sync_supplier_scraper(
     # Load scraper configuration
     config = load_scraper_config(supplier.name)
     if not config:
-        raise Exception(f"No scraper configuration found for {supplier.name}")
+        logger.warning(f"[{supplier.name} Scraper] No scraper configuration found for {supplier.name}, skipping")
+        return 0  # Skip this supplier without error
     
     # Find extraction pattern
     supplier_pattern = None
@@ -1474,7 +1675,7 @@ async def _sync_supplier_scraper(
     found_contracts = set()
     
     try:
-        # Login
+        # Login (credentials are logged inside the scraper.login method)
         logged_in = await scraper.login(username, password)
         if not logged_in:
             raise Exception(f"Failed to login to {supplier.name}")

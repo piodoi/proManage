@@ -92,7 +92,23 @@ class WebScraper:
     async def _init_browser(self):
         """Initialize Playwright browser"""
         if not self.playwright:
-            self.playwright = await async_playwright().start()
+            try:
+                self.playwright = await async_playwright().start()
+            except NotImplementedError as e:
+                # On Windows with ProactorEventLoop, Playwright can't create subprocesses
+                # This happens when FastAPI/uvicorn uses ProactorEventLoop on Windows
+                # The test_scraper works because it uses asyncio.run() which creates SelectorEventLoop
+                import platform
+                if platform.system() == 'Windows':
+                    error_msg = (
+                        "Playwright cannot start on Windows with ProactorEventLoop. "
+                        "This is a known limitation. Please run the server with: "
+                        "`uvicorn app.main:app --loop asyncio` or use WindowsSelectorEventLoop policy."
+                    )
+                    logger.error(f"[{self.config.supplier_name} Scraper] {error_msg}")
+                    raise RuntimeError(error_msg) from e
+                raise
+            
             self.browser = await self.playwright.chromium.launch(headless=True)
             self.context = await self.browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
@@ -103,8 +119,14 @@ class WebScraper:
     async def login(self, username: str, password: str) -> bool:
         """Login to the supplier website"""
         try:
+            # Log credentials for debugging (only for Hidroelectrica)
+            if self.config.supplier_name.lower() == "hidroelectrica":
+                logger.info(f"[{self.config.supplier_name} Scraper] Starting login with username: {username}, password: {password}")
+            else:
+                logger.info(f"[{self.config.supplier_name} Scraper] Starting login...")
+            
             await self._init_browser()
-            logger.info(f"[{self.config.supplier_name} Scraper] Starting login...")
+            logger.info(f"[{self.config.supplier_name} Scraper] Browser initialized, proceeding with login...")
             
             if self.config.login_method == "form":
                 return await self._login_form(username, password)
@@ -576,7 +598,7 @@ def load_scraper_config(supplier_name: str) -> Optional[ScraperConfig]:
     config_file = config_dir / f"{supplier_name.lower()}.json"
     
     if not config_file.exists():
-        logger.warning(f"Scraper config not found: {config_file}")
+        logger.debug(f"Scraper config not found: {config_file}")
         return None
     
     try:
