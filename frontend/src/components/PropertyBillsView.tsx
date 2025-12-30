@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, Bill, Renter, ExtractionResult } from '../api';
+import { api, Bill, Renter, ExtractionResult, Property } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 import AddressWarningDialog from './dialogs/AddressWarningDialog';
 import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
+import SupplierSyncDialog from './dialogs/SupplierSyncDialog';
 
 type PropertyBillsViewProps = {
   token: string | null;
   propertyId: string;
+  property?: Property;  // Optional property object for sync dialog
   renters: Renter[];
   bills: Bill[];
   onError?: (error: string) => void;
@@ -22,7 +24,8 @@ type PropertyBillsViewProps = {
 
 export default function PropertyBillsView({ 
   token, 
-  propertyId, 
+  propertyId,
+  property,
   renters, 
   bills, 
   onError,
@@ -43,6 +46,7 @@ export default function PropertyBillsView({
   const [showContractSelector, setShowContractSelector] = useState(false);
   const [multipleContracts, setMultipleContracts] = useState<Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }>>({});
   const [selectedContracts, setSelectedContracts] = useState<Record<string, string>>({});
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
 
   const handleError = (err: unknown) => {
     console.error('[PropertyBillsView] Error:', err);
@@ -249,50 +253,33 @@ export default function PropertyBillsView({
               <Receipt className="w-4 h-4 mr-1" />
               {parsingPdf ? 'Parsing...' : 'Upload PDF'}
             </Button>
+            {property && (
+              <SupplierSyncDialog
+                token={token}
+                property={property}
+                open={showSyncDialog}
+                onOpenChange={setShowSyncDialog}
+                onSuccess={() => {
+                  if (onBillsChange) {
+                    onBillsChange();
+                  }
+                }}
+                onError={(error) => {
+                  if (onError) {
+                    onError(error);
+                  }
+                }}
+              />
+            )}
             <Button
               size="sm"
-              onClick={async () => {
-                if (!token) return;
-                try {
-                  console.log('[PropertyBillsView] Starting supplier sync for property:', propertyId);
-                  const result = await api.suppliers.sync(token, propertyId);
-                  
-                  // Check if multiple contracts were found
-                  if (result.multiple_contracts && Object.keys(result.multiple_contracts).length > 0) {
-                    setMultipleContracts(result.multiple_contracts);
-                    setShowContractSelector(true);
-                    // Initialize selected contracts with first contract for each supplier
-                    const initialSelections: Record<string, string> = {};
-                    for (const [supplierId, info] of Object.entries(result.multiple_contracts)) {
-                      if (info.contracts.length > 0) {
-                        initialSelections[supplierId] = info.contracts[0].contract_id;
-                      }
-                    }
-                    setSelectedContracts(initialSelections);
-                    if (onError) {
-                      onError(`Found multiple contracts. Please select which contracts to use for each supplier.`);
-                    }
-                  } else if (result.errors && result.errors.length > 0) {
-                    const errorMsg = result.errors.join('; ');
-                    if (onError) {
-                      onError(errorMsg);
-                    }
-                  } else if (result.status === 'no_suppliers') {
-                    if (onError) {
-                      onError(result.message || 'No suppliers with API support configured');
-                    }
-                  } else {
-                    if (onBillsChange) {
-                      onBillsChange();
-                    }
-                    if (onError) {
-                      onError(`Successfully synced ${result.bills_created} bill(s) from suppliers`);
-                    }
-                  }
-                } catch (err) {
-                  const errorMsg = err instanceof Error ? err.message : String(err);
+              onClick={() => {
+                if (property) {
+                  setShowSyncDialog(true);
+                } else {
+                  // Fallback: if property not provided, show error
                   if (onError) {
-                    onError(`Failed to sync bills: ${errorMsg}`);
+                    onError('Property information is required for sync');
                   }
                 }
               }}
