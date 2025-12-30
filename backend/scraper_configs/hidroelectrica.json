@@ -7,7 +7,7 @@
   "login_form_selector": "form",
   "username_field": "txtLogin",
   "password_field": "txtpwd",
-  "login_success_indicator": "selector:.dashboard",
+  "login_success_indicator": "url:Dashboard.aspx",
   "bills_list_selector": "table.bills, .bills-list, #bills-table",
   "bill_item_selector": "tr.bill-item, .bill-row",
   "bill_number_selector": ".bill-number, td:nth-child(1)",

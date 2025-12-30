@@ -1,9 +1,10 @@
 """
 General-purpose web scraper for supplier websites.
 Data-driven configuration allows easy addition of new suppliers.
+Uses Playwright for JavaScript-enabled sites with reCAPTCHA.
 """
 
-import httpx
+from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 from bs4 import BeautifulSoup
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -72,23 +73,33 @@ class ScraperConfig:
 
 
 class WebScraper:
-    """General-purpose web scraper for supplier websites"""
+    """General-purpose web scraper for supplier websites using Playwright"""
     
     def __init__(self, config: ScraperConfig, save_html_dumps: bool = False):
         self.config = config
-        self.client = httpx.AsyncClient(
-            follow_redirects=True,
-            timeout=config.timeout,
-            headers=config.custom_headers or {}
-        )
+        self.playwright = None
+        self.browser: Optional[Browser] = None
+        self.context: Optional[BrowserContext] = None
+        self.page: Optional[Page] = None
         self.logged_in = False
-        self.session_cookies: Dict[str, str] = {}
         self.save_html_dumps = save_html_dumps
         self.dump_counter = 0
+    
+    async def _init_browser(self):
+        """Initialize Playwright browser"""
+        if not self.playwright:
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(headless=True)
+            self.context = await self.browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            self.page = await self.context.new_page()
     
     async def login(self, username: str, password: str) -> bool:
         """Login to the supplier website"""
         try:
+            await self._init_browser()
             logger.info(f"[{self.config.supplier_name} Scraper] Starting login...")
             
             if self.config.login_method == "form":
@@ -99,7 +110,7 @@ class WebScraper:
                 raise ValueError(f"Unknown login method: {self.config.login_method}")
         
         except Exception as e:
-            logger.error(f"[{self.config.supplier_name} Scraper] Login failed: {e}")
+            logger.error(f"[{self.config.supplier_name} Scraper] Login failed: {e}", exc_info=True)
             return False
     
     def _save_html_dump(self, html_content: str, page_name: str):
@@ -128,119 +139,95 @@ class WebScraper:
             logger.error(f"[{self.config.supplier_name} Scraper] Failed to save HTML dump: {e}", exc_info=True)
     
     async def _login_form(self, username: str, password: str) -> bool:
-        """Login using form submission"""
-        # Get login page
-        login_page = await self.client.get(self.config.login_url)
-        if login_page.status_code != 200:
-            logger.error(f"[{self.config.supplier_name} Scraper] Failed to load login page: {login_page.status_code}")
+        """Login using form submission with Playwright"""
+        # Navigate to login page
+        await self.page.goto(self.config.login_url, wait_until="networkidle")
+        
+        # Save HTML dump of login page
+        login_html = await self.page.content()
+        self._save_html_dump(login_html, "login")
+        
+        # Find username and password fields
+        username_field = self.config.username_field or "txtLogin"
+        password_field = self.config.password_field or "txtpwd"
+        
+        # Fill in username and password
+        try:
+            await self.page.fill(f'input[name="{username_field}"]', username)
+            await self.page.fill(f'input[name="{password_field}"]', password)
+        except Exception as e:
+            logger.error(f"[{self.config.supplier_name} Scraper] Failed to fill login fields: {e}")
             return False
         
-        self._save_html_dump(login_page.text, "login")
+        # Wait a bit for any JavaScript to initialize (like reCAPTCHA)
+        await self.page.wait_for_timeout(1000)
         
-        soup = BeautifulSoup(login_page.text, "html.parser")
+        # Click the submit button
+        try:
+            # Wait for the submit button to be ready
+            await self.page.wait_for_selector('input[name="btnlogin"]', state="visible")
+            # Click the submit button and wait for navigation
+            await self.page.click('input[name="btnlogin"]')
+            # Wait for navigation to complete (either redirect or page change)
+            await self.page.wait_for_load_state("networkidle", timeout=int(self.config.timeout * 1000))
+        except Exception as e:
+            logger.warning(f"[{self.config.supplier_name} Scraper] Error clicking submit button: {e}")
+            # Try alternative: press Enter on password field
+            await self.page.press(f'input[name="{password_field}"]', "Enter")
+            await self.page.wait_for_load_state("networkidle", timeout=int(self.config.timeout * 1000))
         
-        # Find login form
-        form = None
-        if self.config.login_form_selector:
-            form = soup.select_one(self.config.login_form_selector)
-        else:
-            form = soup.find("form")
+        # Wait after login as configured
+        if self.config.wait_after_login > 0:
+            await self.page.wait_for_timeout(int(self.config.wait_after_login * 1000))
         
-        if not form:
-            logger.error(f"[{self.config.supplier_name} Scraper] Login form not found")
-            return False
+        # Get current URL and page content
+        current_url = self.page.url
+        page_html = await self.page.content()
+        self._save_html_dump(page_html, "after_login")
         
-        # Build form data and auto-detect username/password fields
-        form_data = {}
-        username_field = None
-        password_field = None
-        submit_button_name = None
-        submit_button_value = None
+        logger.debug(f"[{self.config.supplier_name} Scraper] Current URL after login: {current_url}")
         
-        for inp in form.find_all("input"):
-            name = inp.get("name", "")
-            inp_name_lower = name.lower()
-            inp_type = inp.get("type", "").lower()
-            if name:
-                form_data[name] = inp.get("value", "")
-                
-                # Auto-detect username and password fields
-                if not username_field:
-                    if (self.config.username_field and name == self.config.username_field) or \
-                       (not self.config.username_field and (inp_type == "text" or inp_type == "email" or "user" in inp_name_lower or "email" in inp_name_lower or "login" in inp_name_lower)):
-                        username_field = name
-                if not password_field:
-                    if (self.config.password_field and name == self.config.password_field) or \
-                       (not self.config.password_field and (inp_type == "password" or "pass" in inp_name_lower or "pwd" in inp_name_lower)):
-                        password_field = name
-                
-                # Auto-detect submit button (ASP.NET forms often need this)
-                if inp_type == "submit" and not submit_button_name:
-                    submit_button_name = name
-                    submit_button_value = inp.get("value", "")
-        
-        # Use configured fields or auto-detected ones, fallback to defaults
-        if not username_field:
-            username_field = self.config.username_field or "username"
-        if not password_field:
-            password_field = self.config.password_field or "password"
-        
-        # Set username and password
-        form_data[username_field] = username
-        form_data[password_field] = password
-        
-        # Include submit button if found (important for ASP.NET forms)
-        # Always override the button value even if it's already in form_data (might have wrong value)
-        if submit_button_name:
-            form_data[submit_button_name] = submit_button_value
-            logger.debug(f"[{self.config.supplier_name} Scraper] Including submit button in form data: {submit_button_name}={submit_button_value}")
-        
-        logger.debug(f"[{self.config.supplier_name} Scraper] Submitting form with {len(form_data)} fields")
-        
-        # Submit form
-        form_action = form.get("action", "")
-        if form_action.startswith("/"):
-            form_url = f"{self.config.base_url}{form_action}"
-        elif form_action.startswith("http"):
-            form_url = form_action
-        else:
-            form_url = self.config.login_url
-        
-        response = await self.client.post(form_url, data=form_data)
-        
-        self._save_html_dump(response.text, "after_login")
-        
-        # Check if login was successful - try multiple indicators
+        # Check if login was successful - successful login redirects to Dashboard.aspx
         login_success = False
         success_reason = ""
         
-        # First, check if we were redirected to a different URL (common for ASP.NET)
-        if response.status_code == 200:
-            response_url_str = str(response.url)
-            login_url_str = str(self.config.login_url)
-            if response_url_str != login_url_str and "default.aspx" not in response_url_str.lower():
-                login_success = True
-                success_reason = f"redirected to {response.url}"
+        # Check if we were redirected to Dashboard.aspx
+        if "dashboard.aspx" in current_url.lower() and "default.aspx" not in current_url.lower():
+            login_success = True
+            success_reason = f"redirected to {current_url}"
         
         # Also check configured success indicator
         if not login_success and self.config.login_success_indicator:
             if self.config.login_success_indicator.startswith("selector:"):
                 selector = self.config.login_success_indicator.replace("selector:", "").strip()
-                soup = BeautifulSoup(response.text, "html.parser")
-                found_element = soup.select_one(selector)
-                if found_element:
+                try:
+                    element = await self.page.query_selector(selector)
+                    if element:
+                        login_success = True
+                        success_reason = f"found selector: {selector}"
+                except:
+                    pass
+            elif self.config.login_success_indicator.startswith("url:"):
+                url_pattern = self.config.login_success_indicator.replace("url:", "").strip()
+                if url_pattern in current_url:
                     login_success = True
-                    success_reason = f"found selector: {selector}"
-            elif self.config.login_success_indicator in response.text:
+                    success_reason = f"URL contains: {url_pattern}"
+            elif self.config.login_success_indicator in page_html:
                 login_success = True
                 success_reason = "found text indicator"
+        
+        # Final check: if we're on Dashboard (not default), it's success
+        if not login_success:
+            if "dashboard" in current_url.lower() and "default.aspx" not in current_url.lower():
+                login_success = True
+                success_reason = "on Dashboard page"
         
         if login_success:
             self.logged_in = True
             logger.info(f"[{self.config.supplier_name} Scraper] Login successful ({success_reason})")
             return True
         
-        logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - status: {response.status_code}, URL: {response.url}")
+        logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - URL: {current_url}")
         logger.info(f"[{self.config.supplier_name} Scraper] Check HTML dump file to see what the page contains after login")
         return False
     
@@ -255,6 +242,9 @@ class WebScraper:
         if not self.logged_in:
             raise Exception("Not logged in. Call login() first.")
         
+        if not self.page:
+            await self._init_browser()
+        
         bills = []
         
         try:
@@ -265,15 +255,15 @@ class WebScraper:
                 return bills
             
             logger.info(f"[{self.config.supplier_name} Scraper] Fetching bills page...")
-            response = await self.client.get(bills_url)
+            await self.page.goto(bills_url, wait_until="networkidle")
             
-            if response.status_code != 200:
-                logger.error(f"[{self.config.supplier_name} Scraper] Failed to load bills page: {response.status_code}")
-                return bills
+            # Wait a bit for dynamic content to load
+            await self.page.wait_for_timeout(2000)
             
-            self._save_html_dump(response.text, "bills_page")
+            page_html = await self.page.content()
+            self._save_html_dump(page_html, "bills_page")
             
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(page_html, "html.parser")
             
             # Find bills list
             bills_container = None
@@ -382,9 +372,10 @@ class WebScraper:
             # Download PDF if URL found
             if bill.pdf_url:
                 try:
-                    pdf_response = await self.client.get(bill.pdf_url)
-                    if pdf_response.status_code == 200:
-                        bill.pdf_content = pdf_response.content
+                    # Use Playwright to download PDF
+                    pdf_response = await self.page.request.get(bill.pdf_url)
+                    if pdf_response.status == 200:
+                        bill.pdf_content = await pdf_response.body()
                         logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF: {len(bill.pdf_content)} bytes")
                 except Exception as e:
                     logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF from {bill.pdf_url}: {e}")
@@ -430,8 +421,15 @@ class WebScraper:
         return None
     
     async def close(self):
-        """Close the HTTP client"""
-        await self.client.aclose()
+        """Close the browser and cleanup"""
+        if self.page:
+            await self.page.close()
+        if self.context:
+            await self.context.close()
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
 
 
 def load_scraper_config(supplier_name: str) -> Optional[ScraperConfig]:
