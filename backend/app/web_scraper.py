@@ -104,14 +104,28 @@ class WebScraper:
     
     def _save_html_dump(self, html_content: str, page_name: str):
         """Save HTML content to file for inspection"""
-        if self.save_html_dumps:
-            dump_dir = Path(__file__).parent.parent / "scraper_dumps"
-            dump_dir.mkdir(exist_ok=True)
-            self.dump_counter += 1
-            dump_file = dump_dir / f"{self.config.supplier_name.lower()}_{self.dump_counter:02d}_{page_name}.html"
+        if not self.save_html_dumps:
+            return
+        
+        # Use absolute path to ensure we're saving in the right place
+        # Path(__file__) = backend/app/web_scraper.py
+        # .parent = backend/app
+        # .parent = backend
+        # / "scraper_dumps" = backend/scraper_dumps
+        dump_dir = Path(__file__).parent.parent / "scraper_dumps"
+        dump_dir.mkdir(exist_ok=True)
+        self.dump_counter += 1
+        dump_file = dump_dir / f"{self.config.supplier_name.lower()}_{self.dump_counter:02d}_{page_name}.html"
+        try:
             with open(dump_file, 'w', encoding='utf-8') as f:
                 f.write(html_content)
-            logger.debug(f"[{self.config.supplier_name} Scraper] Saved HTML dump: {dump_file}")
+            abs_path = dump_file.resolve()
+            # Print to stdout (not just logger) so it shows in console
+            print(f"[SAVED] HTML dump: {abs_path}", flush=True)
+            logger.info(f"[{self.config.supplier_name} Scraper] Saved HTML dump: {abs_path}")
+        except Exception as e:
+            print(f"[ERROR] Failed to save HTML dump: {e}", flush=True)
+            logger.error(f"[{self.config.supplier_name} Scraper] Failed to save HTML dump: {e}", exc_info=True)
     
     async def _login_form(self, username: str, password: str) -> bool:
         """Login using form submission"""
@@ -140,6 +154,8 @@ class WebScraper:
         form_data = {}
         username_field = None
         password_field = None
+        submit_button_name = None
+        submit_button_value = None
         
         for inp in form.find_all("input"):
             name = inp.get("name", "")
@@ -157,6 +173,11 @@ class WebScraper:
                     if (self.config.password_field and name == self.config.password_field) or \
                        (not self.config.password_field and (inp_type == "password" or "pass" in inp_name_lower or "pwd" in inp_name_lower)):
                         password_field = name
+                
+                # Auto-detect submit button (ASP.NET forms often need this)
+                if inp_type == "submit" and not submit_button_name:
+                    submit_button_name = name
+                    submit_button_value = inp.get("value", "")
         
         # Use configured fields or auto-detected ones, fallback to defaults
         if not username_field:
@@ -167,6 +188,14 @@ class WebScraper:
         # Set username and password
         form_data[username_field] = username
         form_data[password_field] = password
+        
+        # Include submit button if found (important for ASP.NET forms)
+        # Always override the button value even if it's already in form_data (might have wrong value)
+        if submit_button_name:
+            form_data[submit_button_name] = submit_button_value
+            logger.debug(f"[{self.config.supplier_name} Scraper] Including submit button in form data: {submit_button_name}={submit_button_value}")
+        
+        logger.debug(f"[{self.config.supplier_name} Scraper] Submitting form with {len(form_data)} fields")
         
         # Submit form
         form_action = form.get("action", "")
@@ -181,27 +210,38 @@ class WebScraper:
         
         self._save_html_dump(response.text, "after_login")
         
-        # Check if login was successful
-        if self.config.login_success_indicator:
-            if self.config.login_success_indicator.startswith("selector:"):
-                selector = self.config.login_success_indicator.replace("selector:", "")
-                soup = BeautifulSoup(response.text, "html.parser")
-                if soup.select_one(selector):
-                    self.logged_in = True
-                    logger.info(f"[{self.config.supplier_name} Scraper] Login successful")
-                    return True
-            elif self.config.login_success_indicator in response.text:
-                self.logged_in = True
-                logger.info(f"[{self.config.supplier_name} Scraper] Login successful")
-                return True
-        else:
-            # Default: check if we're redirected away from login page
-            if response.status_code == 200 and response.url != self.config.login_url:
-                self.logged_in = True
-                logger.info(f"[{self.config.supplier_name} Scraper] Login successful (redirected)")
-                return True
+        # Check if login was successful - try multiple indicators
+        login_success = False
+        success_reason = ""
         
-        logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - status: {response.status_code}")
+        # First, check if we were redirected to a different URL (common for ASP.NET)
+        if response.status_code == 200:
+            response_url_str = str(response.url)
+            login_url_str = str(self.config.login_url)
+            if response_url_str != login_url_str and "default.aspx" not in response_url_str.lower():
+                login_success = True
+                success_reason = f"redirected to {response.url}"
+        
+        # Also check configured success indicator
+        if not login_success and self.config.login_success_indicator:
+            if self.config.login_success_indicator.startswith("selector:"):
+                selector = self.config.login_success_indicator.replace("selector:", "").strip()
+                soup = BeautifulSoup(response.text, "html.parser")
+                found_element = soup.select_one(selector)
+                if found_element:
+                    login_success = True
+                    success_reason = f"found selector: {selector}"
+            elif self.config.login_success_indicator in response.text:
+                login_success = True
+                success_reason = "found text indicator"
+        
+        if login_success:
+            self.logged_in = True
+            logger.info(f"[{self.config.supplier_name} Scraper] Login successful ({success_reason})")
+            return True
+        
+        logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - status: {response.status_code}, URL: {response.url}")
+        logger.info(f"[{self.config.supplier_name} Scraper] Check HTML dump file to see what the page contains after login")
         return False
     
     async def _login_api(self, username: str, password: str) -> bool:

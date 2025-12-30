@@ -29,36 +29,36 @@ async def test_scraper(supplier_name: str, username: str, password: str):
     config = load_scraper_config(supplier_name)
     if not config:
         logger.error(f"Config not found for {supplier_name}")
-        print(f"\n❌ Config file not found: backend/scraper_configs/{supplier_name.lower()}.json")
+        print(f"\n[ERROR] Config file not found: backend/scraper_configs/{supplier_name.lower()}.json")
         return False
     
-    print(f"\n✅ Loaded config for {supplier_name}")
+    print(f"\n[OK] Loaded config for {supplier_name}")
     print(f"   Base URL: {config.base_url}")
     print(f"   Login URL: {config.login_url}")
     print(f"   Bills URL: {config.bills_url}")
     
-    # Create scraper
-    scraper = WebScraper(config)
+    # Create scraper with HTML dumps enabled
+    scraper = WebScraper(config, save_html_dumps=True)
     
     try:
         # Test login
-        print(f"\n🔐 Attempting login...")
+        print(f"\n[LOGIN] Attempting login...")
         logged_in = await scraper.login(username, password)
         
         if not logged_in:
-            print(f"❌ Login failed")
+            print(f"[FAILED] Login failed")
             return False
         
-        print(f"✅ Login successful!")
+        print(f"[SUCCESS] Login successful!")
         
         # Test getting bills
-        print(f"\n📄 Fetching bills...")
+        print(f"\n[FETCH] Fetching bills...")
         bills = await scraper.get_bills()
         
-        print(f"✅ Found {len(bills)} bill(s)")
+        print(f"[OK] Found {len(bills)} bill(s)")
         
         if bills:
-            print(f"\n📋 Bills found:")
+            print(f"\n[BILLS] Bills found:")
             for i, bill in enumerate(bills, 1):
                 print(f"\n   Bill #{i}:")
                 if bill.bill_number:
@@ -72,13 +72,13 @@ async def test_scraper(supplier_name: str, username: str, password: str):
                 if bill.pdf_content:
                     print(f"      PDF Size: {len(bill.pdf_content)} bytes")
         else:
-            print(f"⚠️  No bills found - check your selectors in the config file")
+            print(f"[WARN] No bills found - check your selectors in the config file")
         
         return True
     
     except Exception as e:
         logger.error(f"Error testing scraper: {e}", exc_info=True)
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] {e}")
         return False
     
     finally:
@@ -91,29 +91,40 @@ async def test_login_only(supplier_name: str, username: str, password: str):
     
     config = load_scraper_config(supplier_name)
     if not config:
-        print(f"❌ Config not found")
+        print(f"[ERROR] Config not found")
         return False
     
-    scraper = WebScraper(config)
+    scraper = WebScraper(config, save_html_dumps=True)  # Enable HTML dumps
     
     try:
-        print(f"\n🔐 Testing login to {config.login_url}...")
+        print(f"\n[LOGIN] Testing login to {config.login_url}...")
         logged_in = await scraper.login(username, password)
         
         if logged_in:
-            print(f"✅ Login successful!")
+            print(f"[SUCCESS] Login successful!")
             return True
         else:
-            print(f"❌ Login failed - check credentials and login_success_indicator in config")
+            print(f"[FAILED] Login failed - check credentials and login_success_indicator in config")
             return False
     
     except Exception as e:
         logger.error(f"Login error: {e}", exc_info=True)
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] {e}")
         return False
     
     finally:
         await scraper.close()
+        # Show where HTML dumps were saved
+        if scraper.save_html_dumps and scraper.dump_counter > 0:
+            dump_dir = Path(__file__).parent / "scraper_dumps"
+            print(f"\n[INFO] HTML dumps saved to: {dump_dir.resolve()}")
+        elif scraper.save_html_dumps:
+            dump_dir = Path(__file__).parent / "scraper_dumps"
+            print(f"\n[WARN] HTML dumps enabled but no files were saved. Check if _save_html_dump was called.")
+        # Show where HTML dumps were saved
+        if scraper.save_html_dumps and scraper.dump_counter > 0:
+            dump_dir = Path(__file__).parent / "scraper_dumps"
+            print(f"\n[INFO] HTML dumps saved to: {dump_dir.resolve()}")
 
 
 async def inspect_login_page(supplier_name: str):
@@ -122,11 +133,11 @@ async def inspect_login_page(supplier_name: str):
     
     config = load_scraper_config(supplier_name)
     if not config:
-        print(f"❌ Config not found")
+        print(f"[ERROR] Config not found")
         return
     
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        print(f"\n📄 Fetching login page: {config.login_url}")
+        print(f"\n[FETCH] Fetching login page: {config.login_url}")
         response = await client.get(config.login_url)
         
         print(f"   Status: {response.status_code}")
@@ -137,7 +148,7 @@ async def inspect_login_page(supplier_name: str):
         with open(dump_file, 'w', encoding='utf-8') as f:
             f.write(response.text)
         
-        print(f"✅ Saved HTML to: {dump_file}")
+        print(f"[OK] Saved HTML to: {dump_file}")
         print(f"   Open this file in a browser to inspect the login form structure")
 
 
@@ -157,13 +168,13 @@ if __name__ == "__main__":
         asyncio.run(inspect_login_page(args.supplier))
     elif args.login_only:
         if not args.username or not args.password:
-            print("❌ --username and --password required for login test")
+            print("[ERROR] --username and --password required for login test")
             sys.exit(1)
         success = asyncio.run(test_login_only(args.supplier, args.username, args.password))
         sys.exit(0 if success else 1)
     else:
         if not args.username or not args.password:
-            print("❌ --username and --password required")
+            print("[ERROR] --username and --password required")
             sys.exit(1)
         success = asyncio.run(test_scraper(args.supplier, args.username, args.password))
         sys.exit(0 if success else 1)
