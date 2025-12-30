@@ -73,6 +73,7 @@ class ScraperConfig:
     requires_js: bool = False  # If True, would need Selenium/Playwright (not implemented yet)
     wait_after_login: float = 1.0  # Seconds to wait after login
     timeout: float = 30.0
+    multiple_contracts_possible: bool = False  # If True, user may have multiple contracts/addresses
 
 
 class WebScraper:
@@ -419,27 +420,66 @@ class WebScraper:
     async def _download_pdf_via_javascript(self, bill: ScrapedBill, bill_params: str):
         """Download PDF by calling JavaScript BillClick function"""
         try:
-            # Call BillClick function via Playwright
-            # The function likely opens a modal or makes an AJAX call
-            # We'll intercept the network request for the PDF
-            pdf_content = None
+            # BillClick makes an AJAX call that returns JSON with the PDF URL
+            # Intercept the AJAX response
+            pdf_url_from_json = None
             
-            # Set up response listener to catch PDF download
-            async with self.page.expect_response(lambda response: "pdf" in response.url.lower() or response.headers.get("content-type", "").startswith("application/pdf")) as response_info:
+            # Set up response listener to catch the AJAX response (JSON with PDF URL)
+            async with self.page.expect_response(lambda response: 
+                "BillDashboard.aspx" in response.url or 
+                "GetBill" in response.url or
+                "ViewBill" in response.url or
+                response.headers.get("content-type", "").startswith("application/json")
+            ) as response_info:
                 # Call the BillClick function
                 await self.page.evaluate(f"BillClick('{bill_params}')")
             
             response = await response_info.value
             if response.status == 200:
-                bill.pdf_content = await response.body()
-                bill.pdf_url = response.url
-                logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF via JavaScript: {len(bill.pdf_content)} bytes")
+                response_text = await response.text()
+                logger.debug(f"[{self.config.supplier_name} Scraper] BillClick response: {response_text[:200]}")
                 
-                # Save PDF temporarily for debugging
-                if self.save_html_dumps and bill.pdf_content:
-                    await self._save_pdf_dump(bill)
+                # Parse JSON response to get PDF URL
+                try:
+                    import json
+                    response_json = json.loads(response_text)
+                    # The response is like: {"d":"\"Upload.ashx?q=...&EncType=I,Bill...pdf\""}
+                    if "d" in response_json:
+                        pdf_path = response_json["d"]
+                        # Remove outer quotes if present
+                        if isinstance(pdf_path, str):
+                            if pdf_path.startswith('"') and pdf_path.endswith('"'):
+                                pdf_path = pdf_path[1:-1]
+                            # Remove escape sequences
+                            pdf_path = pdf_path.replace("\\u0026", "&")
+                            pdf_path = pdf_path.replace("\\", "")
+                        # Build full URL
+                        if pdf_path.startswith("Upload.ashx"):
+                            bill.pdf_url = f"{self.config.base_url}/portal/{pdf_path}"
+                        elif pdf_path.startswith("/"):
+                            bill.pdf_url = f"{self.config.base_url}{pdf_path}"
+                        elif pdf_path.startswith("http"):
+                            bill.pdf_url = pdf_path
+                        else:
+                            bill.pdf_url = f"{self.config.base_url}/portal/{pdf_path}"
+                        
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Extracted PDF URL from JSON: {bill.pdf_url}")
+                        
+                        # Now download the actual PDF
+                        await self._download_pdf_from_url(bill)
+                except json.JSONDecodeError:
+                    # Maybe it's already a PDF?
+                    content_type = response.headers.get("content-type", "")
+                    if "pdf" in content_type.lower():
+                        bill.pdf_content = await response.body()
+                        bill.pdf_url = response.url
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF directly: {len(bill.pdf_content)} bytes")
+                        if self.save_html_dumps and bill.pdf_content:
+                            await self._save_pdf_dump(bill)
+                    else:
+                        raise Exception(f"Unexpected response format: {response_text[:200]}")
         except Exception as e:
-            logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF via JavaScript: {e}")
+            logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF via JavaScript: {e}", exc_info=True)
             # Try alternative: look for PDF in modal or iframe
             try:
                 # Wait for modal to appear
@@ -451,8 +491,8 @@ class WebScraper:
                     if pdf_src:
                         bill.pdf_url = pdf_src
                         await self._download_pdf_from_url(bill)
-            except:
-                pass
+            except Exception as e2:
+                logger.debug(f"[{self.config.supplier_name} Scraper] Alternative PDF download also failed: {e2}")
     
     async def _download_pdf_from_url(self, bill: ScrapedBill):
         """Download PDF from a direct URL"""

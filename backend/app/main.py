@@ -1378,11 +1378,51 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                     logger.error(f"[Suppliers Sync] Error syncing {supplier.name}: {error_msg}")
                 errors.append(f"{supplier.name}: {error_msg}")
         
+        # Check if any supplier has multiple contracts (after sync)
+        from app.web_scraper import load_scraper_config
+        multiple_contracts_info = {}
+        for supplier, property_supplier in suppliers_to_sync:
+            config = load_scraper_config(supplier.name)
+            if config and config.multiple_contracts_possible:
+                # Get all contracts found for this supplier from bills
+                supplier_bills = db.list_bills(property_id=property_id)
+                supplier_contracts = {}
+                for bill in supplier_bills:
+                    if bill.contract_id and bill.description == supplier.name:
+                        if bill.contract_id not in supplier_contracts:
+                            supplier_contracts[bill.contract_id] = {
+                                "contract_id": bill.contract_id,
+                                "address": None
+                            }
+                            # Try to get address from PDF if available
+                            if bill.pdf_content:
+                                try:
+                                    supplier_pattern = next((p for p in all_patterns if p.supplier and p.supplier.lower() == supplier.name.lower()), None)
+                                    if supplier_pattern:
+                                        from app.pdf_parser import parse_pdf_with_patterns
+                                        pdf_result = parse_pdf_with_patterns(
+                                            bill.pdf_content,
+                                            patterns=[supplier_pattern],
+                                            property_id=property_id
+                                        )
+                                        address = pdf_result.address or pdf_result.consumption_location
+                                        if address:
+                                            supplier_contracts[bill.contract_id]["address"] = address
+                                except:
+                                    pass
+                
+                if len(supplier_contracts) > 1:
+                    multiple_contracts_info[supplier.id] = {
+                        "supplier_name": supplier.name,
+                        "contracts": list(supplier_contracts.values())
+                    }
+        
         result = {
             "status": "success",
             "property_id": property_id,
             "bills_created": bills_created,
-            "errors": errors if errors else None
+            "errors": errors if errors else None,
+            "multiple_contracts": multiple_contracts_info if multiple_contracts_info else None
         }
         logger.info(f"[Suppliers Sync] Sync completed for property {property_id}: {bills_created} bill(s) created, {len(errors)} error(s)")
         return result
@@ -1430,6 +1470,9 @@ async def _sync_supplier_scraper(
     contract_id_filter = property_supplier.contract_id if property_supplier else None
     contract_id_to_save = None
     
+    # Track all unique contracts found (for multiple contracts support)
+    found_contracts = set()
+    
     try:
         # Login
         logged_in = await scraper.login(username, password)
@@ -1474,7 +1517,8 @@ async def _sync_supplier_scraper(
             bill_number = scraped_bill.bill_number
             amount = scraped_bill.amount
             due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
-            extracted_contract_id = None
+            # Use contract_id from scraped bill if available (from table)
+            extracted_contract_id = scraped_bill.contract_id
             
             if scraped_bill.pdf_content and supplier_pattern:
                 try:
@@ -1492,7 +1536,8 @@ async def _sync_supplier_scraper(
                         bill_number = pdf_result.bill_number
                     if pdf_result.amount:
                         amount = pdf_result.amount
-                    if pdf_result.contract_id:
+                    # Use contract_id from PDF if not already set from table
+                    if pdf_result.contract_id and not extracted_contract_id:
                         extracted_contract_id = pdf_result.contract_id
                     if pdf_result.due_date:
                         try:
@@ -1516,9 +1561,12 @@ async def _sync_supplier_scraper(
                     logger.debug(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch: {extracted_contract_id} != {contract_id_filter}")
                     continue
             
-            # Save contract_id if we extracted it and it's not set yet
-            if extracted_contract_id and not contract_id_to_save:
-                contract_id_to_save = extracted_contract_id
+            # Track contract_id for multiple contracts support
+            if extracted_contract_id:
+                found_contracts.add(extracted_contract_id)
+                # Save contract_id if we extracted it and it's not set yet
+                if not contract_id_to_save:
+                    contract_id_to_save = extracted_contract_id
             
             # Determine bill status
             bill_status = BillStatus.PENDING

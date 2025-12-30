@@ -40,6 +40,9 @@ export default function PropertyBillsView({
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [showAddressWarning, setShowAddressWarning] = useState(false);
   const [showPatternSelection, setShowPatternSelection] = useState(false);
+  const [showContractSelector, setShowContractSelector] = useState(false);
+  const [multipleContracts, setMultipleContracts] = useState<Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }>>({});
+  const [selectedContracts, setSelectedContracts] = useState<Record<string, string>>({});
 
   const handleError = (err: unknown) => {
     console.error('[PropertyBillsView] Error:', err);
@@ -253,7 +256,23 @@ export default function PropertyBillsView({
                 try {
                   console.log('[PropertyBillsView] Starting supplier sync for property:', propertyId);
                   const result = await api.suppliers.sync(token, propertyId);
-                  if (result.errors && result.errors.length > 0) {
+                  
+                  // Check if multiple contracts were found
+                  if (result.multiple_contracts && Object.keys(result.multiple_contracts).length > 0) {
+                    setMultipleContracts(result.multiple_contracts);
+                    setShowContractSelector(true);
+                    // Initialize selected contracts with first contract for each supplier
+                    const initialSelections: Record<string, string> = {};
+                    for (const [supplierId, info] of Object.entries(result.multiple_contracts)) {
+                      if (info.contracts.length > 0) {
+                        initialSelections[supplierId] = info.contracts[0].contract_id;
+                      }
+                    }
+                    setSelectedContracts(initialSelections);
+                    if (onError) {
+                      onError(`Found multiple contracts. Please select which contracts to use for each supplier.`);
+                    }
+                  } else if (result.errors && result.errors.length > 0) {
                     const errorMsg = result.errors.join('; ');
                     if (onError) {
                       onError(errorMsg);
@@ -466,6 +485,83 @@ export default function PropertyBillsView({
           }
         }}
       />
+      <Dialog open={showContractSelector} onOpenChange={setShowContractSelector}>
+        <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-slate-200">Select Contracts</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <p className="text-slate-300 text-sm">
+              Multiple contracts were found. Please select which contract to use for each supplier.
+            </p>
+            {Object.entries(multipleContracts).map(([supplierId, info]) => (
+              <div key={supplierId} className="space-y-2">
+                <Label className="text-slate-300 font-medium">{info.supplier_name}</Label>
+                <Select
+                  value={selectedContracts[supplierId] || ''}
+                  onValueChange={(value) => {
+                    setSelectedContracts({ ...selectedContracts, [supplierId]: value });
+                  }}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
+                    <SelectValue placeholder="Select contract" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    {info.contracts.map((contract) => (
+                      <SelectItem key={contract.contract_id} value={contract.contract_id} className="text-slate-200">
+                        {contract.contract_id} {contract.address ? `- ${contract.address}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+            <div className="flex gap-2 justify-end mt-6">
+              <Button
+                onClick={() => {
+                  setShowContractSelector(false);
+                  setMultipleContracts({});
+                  setSelectedContracts({});
+                }}
+                className="bg-slate-700 text-slate-200 hover:bg-slate-600"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!token) return;
+                  // Update property suppliers with selected contract_ids
+                  try {
+                    const propertySuppliers = await api.suppliers.listForProperty(token, propertyId);
+                    for (const [supplierId, contractId] of Object.entries(selectedContracts)) {
+                      const propertySupplier = propertySuppliers.find(ps => ps.supplier_id === supplierId);
+                      if (propertySupplier) {
+                        await api.suppliers.updateForProperty(token, propertyId, propertySupplier.id, {
+                          contract_id: contractId
+                        });
+                      }
+                    }
+                    setShowContractSelector(false);
+                    setMultipleContracts({});
+                    setSelectedContracts({});
+                    if (onBillsChange) {
+                      onBillsChange();
+                    }
+                    if (onError) {
+                      onError('Contract selections saved. You can sync bills again to filter by selected contracts.');
+                    }
+                  } catch (err) {
+                    handleError(err);
+                  }
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Save Selections
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

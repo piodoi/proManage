@@ -17,6 +17,7 @@
   "bill_contract_id_selector": "td:nth-child(2)",
   "bill_pdf_link_selector": "td:nth-child(7) a[onclick*='BillClick']",
   "timeout": 30.0,
-  "wait_after_login": 2.0
+  "wait_after_login": 2.0,
+  "multiple_contracts_possible": true
 }
 

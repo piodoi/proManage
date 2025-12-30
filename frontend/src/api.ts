@@ -88,7 +88,7 @@ export const api = {
     addToProperty: (token: string, propertyId: string, data: PropertySupplierCreate) => request<PropertySupplier>('/properties/' + propertyId + '/suppliers', { method: 'POST', body: data, token }),
     updateForProperty: (token: string, propertyId: string, propertySupplierId: string, data: PropertySupplierUpdate) => request<PropertySupplier>(`/properties/${propertyId}/suppliers/${propertySupplierId}`, { method: 'PUT', body: data, token }),
     removeFromProperty: (token: string, propertyId: string, propertySupplierId: string) => request<{ status: string }>(`/properties/${propertyId}/suppliers/${propertySupplierId}`, { method: 'DELETE', token }),
-    sync: (token: string, propertyId: string) => request<{ status: string; property_id: string; bills_created: number; errors?: string[]; message?: string }>(`/suppliers/sync/${propertyId}`, { method: 'POST', token }),
+    sync: (token: string, propertyId: string) => request<{ status: string; property_id: string; bills_created: number; errors?: string[]; message?: string; multiple_contracts?: Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }> }>(`/suppliers/sync/${propertyId}`, { method: 'POST', token }),
   },
 
 
@@ -237,6 +237,7 @@ export type PropertySupplierCreate = {
 export type PropertySupplierUpdate = {
   username?: string;
   password?: string;
+  contract_id?: string;
 };
 
 export type Renter = {
