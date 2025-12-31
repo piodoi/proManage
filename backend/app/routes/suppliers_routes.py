@@ -9,7 +9,7 @@ from app.models import (
 )
 from app.auth import require_landlord, require_admin
 from app.database import db
-from app.utils.suppliers import initialize_suppliers
+from app.utils.suppliers import initialize_suppliers, save_suppliers_to_json
 
 router = APIRouter(tags=["suppliers"])
 logger = logging.getLogger(__name__)
@@ -71,6 +71,10 @@ async def admin_create_supplier(
         extraction_pattern_supplier=data.extraction_pattern_supplier,
     )
     db.save_supplier(supplier)
+    
+    # Sync to JSON file
+    save_suppliers_to_json()
+    
     return supplier
 
 
@@ -98,6 +102,10 @@ async def admin_update_supplier(
         supplier.extraction_pattern_supplier = data.extraction_pattern_supplier
     
     db.save_supplier(supplier)
+    
+    # Sync to JSON file
+    save_suppliers_to_json()
+    
     return supplier
 
 
@@ -175,6 +183,9 @@ async def admin_delete_supplier(
     deleted = db.delete_supplier(supplier_id)
     if not deleted:
         raise HTTPException(status_code=500, detail="Failed to delete supplier")
+    
+    # Sync to JSON file
+    save_suppliers_to_json()
     
     return {"status": "deleted"}
 

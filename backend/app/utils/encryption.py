@@ -6,6 +6,10 @@ from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
+# Ensure dotenv is loaded before reading environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 # Encryption key for passwords (in production, use a secure key from env)
 # Fernet keys must be 32 bytes when base64-decoded (44 characters when base64-encoded)
 EBLOC_ENCRYPTION_KEY = os.getenv("EBLOC_ENCRYPTION_KEY")

@@ -28,12 +28,21 @@ def load_extraction_patterns_from_json(force_update: bool = False):
     results = []
     
     for json_file in patterns_dir.glob("*.json"):
+        # Skip suppliers.json - it's not an extraction pattern
+        if json_file.name == "suppliers.json":
+            continue
+            
         try:
             # Get file modification time
             file_mtime = datetime.fromtimestamp(os.path.getmtime(json_file))
             
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            
+            # Skip if data is a list (not a pattern object)
+            if isinstance(data, list):
+                logger.debug(f"Skipping {json_file.name} - file contains a list, not a pattern object")
+                continue
             
             # Check if pattern already exists (by supplier or name)
             supplier = data.get('supplier')

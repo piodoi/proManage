@@ -19,6 +19,7 @@ from app.routes import (
 )
 from app.routes.subscription_routes import router as subscription_router
 from app.routes import load_extraction_patterns_from_json
+from app.utils.suppliers import initialize_suppliers
 
 load_dotenv()
 
@@ -51,8 +52,9 @@ app.include_router(subscription_router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Load extraction patterns from JSON files on startup."""
+    """Load extraction patterns and initialize suppliers from JSON files on startup."""
     load_extraction_patterns_from_json()
+    initialize_suppliers()
 
 
 @app.get("/health")
