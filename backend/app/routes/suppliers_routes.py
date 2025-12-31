@@ -161,8 +161,21 @@ async def admin_delete_supplier(
         for ps in property_suppliers:
             db.delete_property_supplier(ps.id)
     
+    # Delete all user supplier credentials for this supplier
+    # Get all users and delete their credentials for this supplier
+    all_users = db.list_users()
+    for user in all_users:
+        user_credentials = db.list_user_supplier_credentials(user.id)
+        for cred in user_credentials:
+            if cred.supplier_id == supplier_id:
+                db.delete_user_supplier_credential(cred.id)
+                logger.info(f"[Suppliers] Deleted credential {cred.id} for supplier {supplier_id}")
+    
     # Delete the supplier
-    db.delete_supplier(supplier_id)
+    deleted = db.delete_supplier(supplier_id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail="Failed to delete supplier")
+    
     return {"status": "deleted"}
 
 

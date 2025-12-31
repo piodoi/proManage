@@ -176,8 +176,20 @@ async def setup_ebloc_supplier_for_properties(
     if not user.ebloc_username or not user.ebloc_password_hash:
         raise HTTPException(status_code=400, detail="E-bloc credentials not configured")
     
-    # Find or create E-bloc supplier
-    ebloc_supplier = db.get_supplier_by_name("E-bloc")
+    # Find or create E-bloc supplier (case-insensitive lookup)
+    all_suppliers = db.list_suppliers()
+    ebloc_supplier = None
+    for supplier in all_suppliers:
+        if supplier.name.lower() in ["e-bloc", "ebloc", "e-bloc.ro"]:
+            ebloc_supplier = supplier
+            # Update to ensure correct name and settings
+            ebloc_supplier.name = "E-bloc"
+            ebloc_supplier.bill_type = BillType.EBLOC
+            ebloc_supplier.has_api = True
+            db.save_supplier(ebloc_supplier)
+            logger.info(f"[E-Bloc] Found and updated existing E-bloc supplier: {ebloc_supplier.id}")
+            break
+    
     if not ebloc_supplier:
         ebloc_supplier = Supplier(
             name="E-bloc",
@@ -185,7 +197,7 @@ async def setup_ebloc_supplier_for_properties(
             has_api=True,
         )
         db.save_supplier(ebloc_supplier)
-        logger.info(f"[E-Bloc] Created E-bloc supplier: {ebloc_supplier.id}")
+        logger.info(f"[E-Bloc] Created new E-bloc supplier: {ebloc_supplier.id}")
     
     # Create or update user supplier credentials
     existing_credential = db.get_user_supplier_credential_by_user_supplier(
