@@ -40,27 +40,27 @@ export function LanguageSelector() {
       <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
         <DropdownMenuItem
           onClick={() => setLanguage('en')}
-          className="text-slate-100 hover:bg-slate-700 cursor-pointer"
+          className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
         >
           <img 
             src={FLAG_IMAGES.en} 
             alt="UK flag"
-            className="h-5 w-auto mr-2"
+            className="h-5 w-8 object-cover mr-3 flex-shrink-0"
           />
-          <span>English</span>
-          {language === 'en' && <span className="ml-auto text-emerald-400">✓</span>}
+          <span className="flex-1 text-left">English</span>
+          {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => setLanguage('ro')}
-          className="text-slate-100 hover:bg-slate-700 cursor-pointer"
+          className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
         >
           <img 
             src={FLAG_IMAGES.ro} 
             alt="Romanian flag"
-            className="h-5 w-auto mr-2"
+            className="h-5 w-8 object-cover mr-3 flex-shrink-0"
           />
-          <span>Română</span>
-          {language === 'ro' && <span className="ml-auto text-emerald-400">✓</span>}
+          <span className="flex-1 text-left">Română</span>
+          {language === 'ro' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
