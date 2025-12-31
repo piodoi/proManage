@@ -225,16 +225,23 @@ class WebScraperSync:
                 if bill_el:
                     bill_number = bill_el.get_text(strip=True)
             
-            # Extract amount
+            # Extract amount - assume value is in bani, strip all commas/dots, then divide by 100
             amount = None
             if self.config.bill_amount_selector:
                 amount_el = item.select_one(self.config.bill_amount_selector)
                 if amount_el:
                     amount_text = amount_el.get_text(strip=True)
-                    # Extract numeric value
-                    amount_match = re.search(r'[\d,]+\.?\d*', amount_text.replace(',', ''))
+                    # Extract numeric value - strip all commas, dots, and spaces
+                    amount_match = re.search(r'[\d,.]+', amount_text)
                     if amount_match:
-                        amount = float(amount_match.group().replace(',', ''))
+                        # Strip all commas and dots - assume value is in bani
+                        cleaned = amount_match.group().replace(',', '').replace('.', '').replace(' ', '')
+                        try:
+                            # Convert to int (bani) then divide by 100 to get lei
+                            amount_bani = int(cleaned)
+                            amount = amount_bani / 100.0
+                        except ValueError:
+                            pass
             
             # Extract due date
             due_date = None

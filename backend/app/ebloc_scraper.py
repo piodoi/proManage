@@ -335,10 +335,14 @@ class EblocScraper:
                 link_el = row.find("a", href=True)
                 month = month_el.get_text(strip=True) if month_el else "Unknown"
                 amount_text = amount_el.get_text(strip=True) if amount_el else "0"
-                amount = float(
-                    amount_text.replace("lei", "").replace("RON", "").replace(",", ".").strip()
-                    or "0"
-                )
+                # Strip all commas, dots, and currency symbols - assume value is in bani
+                cleaned = amount_text.replace("lei", "").replace("RON", "").replace(",", "").replace(".", "").strip() or "0"
+                try:
+                    # Convert to int (bani) then divide by 100 to get lei
+                    amount_bani = int(cleaned)
+                    amount = amount_bani / 100.0
+                except ValueError:
+                    amount = 0.0
                 due_text = due_el.get_text(strip=True) if due_el else None
                 due_date = None
                 if due_text:
@@ -910,12 +914,18 @@ class EblocScraper:
                 suma_span = soup.find("span", class_="plateste_suma_datorata_titlu")
                 if suma_span:
                     text = suma_span.get_text(strip=True)
-                    # Extract amount: "442,38 Lei"
-                    amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:Lei|RON)?', text, re.I)
+                    # Extract amount: "442,38 Lei" - assume value is in bani
+                    amount_match = re.search(r'(\d+[.,]?\d*)\s*(?:Lei|RON)?', text, re.I)
                     if amount_match:
-                        debt_text = amount_match.group(1).replace(',', '.')
-                        outstanding_debt = float(debt_text)
-                        logger.info(f"[E-Bloc Scraper] Found outstanding debt from span: {outstanding_debt} Lei")
+                        # Strip all commas and dots - assume value is in bani
+                        cleaned = amount_match.group(1).replace(',', '').replace('.', '').strip()
+                        try:
+                            # Convert to int (bani) then divide by 100 to get lei
+                            amount_bani = int(cleaned)
+                            outstanding_debt = amount_bani / 100.0
+                            logger.info(f"[E-Bloc Scraper] Found outstanding debt from span: {outstanding_debt} Lei")
+                        except ValueError:
+                            pass
                     else:
                         logger.warning(f"[E-Bloc Scraper] Could not extract amount from suma span: {text}")
                 else:
@@ -1020,11 +1030,18 @@ class EblocScraper:
                     continue
                 
                 amount_text = amount_span.get_text(strip=True)
-                amount_match = re.search(r'(\d+[.,]\d+|\d+)\s*(?:Lei|RON)?', amount_text, re.I)
+                amount_match = re.search(r'(\d+[.,]?\d*)\s*(?:Lei|RON)?', amount_text, re.I)
                 if not amount_match:
                     continue
                 
-                amount = float(amount_match.group(1).replace(',', '.'))
+                # Strip all commas and dots - assume value is in bani
+                cleaned = amount_match.group(1).replace(',', '').replace('.', '').strip()
+                try:
+                    # Convert to int (bani) then divide by 100 to get lei
+                    amount_bani = int(cleaned)
+                    amount = amount_bani / 100.0
+                except ValueError:
+                    continue
                 
                 # Extract receipt number from span with class "plateste_descriere" containing "Numărul:"
                 receipt_span = row.find("span", class_="plateste_descriere")

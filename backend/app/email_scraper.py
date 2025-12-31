@@ -52,12 +52,16 @@ def extract_bill_number(text: str) -> Optional[str]:
 
 
 def extract_amount(text: str) -> Optional[float]:
+    """Extract amount from text. Assumes amount is in bani (smallest unit), strips all commas/dots, then divides by 100 to get lei."""
     for pattern in AMOUNT_PATTERNS:
         match = pattern.search(text)
         if match:
-            amount_str = match.group(1).replace(',', '.')
+            # Strip all commas, dots, and spaces - assume value is in bani
+            cleaned = match.group(1).replace(',', '').replace('.', '').replace(' ', '').strip()
             try:
-                return float(amount_str)
+                # Convert to int (bani) then divide by 100 to get lei
+                amount_bani = int(cleaned)
+                return amount_bani / 100.0
             except ValueError:
                 continue
     return None

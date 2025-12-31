@@ -547,18 +547,16 @@ class WebScraper:
             logger.warning(f"[{self.config.supplier_name} Scraper] Failed to save PDF dump: {e}")
     
     def _parse_amount(self, text: str) -> Optional[float]:
-        """Parse amount from text"""
-        # Remove currency symbols and whitespace
+        """Parse amount from text. Assumes amount is in bani (smallest unit), strips all commas/dots, then divides by 100 to get lei."""
+        # Remove currency symbols and whitespace, keeping only digits, commas, and dots
         text = re.sub(r'[^\d.,]', '', text)
-        # Replace comma with dot if comma is decimal separator
-        if ',' in text and '.' in text:
-            # Assume comma is thousands separator
-            text = text.replace(',', '')
-        elif ',' in text:
-            text = text.replace(',', '.')
+        # Strip all commas and dots - assume value is in bani
+        cleaned = text.replace(',', '').replace('.', '')
         try:
-            return float(text)
-        except:
+            # Convert to int (bani) then divide by 100 to get lei
+            amount_bani = int(cleaned)
+            return amount_bani / 100.0
+        except ValueError:
             return None
     
     def _parse_date(self, text: str) -> Optional[datetime]:

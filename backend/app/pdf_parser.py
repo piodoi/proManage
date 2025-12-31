@@ -202,25 +202,32 @@ def extract_iban(text: str, custom_pattern: Optional[str] = None) -> Optional[st
 
 
 def extract_amount(text: str, custom_pattern: Optional[str] = None) -> Optional[float]:
+    """Extract amount from text. Assumes amount is in bani (smallest unit), strips all commas/dots, then divides by 100 to get lei."""
     if custom_pattern:
         result = apply_pattern(text, custom_pattern)
         if result:
             try:
-                cleaned = result.replace(',', '.').replace(' ', '')
-                return float(cleaned)
+                # Strip all commas, dots, and spaces - assume value is in bani
+                cleaned = result.replace(',', '').replace('.', '').replace(' ', '')
+                # Convert to int (bani) then divide by 100 to get lei
+                amount_bani = int(cleaned)
+                return amount_bani / 100.0
             except ValueError:
                 pass
     amount_patterns = [
-        r'(?:total|suma|amount|de plata|plata)[\s:]*(\d+[.,]\d{2})\s*(?:lei|ron|eur)?',
-        r'(\d+[.,]\d{2})\s*(?:lei|ron|eur)',
-        r'(?:lei|ron|eur)\s*(\d+[.,]\d{2})',
+        r'(?:total|suma|amount|de plata|plata)[\s:]*(\d+[.,]?\d*)\s*(?:lei|ron|eur)?',
+        r'(\d+[.,]?\d*)\s*(?:lei|ron|eur)',
+        r'(?:lei|ron|eur)\s*(\d+[.,]?\d*)',
     ]
     for pattern in amount_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             try:
-                cleaned = match.group(1).replace(',', '.')
-                return float(cleaned)
+                # Strip all commas, dots, and spaces - assume value is in bani
+                cleaned = match.group(1).replace(',', '').replace('.', '').replace(' ', '')
+                # Convert to int (bani) then divide by 100 to get lei
+                amount_bani = int(cleaned)
+                return amount_bani / 100.0
             except ValueError:
                 continue
     return None
