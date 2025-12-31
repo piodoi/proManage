@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.models import (
     User, Property, Renter, Bill, Payment, EmailConfig,
-    ExtractionPattern, UserRole, Supplier, PropertySupplier
+    ExtractionPattern, UserRole, Supplier, PropertySupplier, UserSupplierCredential
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -89,6 +89,14 @@ suppliers_table = Table(
     "suppliers", metadata,
     Column("id", String(36), primary_key=True),
     Column("name", String(255), index=True),
+    Column("data", Text, nullable=False),
+)
+
+user_supplier_credentials_table = Table(
+    "user_supplier_credentials", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), index=True),
+    Column("supplier_id", String(36), index=True),
     Column("data", Text, nullable=False),
 )
 
@@ -560,6 +568,66 @@ class Database:
                 property_suppliers_table.select().where(property_suppliers_table.c.supplier_id == supplier_id)
             ).fetchall()
             return [_deserialize(PropertySupplier, r.data) for r in results]
+
+    # UserSupplierCredential methods
+    def get_user_supplier_credential(self, credential_id: str) -> Optional[UserSupplierCredential]:
+        with engine.connect() as conn:
+            result = conn.execute(
+                user_supplier_credentials_table.select().where(user_supplier_credentials_table.c.id == credential_id)
+            ).fetchone()
+            return _deserialize(UserSupplierCredential, result.data) if result else None
+
+    def get_user_supplier_credential_by_user_supplier(self, user_id: str, supplier_id: str) -> Optional[UserSupplierCredential]:
+        """Get credential for a specific user-supplier pair"""
+        with engine.connect() as conn:
+            result = conn.execute(
+                user_supplier_credentials_table.select().where(
+                    (user_supplier_credentials_table.c.user_id == user_id) &
+                    (user_supplier_credentials_table.c.supplier_id == supplier_id)
+                )
+            ).fetchone()
+            return _deserialize(UserSupplierCredential, result.data) if result else None
+
+    def list_user_supplier_credentials(self, user_id: str) -> list[UserSupplierCredential]:
+        """List all supplier credentials for a user"""
+        with engine.connect() as conn:
+            results = conn.execute(
+                user_supplier_credentials_table.select().where(user_supplier_credentials_table.c.user_id == user_id)
+            ).fetchall()
+            return [_deserialize(UserSupplierCredential, r.data) for r in results]
+
+    def save_user_supplier_credential(self, credential: UserSupplierCredential) -> UserSupplierCredential:
+        with engine.connect() as conn:
+            existing = conn.execute(
+                user_supplier_credentials_table.select().where(user_supplier_credentials_table.c.id == credential.id)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    user_supplier_credentials_table.update().where(user_supplier_credentials_table.c.id == credential.id).values(
+                        user_id=credential.user_id,
+                        supplier_id=credential.supplier_id,
+                        data=_serialize(credential)
+                    )
+                )
+            else:
+                conn.execute(
+                    user_supplier_credentials_table.insert().values(
+                        id=credential.id,
+                        user_id=credential.user_id,
+                        supplier_id=credential.supplier_id,
+                        data=_serialize(credential)
+                    )
+                )
+            conn.commit()
+        return credential
+
+    def delete_user_supplier_credential(self, credential_id: str) -> bool:
+        with engine.connect() as conn:
+            result = conn.execute(
+                user_supplier_credentials_table.delete().where(user_supplier_credentials_table.c.id == credential_id)
+            )
+            conn.commit()
+            return result.rowcount > 0
 
 
 db = Database()

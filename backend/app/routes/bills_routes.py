@@ -286,8 +286,7 @@ async def parse_bill_pdf(
                 property_supplier = PropertySupplier(
                     property_id=property_id,
                     supplier_id=matched_supplier.id,
-                    username=None,
-                    password_hash=None,
+                    credential_id=None,
                 )
                 db.save_property_supplier(property_supplier)
                 supplier_added = True

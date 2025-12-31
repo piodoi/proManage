@@ -314,13 +314,23 @@ class Supplier(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class PropertySupplier(BaseModel):
-    """Represents a supplier configured for a specific property with credentials"""
+class UserSupplierCredential(BaseModel):
+    """Represents user credentials for a supplier (shared across all user's properties)"""
     id: str = Field(default_factory=gen_id)
-    property_id: str
+    user_id: str  # Reference to User.id
     supplier_id: str  # Reference to Supplier.id
     username: Optional[str] = None  # Encrypted username for API access
     password_hash: Optional[str] = None  # Encrypted password for API access
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PropertySupplier(BaseModel):
+    """Represents a supplier configured for a specific property"""
+    id: str = Field(default_factory=gen_id)
+    property_id: str
+    supplier_id: str  # Reference to Supplier.id
+    credential_id: Optional[str] = None  # Reference to UserSupplierCredential.id (shared credentials)
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property (filled on first scrape)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -342,11 +352,20 @@ class SupplierUpdate(BaseModel):
 
 class PropertySupplierCreate(BaseModel):
     supplier_id: str
+    credential_id: Optional[str] = None  # Link to existing user-supplier credential
+
+
+class PropertySupplierUpdate(BaseModel):
+    credential_id: Optional[str] = None  # Link to existing user-supplier credential
+
+
+class UserSupplierCredentialCreate(BaseModel):
+    supplier_id: str
     username: Optional[str] = None
     password: Optional[str] = None
 
 
-class PropertySupplierUpdate(BaseModel):
+class UserSupplierCredentialUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
 

@@ -121,10 +121,18 @@ export default function EblocImportDialog({
 
       const selectedProp = discoveredProperties.find(p => p.page_id === form.selectedPropertyId);
       if (selectedProp) {
-        await api.properties.create(token, {
+        const newProperty = await api.properties.create(token, {
           name: selectedProp.name,
           address: selectedProp.address || selectedProp.name,
         });
+        
+        // Auto-setup E-bloc supplier and credentials
+        try {
+          await api.ebloc.setupSupplierForProperties(token, [newProperty.id]);
+        } catch (setupErr) {
+          // Log but don't fail the import if setup fails
+          console.warn('Failed to auto-setup E-bloc supplier:', setupErr);
+        }
       }
 
       onOpenChange(false);
@@ -141,16 +149,39 @@ export default function EblocImportDialog({
   const handleImportAll = async () => {
     if (!token) return;
     if (discoveredProperties.length === 0) return;
+    if (!form.username || !form.password) {
+      onError(t('ebloc.enterUsernamePassword'));
+      return;
+    }
 
     setImporting(true);
     onError('');
 
     try {
+      // Configure credentials first
+      await api.ebloc.configure(token, {
+        username: form.username,
+        password: form.password,
+      });
+
+      // Import all properties
+      const importedPropertyIds: string[] = [];
       for (const prop of discoveredProperties) {
-        await api.properties.create(token, {
+        const newProperty = await api.properties.create(token, {
           name: prop.name,
           address: prop.address || prop.name,
         });
+        importedPropertyIds.push(newProperty.id);
+      }
+
+      // Auto-setup E-bloc supplier and credentials for all imported properties
+      if (importedPropertyIds.length > 0) {
+        try {
+          await api.ebloc.setupSupplierForProperties(token, importedPropertyIds);
+        } catch (setupErr) {
+          // Log but don't fail the import if setup fails
+          console.warn('Failed to auto-setup E-bloc supplier:', setupErr);
+        }
       }
 
       onOpenChange(false);

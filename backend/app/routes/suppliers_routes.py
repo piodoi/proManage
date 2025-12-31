@@ -10,19 +10,39 @@ from app.models import (
 from app.auth import require_landlord, require_admin
 from app.database import db
 from app.utils.suppliers import initialize_suppliers
-from app.utils.encryption import encrypt_password
 
 router = APIRouter(tags=["suppliers"])
 logger = logging.getLogger(__name__)
 
 
 @router.get("/suppliers")
-async def list_suppliers(current_user: TokenData = Depends(require_landlord)):
-    """List all supported suppliers"""
+async def list_suppliers(
+    assigned_only: bool = Query(False, description="Only return suppliers assigned to properties"),
+    current_user: TokenData = Depends(require_landlord)
+):
+    """List all supported suppliers, optionally filtered to only those assigned to properties"""
     # Initialize suppliers on first request
     initialize_suppliers()
-    suppliers = db.list_suppliers()
-    return suppliers
+    
+    if assigned_only:
+        # Get all properties for this user
+        user_properties = db.list_properties(landlord_id=current_user.user_id)
+        if not user_properties:
+            return []
+        
+        # Get all property suppliers for these properties
+        assigned_supplier_ids = set()
+        for prop in user_properties:
+            property_suppliers = db.list_property_suppliers(prop.id)
+            for ps in property_suppliers:
+                assigned_supplier_ids.add(ps.supplier_id)
+        
+        # Get unique suppliers
+        all_suppliers = db.list_suppliers()
+        return [s for s in all_suppliers if s.id in assigned_supplier_ids]
+    else:
+        suppliers = db.list_suppliers()
+        return suppliers
 
 
 @router.get("/admin/suppliers")
@@ -163,12 +183,19 @@ async def list_property_suppliers(
     for ps in property_suppliers:
         supplier = db.get_supplier(ps.supplier_id)
         if supplier:
+            # Check if credentials are available
+            has_credentials = False
+            if ps.credential_id:
+                credential = db.get_user_supplier_credential(ps.credential_id)
+                has_credentials = bool(credential and credential.username and credential.password_hash)
+            
             result.append({
                 "id": ps.id,
                 "supplier": supplier,
                 "property_id": ps.property_id,
                 "supplier_id": ps.supplier_id,
-                "has_credentials": bool(ps.username and ps.password_hash),
+                "credential_id": ps.credential_id,
+                "has_credentials": has_credentials,
                 "created_at": ps.created_at,
                 "updated_at": ps.updated_at,
             })
@@ -179,7 +206,7 @@ async def list_property_suppliers(
 async def create_property_supplier(
     property_id: str, data: PropertySupplierCreate, current_user: TokenData = Depends(require_landlord)
 ):
-    """Add a supplier to a property (with optional credentials)"""
+    """Add a supplier to a property (links to user-supplier credentials if available)"""
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -195,42 +222,42 @@ async def create_property_supplier(
     if existing:
         raise HTTPException(status_code=400, detail="Supplier already configured for this property")
     
-    # Check if same supplier exists for other properties of the same user - copy credentials
-    username = None
-    password_hash = None
-    if not data.username or not data.password:
-        # Try to find credentials from another property of the same user
-        user_properties = db.list_properties(landlord_id=prop.landlord_id)
-        for user_prop in user_properties:
-            if user_prop.id != property_id:
-                existing_ps = db.get_property_supplier_by_supplier(user_prop.id, data.supplier_id)
-                if existing_ps and existing_ps.username and existing_ps.password_hash:
-                    # Copy credentials from existing property supplier
-                    username = existing_ps.username
-                    password_hash = existing_ps.password_hash
-                    logger.info(f"[Property Supplier] Copied credentials from property {user_prop.id} for supplier {supplier.name}")
-                    break
-    
-    # Use provided credentials if available, otherwise use copied ones
-    if data.username:
-        username = encrypt_password(data.username)
-    if data.password:
-        password_hash = encrypt_password(data.password)
+    # If credential_id provided, verify it belongs to the user
+    credential_id = data.credential_id
+    if credential_id:
+        credential = db.get_user_supplier_credential(credential_id)
+        if not credential:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        if credential.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if credential.supplier_id != data.supplier_id:
+            raise HTTPException(status_code=400, detail="Credential does not match supplier")
+    else:
+        # Try to find existing user-supplier credential
+        user_credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, data.supplier_id)
+        if user_credential:
+            credential_id = user_credential.id
     
     property_supplier = PropertySupplier(
         property_id=property_id,
         supplier_id=data.supplier_id,
-        username=username,
-        password_hash=password_hash,
+        credential_id=credential_id,
     )
     db.save_property_supplier(property_supplier)
+    
+    # Determine if credentials are available
+    has_credentials = False
+    if credential_id:
+        credential = db.get_user_supplier_credential(credential_id)
+        has_credentials = bool(credential and credential.username and credential.password_hash)
     
     return {
         "id": property_supplier.id,
         "supplier": supplier,
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
-        "has_credentials": bool(property_supplier.username and property_supplier.password_hash),
+        "credential_id": property_supplier.credential_id,
+        "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,
     }
@@ -243,7 +270,7 @@ async def update_property_supplier(
     data: PropertySupplierUpdate,
     current_user: TokenData = Depends(require_landlord),
 ):
-    """Update supplier credentials for a property"""
+    """Update property supplier (link to different credential)"""
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -256,22 +283,37 @@ async def update_property_supplier(
     if property_supplier.property_id != property_id:
         raise HTTPException(status_code=400, detail="Property supplier does not belong to this property")
     
-    # Update credentials if provided
-    if data.username is not None:
-        property_supplier.username = encrypt_password(data.username) if data.username else None
-    if data.password is not None:
-        property_supplier.password_hash = encrypt_password(data.password) if data.password else None
+    # Update credential_id if provided
+    if data.credential_id is not None:
+        if data.credential_id:
+            # Verify credential exists and belongs to user
+            credential = db.get_user_supplier_credential(data.credential_id)
+            if not credential:
+                raise HTTPException(status_code=404, detail="Credential not found")
+            if credential.user_id != current_user.user_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+            if credential.supplier_id != property_supplier.supplier_id:
+                raise HTTPException(status_code=400, detail="Credential does not match supplier")
+        property_supplier.credential_id = data.credential_id
     
     property_supplier.updated_at = datetime.utcnow()
     db.save_property_supplier(property_supplier)
     
     supplier = db.get_supplier(property_supplier.supplier_id)
+    
+    # Determine if credentials are available
+    has_credentials = False
+    if property_supplier.credential_id:
+        credential = db.get_user_supplier_credential(property_supplier.credential_id)
+        has_credentials = bool(credential and credential.username and credential.password_hash)
+    
     return {
         "id": property_supplier.id,
         "supplier": supplier,
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
-        "has_credentials": bool(property_supplier.username and property_supplier.password_hash),
+        "credential_id": property_supplier.credential_id,
+        "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,
     }

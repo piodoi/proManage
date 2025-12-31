@@ -2,6 +2,7 @@ from app.routes.auth_routes import router as auth_router
 from app.routes.admin_routes import router as admin_router, load_extraction_patterns_from_json
 from app.routes.properties_routes import router as properties_router
 from app.routes.suppliers_routes import router as suppliers_router
+from app.routes.supplier_credentials_routes import router as supplier_credentials_router
 from app.routes.renters_routes import router as renters_router
 from app.routes.bills_routes import router as bills_router
 from app.routes.renter_public_routes import router as renter_public_router
@@ -14,6 +15,7 @@ __all__ = [
     "admin_router",
     "properties_router",
     "suppliers_router",
+    "supplier_credentials_router",
     "renters_router",
     "bills_router",
     "renter_public_router",

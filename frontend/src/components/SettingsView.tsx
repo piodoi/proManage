@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Mail, Settings } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import SupplierCredentialsSettings from './SupplierCredentialsSettings';
 
 type SettingsViewProps = {
   token: string | null;
@@ -145,6 +146,8 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
           )}
         </CardContent>
       </Card>
+
+      <SupplierCredentialsSettings token={token} onError={onError} />
     </div>
   );
 }

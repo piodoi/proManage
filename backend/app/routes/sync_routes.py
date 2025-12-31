@@ -454,12 +454,18 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                 })
         
         for idx, (supplier, property_supplier) in enumerate(suppliers_to_sync, 1):
+            # Get credentials from user-supplier credential
+            username = None
+            password = None
+            if property_supplier.credential_id:
+                credential = db.get_user_supplier_credential(property_supplier.credential_id)
+                if credential:
+                    username = decrypt_password(credential.username) if credential.username else None
+                    password = decrypt_password(credential.password_hash) if credential.password_hash else None
+                    logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
+            
             try:
                 logger.info(f"[Suppliers Sync] Syncing {supplier.name} ({idx}/{len(suppliers_to_sync)}) for property {property_id}")
-                # Decrypt credentials
-                username = decrypt_password(property_supplier.username)
-                password = decrypt_password(property_supplier.password_hash)
-                logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
                 
                 # Sync based on supplier capabilities
                 if supplier.has_api:
