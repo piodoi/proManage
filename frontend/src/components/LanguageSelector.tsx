@@ -7,9 +7,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const FLAG_EMOJIS: Record<string, string> = {
-  en: '🇬🇧',
-  ro: '🇷🇴',
+// Flag images - served from public folder
+const FLAG_IMAGES: Record<string, string> = {
+  en: '/flags/uk-flag.gif',
+  ro: '/flags/ro-flag.gif',
 };
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -28,7 +29,11 @@ export function LanguageSelector() {
           size="sm"
           className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
         >
-          <span className="text-lg mr-2">{FLAG_EMOJIS[language]}</span>
+          <img 
+            src={FLAG_IMAGES[language]} 
+            alt={`${language} flag`}
+            className="h-4 w-auto mr-2"
+          />
           <span className="text-xs uppercase">{language}</span>
         </Button>
       </DropdownMenuTrigger>
@@ -37,7 +42,11 @@ export function LanguageSelector() {
           onClick={() => setLanguage('en')}
           className="text-slate-100 hover:bg-slate-700 cursor-pointer"
         >
-          <span className="text-lg mr-2">🇬🇧</span>
+          <img 
+            src={FLAG_IMAGES.en} 
+            alt="UK flag"
+            className="h-5 w-auto mr-2"
+          />
           <span>English</span>
           {language === 'en' && <span className="ml-auto text-emerald-400">✓</span>}
         </DropdownMenuItem>
@@ -45,7 +54,11 @@ export function LanguageSelector() {
           onClick={() => setLanguage('ro')}
           className="text-slate-100 hover:bg-slate-700 cursor-pointer"
         >
-          <span className="text-lg mr-2">🇷🇴</span>
+          <img 
+            src={FLAG_IMAGES.ro} 
+            alt="Romanian flag"
+            className="h-5 w-auto mr-2"
+          />
           <span>Română</span>
           {language === 'ro' && <span className="ml-auto text-emerald-400">✓</span>}
         </DropdownMenuItem>
