@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, Property } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -35,7 +35,9 @@ export default function SupplierSyncDialog({
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SupplierProgress[]>([]);
   const [totalBillsCreated, setTotalBillsCreated] = useState(0);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [syncId, setSyncId] = useState<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const progressMapRef = useRef<Map<string, SupplierProgress>>(new Map());
 
   useEffect(() => {
     if (open && token && !syncing) {
@@ -43,53 +45,198 @@ export default function SupplierSyncDialog({
       setSyncing(true);
       setProgress([]);
       setTotalBillsCreated(0);
-      setErrors([]);
+      progressMapRef.current.clear();
+      const newSyncId = crypto.randomUUID();
+      setSyncId(newSyncId);
 
-      // Start sync
-      api.suppliers.sync(token, property.id)
-        .then((result) => {
-          setSyncing(false);
-          
-          if (result.status === 'no_suppliers') {
-            // Still show progress if there are suppliers without credentials
-            if (result.progress && Array.isArray(result.progress) && result.progress.length > 0) {
-              setProgress(result.progress as SupplierProgress[]);
-            } else {
-              // Only close if there's truly nothing to show
-              onError(result.message || 'No suppliers with credentials configured');
-              onOpenChange(false);
+      // Get API base URL
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const url = `${apiBaseUrl}/suppliers/sync/${property.id}?sync_id=${newSyncId}`;
+
+      // Create EventSource for SSE
+      const eventSource = new EventSource(url, {
+        withCredentials: false,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      } as any); // TypeScript workaround for headers in EventSource
+
+      // Override EventSource to send auth header via fetch
+      // Since EventSource doesn't support custom headers, we use a workaround
+      // For now, we'll use a POST request with fetch and read the stream manually
+      const abortController = new AbortController();
+
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream',
+        },
+        signal: abortController.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+
+          if (!reader) {
+            throw new Error('No response body');
+          }
+
+          let buffer = '';
+          let currentEvent = '';
+          let currentData = '';
+
+          const readStream = async (): Promise<void> => {
+            while (true) {
+              const { done, value } = await reader.read();
+              
+              if (done) {
+                break;
+              }
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+
+                if (line.startsWith('event: ')) {
+                  currentEvent = line.substring(7).trim();
+                } else if (line.startsWith('data: ')) {
+                  currentData = line.substring(6);
+                  // Check if this is the last line of the event (next line is empty or new event)
+                  if (i === lines.length - 1 || lines[i + 1] === '' || lines[i + 1].startsWith('event: ')) {
+                    try {
+                      const eventData = JSON.parse(currentData);
+                      handleSSEEvent(currentEvent || 'message', eventData);
+                      currentEvent = '';
+                      currentData = '';
+                    } catch (e) {
+                      console.error('Failed to parse SSE data:', e, currentData);
+                    }
+                  } else {
+                    // Multi-line data, accumulate
+                    currentData += '\n' + lines[i + 1].substring(6);
+                    i++; // Skip next line as we've processed it
+                  }
+                } else if (line === '' && currentEvent && currentData) {
+                  // Empty line indicates end of event
+                  try {
+                    const eventData = JSON.parse(currentData);
+                    handleSSEEvent(currentEvent, eventData);
+                    currentEvent = '';
+                    currentData = '';
+                  } catch (e) {
+                    console.error('Failed to parse SSE data:', e, currentData);
+                  }
+                }
+              }
             }
-            return;
-          }
+          };
 
-          // Update progress from result
-          if (result.progress && Array.isArray(result.progress)) {
-            setProgress(result.progress as SupplierProgress[]);
-          }
-
-          if (result.bills_created !== undefined) {
-            setTotalBillsCreated(result.bills_created);
-          }
-
-          if (result.errors && result.errors.length > 0) {
-            setErrors(result.errors);
-          }
+          await readStream();
         })
         .catch((err) => {
-          setSyncing(false);
-          const errorMsg = err instanceof Error ? err.message : 'Failed to sync supplier bills';
-          onError(errorMsg);
-          // Add error to progress for display
-          setProgress([{
-            supplier_name: 'Sync Error',
-            status: 'error',
-            bills_found: 0,
-            bills_created: 0,
-            error: errorMsg
-          }]);
+          if (err.name !== 'AbortError') {
+            setSyncing(false);
+            const errorMsg = err instanceof Error ? err.message : 'Failed to sync supplier bills';
+            onError(errorMsg);
+          }
         });
+
+      eventSourceRef.current = eventSource;
+
+      // Cleanup function
+      return () => {
+        abortController.abort();
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+      };
+    } else if (!open && eventSourceRef.current) {
+      // Close EventSource when dialog closes
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      setSyncing(false);
     }
   }, [open, token, property.id]);
+
+  const handleSSEEvent = (eventType: string, data: any) => {
+    if (eventType === 'start') {
+      setSyncing(true);
+    } else if (eventType === 'progress') {
+      // Update progress for this supplier
+      const supplierProgress: SupplierProgress = {
+        supplier_name: data.supplier_name,
+        status: data.status,
+        bills_found: data.bills_found || 0,
+        bills_created: data.bills_created || 0,
+        error: data.error,
+      };
+
+      progressMapRef.current.set(data.supplier_name, supplierProgress);
+      setProgress(Array.from(progressMapRef.current.values()));
+
+      // Update total bills created
+      if (data.bills_created) {
+        setTotalBillsCreated((prev) => {
+          const currentSupplierPrevious = progressMapRef.current.get(data.supplier_name);
+          const previousCreated = currentSupplierPrevious?.bills_created || 0;
+          return prev + (data.bills_created - previousCreated);
+        });
+      }
+    } else if (eventType === 'complete') {
+      setSyncing(false);
+      if (data.bills_created !== undefined) {
+        setTotalBillsCreated(data.bills_created);
+      }
+    } else if (eventType === 'error') {
+      setSyncing(false);
+      onError(data.error || 'Sync failed');
+    } else if (eventType === 'cancelled') {
+      setSyncing(false);
+      setProgress((prev) =>
+        prev.map((p) =>
+          p.status === 'processing' || p.status === 'starting'
+            ? { ...p, status: 'error' as const, error: 'Cancelled' }
+            : p
+        )
+      );
+    }
+  };
+
+  const handleCancel = async () => {
+    if (syncId && token) {
+      try {
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        await fetch(`${apiBaseUrl}/suppliers/sync/${property.id}/cancel?sync_id=${syncId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+      } catch (err) {
+        console.error('Failed to cancel sync:', err);
+      }
+    }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setSyncing(false);
+  };
+
+  const handleClose = () => {
+    if (syncing) {
+      handleCancel();
+    }
+    onOpenChange(false);
+  };
 
   const getStatusIcon = (status: SupplierProgress['status']) => {
     switch (status) {
@@ -120,11 +267,7 @@ export default function SupplierSyncDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(open) => {
-      if (!open && !syncing) {
-        onOpenChange(false);
-      }
-    }}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('supplier.syncProgress')}</DialogTitle>
@@ -163,7 +306,7 @@ export default function SupplierSyncDialog({
               <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-3">
                 {progress.map((item, index) => (
                   <div
-                    key={index}
+                    key={item.supplier_name || index}
                     className="bg-slate-700 rounded-lg p-4 border border-slate-600"
                   >
                     <div className="flex items-start justify-between">
@@ -208,23 +351,12 @@ export default function SupplierSyncDialog({
             </div>
           )}
 
-          {errors.length > 0 && (
-            <div className="bg-red-900/20 border border-red-700 rounded-lg p-4">
-              <p className="text-sm font-medium text-red-400 mb-2">{t('errors.generic')}:</p>
-              <ul className="space-y-1">
-                {errors.map((error, index) => (
-                  <li key={index} className="text-xs text-red-300">{error}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {!syncing && (
+          {!syncing && progress.length > 0 && (
             <div className="flex justify-end pt-2 border-t border-slate-700">
               <Button
                 onClick={() => {
                   onOpenChange(false);
-                  if (totalBillsCreated > 0 || progress.some(p => p.status === 'completed')) {
+                  if (totalBillsCreated > 0 || progress.some((p) => p.status === 'completed')) {
                     onSuccess();
                   }
                 }}
@@ -234,9 +366,20 @@ export default function SupplierSyncDialog({
               </Button>
             </div>
           )}
+
+          {syncing && (
+            <div className="flex justify-end pt-2 border-t border-slate-700">
+              <Button
+                onClick={handleCancel}
+                variant="outline"
+                className="bg-red-600 hover:bg-red-700 text-white border-red-700"
+              >
+                {t('common.cancel')}
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
-

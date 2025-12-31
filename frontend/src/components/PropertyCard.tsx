@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { ExternalLink, Trash2, Pencil, Copy, Settings } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
-import EblocSyncDialog from './dialogs/EblocSyncDialog';
 import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
 import { useI18n } from '../lib/i18n';
 
@@ -34,7 +33,6 @@ export default function PropertyCard({
 }: PropertyCardProps) {
   const { t } = useI18n();
   const [showRenterDialog, setShowRenterDialog] = useState(false);
-  const [showEblocSync, setShowEblocSync] = useState(false);
   const [showSupplierSettings, setShowSupplierSettings] = useState(false);
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [renterLink, setRenterLink] = useState<{ token: string; link: string } | null>(null);
@@ -76,14 +74,6 @@ export default function PropertyCard({
             <p className="text-sm text-slate-400">{property.address}</p>
           </div>
           <div className="flex gap-2">
-            <EblocSyncDialog
-              token={token}
-              property={property}
-              open={showEblocSync}
-              onOpenChange={setShowEblocSync}
-              onSuccess={onDataChange}
-              onError={onError}
-            />
             <Button
               size="sm"
               onClick={() => setShowSupplierSettings(true)}

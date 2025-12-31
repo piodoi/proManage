@@ -16,8 +16,9 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
   const [assignedSuppliers, setAssignedSuppliers] = useState<Supplier[]>([]);
   const [credentials, setCredentials] = useState<UserSupplierCredential[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editingCredential, setEditingCredential] = useState<UserSupplierCredential | null>(null);
-  const [formData, setFormData] = useState({ username: '', password: '' });
+  const [formData, setFormData] = useState<Record<string, { username: string; password: string }>>({});
 
   useEffect(() => {
     if (token) {
@@ -46,53 +47,144 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
 
   const handleEdit = (credential: UserSupplierCredential) => {
     setEditingCredential(credential);
-    setFormData({ username: '', password: '' }); // Don't show existing passwords
+    // Initialize form data for this specific credential (don't show existing passwords)
+    setFormData(prev => ({
+      ...prev,
+      [credential.id]: { username: '', password: '' }
+    }));
   };
 
   const handleCancel = () => {
+    if (editingCredential) {
+      // Remove form data for the credential being cancelled
+      setFormData(prev => {
+        const updated = { ...prev };
+        delete updated[editingCredential.id];
+        return updated;
+      });
+    }
     setEditingCredential(null);
-    setFormData({ username: '', password: '' });
   };
 
-  const handleSave = async () => {
-    if (!token || !editingCredential) return;
+  const handleSaveWithCredential = async (credential: UserSupplierCredential) => {
+    if (!token) {
+      console.error('[SupplierCredentials] Save failed: missing token');
+      return;
+    }
+
+    if (!credential || !credential.id) {
+      console.error('[SupplierCredentials] Save failed: invalid credential', credential);
+      if (onError) {
+        onError('Invalid credential ID');
+      }
+      return;
+    }
+
+    setSaving(true);
+    const credentialFormData = formData[credential.id] || { username: '', password: '' };
+
+    // Build update payload - only include fields that have values
+    const updateData: { username?: string; password?: string } = {};
+    if (credentialFormData.username && credentialFormData.username.trim()) {
+      updateData.username = credentialFormData.username.trim();
+    }
+    if (credentialFormData.password && credentialFormData.password.trim()) {
+      updateData.password = credentialFormData.password.trim();
+    }
+
+    // If both fields are empty, show error
+    if (!updateData.username && !updateData.password) {
+      setSaving(false);
+      if (onError) {
+        onError('Please enter at least a username or password');
+      }
+      return;
+    }
 
     try {
-      await api.supplierCredentials.update(token, editingCredential.id, {
-        username: formData.username || undefined,
-        password: formData.password || undefined,
+      await api.supplierCredentials.update(token, credential.id, updateData);
+      
+      // Remove form data for this credential after successful save
+      setFormData(prev => {
+        const updated = { ...prev };
+        delete updated[credential.id];
+        return updated;
       });
       setEditingCredential(null);
-      setFormData({ username: '', password: '' });
       await loadData();
       if (onError) {
         onError('');
       }
     } catch (err) {
+      console.error('[SupplierCredentials] Save error', err);
       if (onError) {
         onError(err instanceof Error ? err.message : t('supplier.saveCredentialsError'));
       }
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleCreate = async (supplierId: string) => {
-    if (!token) return;
+    if (!token) {
+      console.error('[SupplierCredentials] Create failed: missing token');
+      return;
+    }
+    
+    if (!editingCredential) {
+      console.error('[SupplierCredentials] Create failed: missing editingCredential');
+      return;
+    }
+
+    setSaving(true);
+    // Use supplier_id as key for new credentials being created
+    const supplierFormData = formData[supplierId] || formData[editingCredential.supplier_id] || { username: '', password: '' };
+
+    // Build create payload
+    const createData: { supplier_id: string; username?: string; password?: string } = {
+      supplier_id: supplierId,
+    };
+    
+    if (supplierFormData.username && supplierFormData.username.trim()) {
+      createData.username = supplierFormData.username.trim();
+    }
+    if (supplierFormData.password && supplierFormData.password.trim()) {
+      createData.password = supplierFormData.password.trim();
+    }
+
+    // If both fields are empty, show error
+    if (!createData.username && !createData.password) {
+      setSaving(false);
+      if (onError) {
+        onError('Please enter at least a username or password');
+      }
+      return;
+    }
 
     try {
-      await api.supplierCredentials.create(token, {
-        supplier_id: supplierId,
-        username: formData.username || undefined,
-        password: formData.password || undefined,
+      await api.supplierCredentials.create(token, createData);
+      
+      // Remove form data for this supplier after successful create
+      setFormData(prev => {
+        const updated = { ...prev };
+        delete updated[supplierId];
+        if (editingCredential.supplier_id) {
+          delete updated[editingCredential.supplier_id];
+        }
+        return updated;
       });
-      setFormData({ username: '', password: '' });
+      setEditingCredential(null);
       await loadData();
       if (onError) {
         onError('');
       }
     } catch (err) {
+      console.error('[SupplierCredentials] Create error', err);
       if (onError) {
         onError(err instanceof Error ? err.message : t('supplier.saveCredentialsError'));
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -159,8 +251,10 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
         <div className="space-y-3">
           {assignedSuppliers.map(supplier => {
             const credential = getCredentialForSupplier(supplier.id);
-            const isEditing = editingCredential?.id === credential?.id;
-            const isCreating = editingCredential?.supplier_id === supplier.id && !credential;
+            // Only consider editing if both exist and IDs match (explicit check to avoid undefined === undefined)
+            const isEditing = !!(editingCredential && credential && editingCredential.id && credential.id && editingCredential.id === credential.id);
+            // Only consider creating if editingCredential exists, matches supplier, and no credential exists
+            const isCreating = !!(editingCredential && !credential && editingCredential.supplier_id === supplier.id);
 
             return (
               <div
@@ -173,10 +267,39 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        onClick={isEditing ? handleSave : () => handleCreate(supplier.id)}
-                        className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          // Re-compute state inside handler to avoid stale closures
+                          const currentCredential = getCredentialForSupplier(supplier.id);
+                          const actuallyEditing = !!(editingCredential && currentCredential && editingCredential.id && currentCredential.id && editingCredential.id === currentCredential.id);
+                          const actuallyCreating = !!(editingCredential && !currentCredential && editingCredential.supplier_id === supplier.id);
+                          
+                          if (actuallyEditing && currentCredential && currentCredential.id) {
+                            // Pass the credential directly to avoid stale closure
+                            handleSaveWithCredential(currentCredential);
+                          } else if (actuallyCreating && editingCredential) {
+                            handleCreate(supplier.id);
+                          } else {
+                            console.error('[SupplierCredentials] Invalid save state', { 
+                              isEditing, 
+                              actuallyEditing,
+                              isCreating, 
+                              actuallyCreating,
+                              currentCredential, 
+                              editingCredential, 
+                              supplierId: supplier.id 
+                            });
+                            if (onError) {
+                              onError('Cannot save: Invalid state. Please refresh and try again.');
+                            }
+                          }
+                        }}
+                        disabled={saving}
+                        className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs disabled:opacity-50"
                       >
-                        {t('common.save')}
+                        {saving ? t('common.saving') || 'Saving...' : t('common.save')}
                       </Button>
                       <Button
                         size="sm"
@@ -199,7 +322,15 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
                   ) : (
                     <Button
                       size="sm"
-                      onClick={() => setEditingCredential({ id: '', supplier, user_id: '', supplier_id: supplier.id, has_credentials: false, created_at: '', updated_at: '' })}
+                      onClick={() => {
+                        const newCredential = { id: '', supplier, user_id: '', supplier_id: supplier.id, has_credentials: false, created_at: '', updated_at: '' };
+                        setEditingCredential(newCredential);
+                        // Initialize form data for this supplier
+                        setFormData(prev => ({
+                          ...prev,
+                          [supplier.id]: { username: '', password: '' }
+                        }));
+                      }}
                       className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-8"
                     >
                       <Lock className="w-3 h-3 mr-1" />
@@ -232,15 +363,27 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
                   {isEditing || isCreating ? (
                     <div className="flex gap-2">
                       <Input
-                        value={formData.username}
-                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        value={formData[credential?.id || supplier.id]?.username || ''}
+                        onChange={(e) => {
+                          const key = credential?.id || supplier.id;
+                          setFormData(prev => ({
+                            ...prev,
+                            [key]: { ...(prev[key] || { username: '', password: '' }), username: e.target.value }
+                          }));
+                        }}
                         placeholder={t('supplier.enterUsername')}
                         className="bg-slate-700 border-slate-600 text-slate-100 h-8 text-sm flex-1"
                       />
                       <Input
                         type="password"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        value={formData[credential?.id || supplier.id]?.password || ''}
+                        onChange={(e) => {
+                          const key = credential?.id || supplier.id;
+                          setFormData(prev => ({
+                            ...prev,
+                            [key]: { ...(prev[key] || { username: '', password: '' }), password: e.target.value }
+                          }));
+                        }}
                         placeholder={credential?.has_credentials ? t('supplier.newPasswordPlaceholder') : t('supplier.enterPassword')}
                         className="bg-slate-700 border-slate-600 text-slate-100 h-8 text-sm flex-1"
                       />

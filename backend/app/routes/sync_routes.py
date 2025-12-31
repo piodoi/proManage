@@ -5,8 +5,10 @@ import platform
 from datetime import datetime
 from typing import Optional, List, Callable, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import StreamingResponse
 import json
 import httpx
+import uuid
 
 from app.models import (
     Supplier, ExtractionPattern, Bill, BillType, BillStatus,
@@ -18,6 +20,9 @@ from app.utils.encryption import decrypt_password
 
 router = APIRouter(tags=["sync"])
 logger = logging.getLogger(__name__)
+
+# Store cancellation flags for active sync operations
+_cancellation_flags: Dict[str, bool] = {}
 
 
 async def _send_progress_update(supplier_name: str, status: str, bills_found: int = 0, bills_created: int = 0, error: Optional[str] = None):
@@ -388,231 +393,436 @@ async def _sync_supplier_scraper(
         await scraper.close()
 
 
+@router.post("/suppliers/sync/{property_id}/cancel")
+async def cancel_sync(property_id: str, sync_id: str = Query(...), current_user: TokenData = Depends(require_landlord)):
+    """Cancel an ongoing sync operation."""
+    cancel_key = f"{property_id}:{sync_id}"
+    if cancel_key in _cancellation_flags:
+        _cancellation_flags[cancel_key] = True
+        logger.info(f"[Suppliers Sync] Cancellation requested for {cancel_key}")
+        return {"status": "cancelled"}
+    return {"status": "not_found"}
+
+
 @router.post("/suppliers/sync/{property_id}")
-async def sync_supplier_bills(property_id: str, current_user: TokenData = Depends(require_landlord)):
+async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(None), current_user: TokenData = Depends(require_landlord)):
     """
     Sync bills from all suppliers with credentials configured for this property.
     Returns progress information including supplier status and bill counts.
+    If sync_id is provided, streams progress via Server-Sent Events.
     """
-    try:
-        logger.info(f"[Suppliers Sync] Starting sync for property {property_id}, user {current_user.user_id}")
-        
-        prop = db.get_property(property_id)
-        if not prop:
-            logger.error(f"[Suppliers Sync] Property {property_id} not found")
-            raise HTTPException(status_code=404, detail="Property not found")
-        if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
-            logger.error(f"[Suppliers Sync] Access denied for property {property_id}, user {current_user.user_id}")
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Get all property suppliers
-        logger.info(f"[Suppliers Sync] Getting property suppliers for property {property_id}")
-        property_suppliers = db.list_property_suppliers(property_id)
-        logger.info(f"[Suppliers Sync] Found {len(property_suppliers)} property supplier(s)")
-        
-        suppliers_to_sync = []
-        suppliers_without_credentials = []
-        
-        for ps in property_suppliers:
-            supplier = db.get_supplier(ps.supplier_id)
-            if not supplier:
-                continue
-                
-            # Check if credentials are configured
-            if ps.credential_id:
-                credential = db.get_user_supplier_credential(ps.credential_id)
-                if credential and credential.username and credential.password_hash:
-                    logger.debug(f"[Suppliers Sync] Checking supplier {supplier.name}: has_api={supplier.has_api}, has_credentials=True")
-                    suppliers_to_sync.append((supplier, ps))
+    # Generate sync_id if not provided
+    if not sync_id:
+        sync_id = str(uuid.uuid4())
+    
+    cancel_key = f"{property_id}:{sync_id}"
+    _cancellation_flags[cancel_key] = False
+    
+    async def stream_sync_progress():
+        """Generator function that streams progress updates via SSE."""
+        try:
+            def is_cancelled():
+                return _cancellation_flags.get(cancel_key, False)
+            
+            def send_event(event_type: str, data: dict):
+                """Send SSE event"""
+                return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+            
+            # Send initial status
+            yield send_event("start", {"sync_id": sync_id, "status": "starting"})
+            
+            prop = db.get_property(property_id)
+            if not prop:
+                yield send_event("error", {"error": "Property not found"})
+                return
+            if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+                yield send_event("error", {"error": "Access denied"})
+                return
+            
+            # Get all property suppliers
+            property_suppliers = db.list_property_suppliers(property_id)
+            suppliers_to_sync = []
+            suppliers_without_credentials = []
+            
+            for ps in property_suppliers:
+                supplier = db.get_supplier(ps.supplier_id)
+                if not supplier:
+                    continue
+                    
+                # Check if credentials are configured
+                if ps.credential_id:
+                    credential = db.get_user_supplier_credential(ps.credential_id)
+                    if credential and credential.username and credential.password_hash:
+                        suppliers_to_sync.append((supplier, ps))
+                    else:
+                        suppliers_without_credentials.append(supplier.name)
                 else:
                     suppliers_without_credentials.append(supplier.name)
-                    logger.warning(f"[Suppliers Sync] Supplier {supplier.name} has credential_id but credential is invalid")
-            else:
-                suppliers_without_credentials.append(supplier.name)
-                logger.warning(f"[Suppliers Sync] Supplier {supplier.name} has no credentials configured")
-        
-        logger.info(f"[Suppliers Sync] {len(suppliers_to_sync)} supplier(s) ready to sync, {len(suppliers_without_credentials)} without credentials")
-        
-        # If no suppliers to sync, return early but include info about missing credentials
-        if not suppliers_to_sync:
-            logger.warning(f"[Suppliers Sync] No suppliers with credentials configured for property {property_id}")
-            progress = []
-            if suppliers_without_credentials:
-                for supplier_name in suppliers_without_credentials:
-                    progress.append({
-                        "supplier_name": supplier_name,
-                        "status": "error",
-                        "bills_found": 0,
-                        "bills_created": 0,
-                        "error": "No credentials configured. Please set credentials in Settings."
-                    })
-            return {
-                "status": "no_suppliers",
-                "message": "No suppliers with credentials configured for this property",
-                "progress": progress
-            }
-        
-        # Find extraction pattern for supplier matching
-        all_patterns = db.list_extraction_patterns()
-        logger.debug(f"[Suppliers Sync] Loaded {len(all_patterns)} extraction patterns")
-        
-        bills_created = 0
-        errors = []
-        progress = []  # Track progress for each supplier
-        
-        # Progress callback to update progress list
-        def update_progress(supplier_name: str, status: str, bills_found: int = 0, bills_created: int = 0, error: Optional[str] = None):
-            # Find existing progress entry or create new one
-            existing = next((p for p in progress if p["supplier_name"] == supplier_name), None)
-            if existing:
-                existing["status"] = status
-                existing["bills_found"] = bills_found
-                existing["bills_created"] = bills_created
-                if error:
-                    existing["error"] = error
-            else:
-                progress.append({
+            
+            # Send suppliers without credentials as errors
+            for supplier_name in suppliers_without_credentials:
+                if is_cancelled():
+                    yield send_event("cancelled", {"message": "Sync cancelled"})
+                    return
+                yield send_event("progress", {
+                    "supplier_name": supplier_name,
+                    "status": "error",
+                    "bills_found": 0,
+                    "bills_created": 0,
+                    "error": "No credentials configured. Please set credentials in Settings."
+                })
+            
+            if not suppliers_to_sync:
+                yield send_event("complete", {
+                    "status": "no_suppliers",
+                    "bills_created": 0,
+                    "message": "No suppliers with credentials configured"
+                })
+                return
+            
+            all_patterns = db.list_extraction_patterns()
+            bills_created_total = 0
+            
+            # Use a queue to receive progress updates from callbacks
+            progress_queue = asyncio.Queue()
+            
+            async def progress_callback_wrapper(supplier_name: str, status: str, bills_found: int = 0, bills_created_count: int = 0, error: Optional[str] = None):
+                """Progress callback that puts events in the queue"""
+                await progress_queue.put({
                     "supplier_name": supplier_name,
                     "status": status,
                     "bills_found": bills_found,
-                    "bills_created": bills_created,
+                    "bills_created": bills_created_count,
                     "error": error
                 })
-        
-        # Add suppliers without credentials to progress with error status
-        for supplier_name in suppliers_without_credentials:
-            update_progress(supplier_name, "error", 0, 0, "No credentials configured. Please set credentials in Settings.")
-        
-        for idx, (supplier, property_supplier) in enumerate(suppliers_to_sync, 1):
-            # Get credentials from user-supplier credential
-            username = None
-            password = None
-            try:
-                if property_supplier.credential_id:
-                    credential = db.get_user_supplier_credential(property_supplier.credential_id)
-                    if credential and credential.username and credential.password_hash:
-                        username = decrypt_password(credential.username) if credential.username else None
-                        password = decrypt_password(credential.password_hash) if credential.password_hash else None
-                    else:
-                        # Credential exists but is invalid
-                        update_progress(supplier.name, "error", 0, 0, "Invalid credentials. Please reconfigure in Settings.")
-                        continue
-                else:
-                    # No credential_id, should not happen but handle gracefully
-                    update_progress(supplier.name, "error", 0, 0, "No credentials configured. Please set credentials in Settings.")
-                    continue
-            except Exception as e:
-                logger.error(f"[Suppliers Sync] Error getting credentials for supplier {supplier.name}: {e}", exc_info=True)
-                update_progress(supplier.name, "error", 0, 0, f"Error loading credentials: {str(e)}")
-                continue
             
-            if not username or not password:
-                update_progress(supplier.name, "error", 0, 0, "Missing username or password. Please configure credentials in Settings.")
-                continue
-            logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
+            # Task to process progress queue and yield events
+            async def process_progress_queue():
+                """Process progress updates from queue and yield SSE events"""
+                while True:
+                    try:
+                        # Get progress update with timeout to allow checking cancellation
+                        try:
+                            progress_update = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                            yield send_event("progress", progress_update)
+                            if progress_update["status"] == "completed":
+                                nonlocal bills_created_total
+                                bills_created_total += progress_update.get("bills_created", 0)
+                        except asyncio.TimeoutError:
+                            # Check cancellation periodically
+                            if is_cancelled():
+                                break
+                            continue
+                    except Exception as e:
+                        logger.error(f"[Suppliers Sync] Error processing progress queue: {e}")
+                        break
             
-            try:
-                logger.info(f"[Suppliers Sync] Syncing {supplier.name} ({idx}/{len(suppliers_to_sync)}) for property {property_id}")
+            for idx, (supplier, property_supplier) in enumerate(suppliers_to_sync, 1):
+                if is_cancelled():
+                    yield send_event("cancelled", {"message": "Sync cancelled"})
+                    return
                 
-                # Sync based on supplier capabilities
-                if supplier.has_api:
-                    logger.warning(f"[Suppliers Sync] Supplier {supplier.name} has API flag but API integration not implemented")
-                    error_msg = f"{supplier.name}: API integration not yet implemented"
-                    errors.append(error_msg)
-                    update_progress(supplier.name, "error", 0, 0, error_msg)
-                else:
-                    # Use web scraper for suppliers without API
-                    logger.info(f"[Suppliers Sync] Starting {supplier.name} scraper sync")
-                    
-                    from app.web_scraper import load_scraper_config
-                    config = load_scraper_config(supplier.name)
-                    if config and config.requires_js:
-                        # On Windows, use sync API in thread executor
-                        if platform.system() == 'Windows':
-                            logger.info(f"[Suppliers Sync] Using sync API scraper for {supplier.name} (Windows + requires_js=True)")
-                            bills_found, bills_count = await asyncio.to_thread(
-                                _run_sync_supplier_scraper_in_thread,
-                                property_id=property_id,
-                                username=username,
-                                password=password,
-                                supplier=supplier,
-                                patterns=all_patterns,
-                                property_supplier_id=property_supplier.id,
-                                save_html_dumps=False,
-                                progress_callback=update_progress
-                            )
+                # Get credentials
+                username = None
+                password = None
+                try:
+                    if property_supplier.credential_id:
+                        credential = db.get_user_supplier_credential(property_supplier.credential_id)
+                        if credential and credential.username and credential.password_hash:
+                            username = decrypt_password(credential.username) if credential.username else None
+                            password = decrypt_password(credential.password_hash) if credential.password_hash else None
                         else:
-                            bills_found, bills_count = await _sync_supplier_scraper(
-                                property_id=property_id,
-                                username=username,
-                                password=password,
-                                supplier=supplier,
-                                patterns=all_patterns,
-                                logger=logger,
-                                property_supplier_id=property_supplier.id,
-                                save_html_dumps=False,
-                                progress_callback=update_progress
-                            )
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "error",
+                                "bills_found": 0,
+                                "bills_created": 0,
+                                "error": "Invalid credentials. Please reconfigure in Settings."
+                            })
+                            continue
                     else:
-                        bills_found, bills_count = await _sync_supplier_scraper(
-                            property_id=property_id,
-                            username=username,
-                            password=password,
-                            supplier=supplier,
-                            patterns=all_patterns,
-                            logger=logger,
-                            property_supplier_id=property_supplier.id,
-                            save_html_dumps=False,
-                            progress_callback=update_progress
-                        )
-                    bills_created += bills_count
-                    logger.info(f"[Suppliers Sync] {supplier.name} sync completed: {bills_count} bill(s) created from {bills_found} found")
-            
-            except Exception as e:
-                error_msg = str(e)
-                if "Hidroelectrica" not in error_msg or "Sync" not in error_msg:
-                    logger.error(f"[Suppliers Sync] Error syncing {supplier.name}: {error_msg}")
-                errors.append(f"{supplier.name}: {error_msg}")
-                update_progress(supplier.name, "error", 0, 0, error_msg)
-        
-        # Check if any supplier has multiple contracts (after sync)
-        from app.web_scraper import load_scraper_config
-        multiple_contracts_info = {}
-        for supplier, property_supplier in suppliers_to_sync:
-            config = load_scraper_config(supplier.name)
-            if config and config.multiple_contracts_possible:
-                supplier_bills = db.list_bills(property_id=property_id)
-                supplier_contracts = {}
-                for bill in supplier_bills:
-                    if bill.contract_id and bill.description == supplier.name:
-                        if bill.contract_id not in supplier_contracts:
-                            supplier_contracts[bill.contract_id] = {
-                                "contract_id": bill.contract_id,
-                                "address": None
-                            }
-                
-                if len(supplier_contracts) > 1:
-                    multiple_contracts_info[supplier.id] = {
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "status": "error",
+                            "bills_found": 0,
+                            "bills_created": 0,
+                            "error": "No credentials configured. Please set credentials in Settings."
+                        })
+                        continue
+                except Exception as e:
+                    yield send_event("progress", {
                         "supplier_name": supplier.name,
-                        "contracts": list(supplier_contracts.values())
-                    }
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": f"Error loading credentials: {str(e)}"
+                    })
+                    continue
+                
+                if not username or not password:
+                    yield send_event("progress", {
+                        "supplier_name": supplier.name,
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": "Missing username or password. Please configure credentials in Settings."
+                    })
+                    continue
+                
+                # Send starting status
+                yield send_event("progress", {
+                    "supplier_name": supplier.name,
+                    "status": "starting",
+                    "bills_found": 0,
+                    "bills_created": 0
+                })
+                
+                try:
+                    # Sync based on supplier capabilities
+                    if supplier.name.lower() == "e-bloc":
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "status": "processing",
+                            "bills_found": 0,
+                            "bills_created": 0
+                        })
+                        
+                        from app.ebloc_scraper import EblocScraper
+                        scraper = EblocScraper()
+                        logged_in = await scraper.login(username, password)
+                        if not logged_in:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "error",
+                                "bills_found": 0,
+                                "bills_created": 0,
+                                "error": "Invalid E-bloc credentials"
+                            })
+                            continue
+                        
+                        if is_cancelled():
+                            await scraper.close()
+                            yield send_event("cancelled", {"message": "Sync cancelled"})
+                            return
+                        
+                        matches = await scraper.find_matching_associations(prop.name)
+                        if not matches:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "error",
+                                "bills_found": 0,
+                                "bills_created": 0,
+                                "error": f"Could not find matching E-bloc association for property: {prop.name}"
+                            })
+                            await scraper.close()
+                            continue
+                        
+                        selected_match = max(matches, key=lambda m: m.get("score", 0))
+                        selected_association_id = selected_match["id"]
+                        selected_apartment_index = selected_match.get("apartment_index")
+                        selected_apartment_id = selected_match.get("apartment_id")
+                        
+                        matched_asoc_id, soup = await scraper.ensure_cookies_and_navigate(
+                            property_name=prop.name,
+                            association_id=selected_association_id,
+                            apartment_index=selected_apartment_index,
+                            apartment_id=selected_apartment_id
+                        )
+                        
+                        if soup is None:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "error",
+                                "bills_found": 0,
+                                "bills_created": 0,
+                                "error": "Could not navigate to E-bloc page"
+                            })
+                            await scraper.close()
+                            continue
+                        
+                        if is_cancelled():
+                            await scraper.close()
+                            yield send_event("cancelled", {"message": "Sync cancelled"})
+                            return
+                        
+                        balance = await scraper.get_balance(
+                            property_name=prop.name,
+                            association_id=selected_association_id,
+                            apartment_index=selected_apartment_index,
+                            apartment_id=selected_apartment_id,
+                            soup=soup
+                        )
+                        payments = await scraper.get_payments(
+                            property_name=prop.name,
+                            association_id=selected_association_id,
+                            apartment_index=selected_apartment_index,
+                            apartment_id=selected_apartment_id,
+                            soup=soup
+                        )
+                        
+                        # Delete existing E-bloc bills
+                        existing_bills = db.list_bills(property_id=property_id)
+                        existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.renter_id is None]
+                        for existing_bill in existing_ebloc_bills:
+                            db.delete_bill(existing_bill.id)
+                        
+                        bills_count = 0
+                        outstanding_debt = balance.outstanding_debt if balance else 0.0
+                        if outstanding_debt > 0 or balance:
+                            bill_status = BillStatus.OVERDUE if outstanding_debt > 0 else BillStatus.PAID
+                            bill = Bill(
+                                property_id=property_id,
+                                renter_id=None,
+                                bill_type=BillType.EBLOC,
+                                description="E-Bloc",
+                                amount=outstanding_debt,
+                                due_date=balance.last_payment_date if balance and balance.last_payment_date else datetime.utcnow(),
+                                status=bill_status
+                            )
+                            db.save_bill(bill)
+                            bills_count = 1
+                        
+                        # Create payment records
+                        if payments:
+                            all_payments = db.list_payments()
+                            existing_payments = [p for p in all_payments if p.bill_id is None]
+                            for payment in payments:
+                                if not any(
+                                    p.bill_id is None and
+                                    abs((p.payment_date - payment.payment_date).total_seconds()) < 86400
+                                    for p in existing_payments
+                                ):
+                                    payment_record = Payment(
+                                        bill_id=None,
+                                        amount=0.0,
+                                        payment_date=payment.payment_date,
+                                        payment_method="E-bloc"
+                                    )
+                                    db.save_payment(payment_record)
+                                    existing_payments.append(payment_record)
+                        
+                        await scraper.close()
+                        
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "status": "completed",
+                            "bills_found": 1,
+                            "bills_created": bills_count
+                        })
+                        
+                    elif supplier.has_api:
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "status": "error",
+                            "bills_found": 0,
+                            "bills_created": 0,
+                            "error": f"{supplier.name}: API integration not yet implemented"
+                        })
+                    else:
+                        # Use web scraper
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "status": "processing",
+                            "bills_found": 0,
+                            "bills_created": 0
+                        })
+                        
+                        from app.web_scraper import load_scraper_config
+                        config = load_scraper_config(supplier.name)
+                        
+                        # Use a list to collect progress updates (simpler than queue for now)
+                        supplier_progress_updates = []
+                        
+                        def sync_progress_callback(name: str, status: str, found: int = 0, created: int = 0, err: Optional[str] = None):
+                            """Progress callback - stores updates to be sent via SSE"""
+                            supplier_progress_updates.append({
+                                "supplier_name": name,
+                                "status": status,
+                                "bills_found": found,
+                                "bills_created": created,
+                                "error": err
+                            })
+                        
+                        try:
+                            if config and config.requires_js and platform.system() == 'Windows':
+                                bills_found, bills_count = await asyncio.to_thread(
+                                    _run_sync_supplier_scraper_in_thread,
+                                    property_id=property_id,
+                                    username=username,
+                                    password=password,
+                                    supplier=supplier,
+                                    patterns=all_patterns,
+                                    property_supplier_id=property_supplier.id,
+                                    save_html_dumps=False,
+                                    progress_callback=sync_progress_callback
+                                )
+                            else:
+                                bills_found, bills_count = await _sync_supplier_scraper(
+                                    property_id=property_id,
+                                    username=username,
+                                    password=password,
+                                    supplier=supplier,
+                                    patterns=all_patterns,
+                                    logger=logger,
+                                    property_supplier_id=property_supplier.id,
+                                    save_html_dumps=False,
+                                    progress_callback=sync_progress_callback
+                                )
+                            
+                            # Send all progress updates collected during sync
+                            for update in supplier_progress_updates:
+                                yield send_event("progress", update)
+                                await asyncio.sleep(0)  # Yield control to allow cancellation check
+                            
+                            if is_cancelled():
+                                yield send_event("cancelled", {"message": "Sync cancelled"})
+                                return
+                            
+                            # Send final completion event
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "completed",
+                                "bills_found": bills_found,
+                                "bills_created": bills_count
+                            })
+                            bills_created_total += bills_count
+                        except Exception as e:
+                            error_msg = str(e)
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "error",
+                                "bills_found": 0,
+                                "bills_created": 0,
+                                "error": error_msg
+                            })
+                            raise
+                
+                except Exception as e:
+                    error_msg = str(e)
+                    yield send_event("progress", {
+                        "supplier_name": supplier.name,
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": error_msg
+                    })
+            
+            # Send completion event
+            yield send_event("complete", {
+                "status": "success",
+                "bills_created": bills_created_total,
+                "sync_id": sync_id
+            })
         
-        result = {
-            "status": "success",
-            "property_id": property_id,
-            "bills_created": bills_created,
-            "errors": errors if errors else None,
-            "multiple_contracts": multiple_contracts_info if multiple_contracts_info else None,
-            "progress": progress  # Include progress information
-        }
-        logger.info(f"[Suppliers Sync] Sync completed for property {property_id}: {bills_created} bill(s) created, {len(errors)} error(s)")
-        return result
+        except Exception as e:
+            logger.error(f"[Suppliers Sync] Error in stream: {e}", exc_info=True)
+            yield send_event("error", {"error": str(e)})
+        finally:
+            # Clean up cancellation flag
+            if cancel_key in _cancellation_flags:
+                del _cancellation_flags[cancel_key]
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[Suppliers Sync] Unexpected error in sync endpoint: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error syncing suppliers: {str(e)}")
+    return StreamingResponse(stream_sync_progress(), media_type="text/event-stream")
 
 
 @router.post("/ebloc/sync/{property_id}")
@@ -743,22 +953,24 @@ async def sync_ebloc(
                     amount=payment.amount,
                     method=PaymentMethod.BANK_TRANSFER,
                     status=PaymentStatus.COMPLETED,
-                    commission=0.0
+                    payment_date=payment.payment_date
                 )
                 db.save_payment(payment_record)
                 payments_created.append(payment_record.id)
+        
+        await scraper.close()
         
         return {
             "status": "success",
             "property_id": property_id,
             "property_name": prop.name,
-            "balance": {
-                "outstanding_debt": balance.outstanding_debt if balance else 0.0,
-                "last_payment_date": balance.last_payment_date.isoformat() if balance and balance.last_payment_date else None,
-                "oldest_debt_month": balance.oldest_debt_month if balance else None
-            } if balance else None,
             "bills_created": len(bills_created),
-            "payments_created": len(payments_created)
+            "payments_created": len(payments_created),
+            "balance": {
+                "outstanding_debt": outstanding_debt,
+                "last_payment_date": balance.last_payment_date.isoformat() if balance and balance.last_payment_date else None,
+                "oldest_debt_month": balance.oldest_debt_month.isoformat() if balance and balance.oldest_debt_month else None
+            } if balance else None
         }
     except HTTPException:
         raise
@@ -772,4 +984,3 @@ async def sync_ebloc(
         raise HTTPException(status_code=500, detail=f"Error syncing e-bloc: {str(e)}")
     finally:
         await scraper.close()
-

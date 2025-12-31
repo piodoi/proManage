@@ -207,11 +207,10 @@ async def list_property_suppliers(
     for ps in property_suppliers:
         supplier = db.get_supplier(ps.supplier_id)
         if supplier:
-            # Check if credentials are available
-            has_credentials = False
-            if ps.credential_id:
-                credential = db.get_user_supplier_credential(ps.credential_id)
-                has_credentials = bool(credential and credential.username and credential.password_hash)
+            # Check if credentials are available - source of truth is user_supplier_credentials table
+            # Check directly by user_id and supplier_id, not just by credential_id link
+            credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, ps.supplier_id)
+            has_credentials = bool(credential and credential.username and credential.password_hash)
             
             result.append({
                 "id": ps.id,
@@ -269,11 +268,10 @@ async def create_property_supplier(
     )
     db.save_property_supplier(property_supplier)
     
-    # Determine if credentials are available
-    has_credentials = False
-    if credential_id:
-        credential = db.get_user_supplier_credential(credential_id)
-        has_credentials = bool(credential and credential.username and credential.password_hash)
+    # Determine if credentials are available - source of truth is user_supplier_credentials table
+    # Check directly by user_id and supplier_id
+    credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, data.supplier_id)
+    has_credentials = bool(credential and credential.username and credential.password_hash)
     
     return {
         "id": property_supplier.id,
@@ -325,11 +323,10 @@ async def update_property_supplier(
     
     supplier = db.get_supplier(property_supplier.supplier_id)
     
-    # Determine if credentials are available
-    has_credentials = False
-    if property_supplier.credential_id:
-        credential = db.get_user_supplier_credential(property_supplier.credential_id)
-        has_credentials = bool(credential and credential.username and credential.password_hash)
+    # Determine if credentials are available - source of truth is user_supplier_credentials table
+    # Check directly by user_id and supplier_id
+    credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, property_supplier.supplier_id)
+    has_credentials = bool(credential and credential.username and credential.password_hash)
     
     return {
         "id": property_supplier.id,
