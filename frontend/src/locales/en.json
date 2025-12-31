@@ -269,6 +269,7 @@
   "admin": {
     "dashboard": "Admin Dashboard",
     "users": "Users",
+    "adminTab": "Admin",
     "extractionPatterns": "Extraction Patterns",
     "addPattern": "Add Pattern",
     "editPattern": "Edit Pattern",

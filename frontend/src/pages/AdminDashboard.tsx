@@ -273,18 +273,22 @@ export default function AdminDashboard() {
               <Building2 className="w-4 h-4 mr-2" />
               {t('property.properties')}
             </TabsTrigger>
-            <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700">
-              <Users className="w-4 h-4 mr-2" />
-              {t('admin.users')}
-            </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
               <Settings className="w-4 h-4 mr-2" />
               {t('settings.settings')}
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700">
+              <Users className="w-4 h-4 mr-2" />
+              {t('admin.adminTab')}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="property" className="space-y-4">
             <LandlordView token={token} onError={setError} hideSettings />
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4">
+            <SettingsView token={token} onError={setError} />
           </TabsContent>
 
           <TabsContent value="admin" className="space-y-4">
@@ -868,10 +872,6 @@ export default function AdminDashboard() {
                 </div>
               </DialogContent>
             </Dialog>
-          </TabsContent>
-
-          <TabsContent value="settings" className="space-y-4">
-            <SettingsView token={token} onError={setError} />
           </TabsContent>
         </Tabs>
       </main>
