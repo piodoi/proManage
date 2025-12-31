@@ -9,6 +9,7 @@ import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import EblocSyncDialog from './dialogs/EblocSyncDialog';
 import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
+import { useI18n } from '../lib/i18n';
 
 type PropertyCardProps = {
   token: string | null;
@@ -31,6 +32,7 @@ export default function PropertyCard({
   onDataChange,
   onError,
 }: PropertyCardProps) {
+  const { t } = useI18n();
   const [showRenterDialog, setShowRenterDialog] = useState(false);
   const [showEblocSync, setShowEblocSync] = useState(false);
   const [showSupplierSettings, setShowSupplierSettings] = useState(false);
@@ -43,20 +45,20 @@ export default function PropertyCard({
       const link = await api.renters.getLink(token, renterId);
       setRenterLink({ token: link.access_token, link: link.link });
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'An error occurred');
+      onError(err instanceof Error ? err.message : t('errors.generic'));
     }
   };
 
   const handleDeleteRenter = async (renterId: string) => {
     if (!token) return;
-    if (!confirm('Are you sure you want to delete this renter? This will also delete all associated bills.')) {
+    if (!confirm(t('renter.confirmDelete'))) {
       return;
     }
     try {
       await api.renters.delete(token, renterId);
       onDataChange();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'An error occurred');
+      onError(err instanceof Error ? err.message : t('errors.generic'));
     }
   };
 
@@ -86,7 +88,7 @@ export default function PropertyCard({
               size="sm"
               onClick={() => setShowSupplierSettings(true)}
               className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600"
-              title="Manage bill suppliers"
+              title={t('supplier.manageSuppliers')}
             >
               <Settings className="w-4 h-4" />
             </Button>
@@ -123,10 +125,10 @@ export default function PropertyCard({
         </CardHeader>
         <CardContent>
           <div className="mb-3">
-            <span className="text-slate-200 font-medium">Renters</span>
+            <span className="text-slate-200 font-medium">{t('renter.renters')}</span>
           </div>
           {renters.length === 0 ? (
-            <p className="text-slate-500 text-xs">No renters yet</p>
+            <p className="text-slate-500 text-xs">{t('renter.noRenters')}</p>
           ) : (
             <div className="space-y-1">
               {renters.map((renter) => {
@@ -148,10 +150,10 @@ export default function PropertyCard({
                             </>
                           )}
                           {renter.rent_day && (
-                            <span className="ml-2">• Due day: {renter.rent_day}</span>
+                            <span className="ml-2">• {t('renter.dueDay')}: {renter.rent_day}</span>
                           )}
                           {renter.start_contract_date && (
-                            <span className="ml-2">• Start: {new Date(renter.start_contract_date).toLocaleDateString()}</span>
+                            <span className="ml-2">• {t('renter.start')}: {new Date(renter.start_contract_date).toLocaleDateString()}</span>
                           )}
                         </span>
                       )}
@@ -161,7 +163,7 @@ export default function PropertyCard({
                         size="sm"
                         onClick={() => openEditRenter(renter)}
                         className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
-                        title="Edit renter"
+                        title={t('renter.editRenter')}
                       >
                         <Pencil className="w-3 h-3" />
                       </Button>
@@ -169,7 +171,7 @@ export default function PropertyCard({
                         size="sm"
                         onClick={() => handleGetRenterLink(renter.id)}
                         className="bg-slate-700 text-emerald-400 hover:bg-slate-600 hover:text-emerald-300 border border-slate-600 h-6 px-2 w-6"
-                        title="Get renter link"
+                        title={t('renter.getLink')}
                       >
                         <ExternalLink className="w-3 h-3" />
                       </Button>
@@ -177,7 +179,7 @@ export default function PropertyCard({
                         size="sm"
                         onClick={() => handleDeleteRenter(renter.id)}
                         className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600 h-6 px-2 w-6"
-                        title="Delete renter"
+                        title={t('renter.deleteRenter')}
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -205,11 +207,11 @@ export default function PropertyCard({
       <Dialog open={!!renterLink} onOpenChange={(open) => !open && setRenterLink(null)}>
         <DialogContent className="bg-slate-800 border-slate-700">
           <DialogHeader>
-            <DialogTitle className="text-slate-100">Renter Access Link</DialogTitle>
+            <DialogTitle className="text-slate-100">{t('renter.accessLinkTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-slate-400 text-sm">
-              Share this link with your renter. They can use it to view and pay their bills without logging in.
+              {t('renter.accessLinkDescription')}
             </p>
             <div className="flex gap-2">
               <Input

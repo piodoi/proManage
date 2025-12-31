@@ -4,6 +4,7 @@ import { useAuth } from '../App';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Check, X } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -11,6 +12,7 @@ export default function ConfirmEmail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { login, user, token } = useAuth();
+  const { t } = useI18n();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState('');
 
@@ -33,7 +35,7 @@ export default function ConfirmEmail() {
     
     if (!tokenParam) {
       setStatus('error');
-      setError('No confirmation token provided');
+      setError(t('auth.noToken'));
       return;
     }
 
@@ -53,11 +55,11 @@ export default function ConfirmEmail() {
         } else {
           const err = await response.json();
           setStatus('error');
-          setError(err.detail || 'Failed to confirm email');
+          setError(err.detail || t('auth.confirmEmailFailed'));
         }
       } catch {
         setStatus('error');
-        setError('Could not connect to server. Please try again later.');
+        setError(t('errors.connectionError'));
       }
     };
 
@@ -69,14 +71,14 @@ export default function ConfirmEmail() {
       <Card className="w-full max-w-md bg-slate-800 border-slate-700">
         <CardHeader>
           <CardTitle className="text-2xl text-center text-slate-100">
-            Email Confirmation
+            {t('auth.emailConfirmation')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {status === 'loading' && (
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-              <p className="text-slate-300">Confirming your email...</p>
+              <p className="text-slate-300">{t('auth.confirmingEmail')}</p>
             </div>
           )}
 
@@ -85,13 +87,13 @@ export default function ConfirmEmail() {
               <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Check className="w-6 h-6 text-white" />
               </div>
-              <p className="text-emerald-400 font-medium mb-2">Email confirmed successfully!</p>
-              <p className="text-slate-400 text-sm mb-4">Your account has been activated. You can now access your dashboard.</p>
+              <p className="text-emerald-400 font-medium mb-2">{t('auth.emailConfirmed')}</p>
+              <p className="text-slate-400 text-sm mb-4">{t('auth.accountActivated')}</p>
               <Button
                 onClick={() => navigate('/')}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
-                Go to Dashboard
+                {t('auth.goToDashboard')}
               </Button>
             </div>
           )}
@@ -101,18 +103,18 @@ export default function ConfirmEmail() {
               <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <X className="w-6 h-6 text-white" />
               </div>
-              <p className="text-red-400 font-medium mb-2">Confirmation failed</p>
+              <p className="text-red-400 font-medium mb-2">{t('auth.confirmationFailed')}</p>
               <p className="text-slate-400 text-sm mb-4">{error}</p>
               <p className="text-slate-500 text-xs mb-4">
                 {error.toLowerCase().includes('expired') || error.toLowerCase().includes('invalid')
-                  ? 'The confirmation link may have expired. Please try registering again or contact support.'
-                  : 'Please try again or contact support if the problem persists.'}
+                  ? t('auth.linkExpired')
+                  : t('auth.tryAgainOrContact')}
               </p>
               <Button
                 onClick={() => navigate('/login')}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
-                Go to Login
+                {t('auth.goToLogin')}
               </Button>
             </div>
           )}

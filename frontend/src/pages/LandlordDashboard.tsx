@@ -5,9 +5,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LogOut, Building2, Settings } from 'lucide-react';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
+import { useI18n } from '../lib/i18n';
+import { LanguageSelector } from '../components/LanguageSelector';
 
 export default function LandlordDashboard() {
   const { user, token, logout } = useAuth();
+  const { t } = useI18n();
   const [error, setError] = useState('');
 
   return (
@@ -17,14 +20,15 @@ export default function LandlordDashboard() {
           <div className="flex items-center gap-3">
             <Building2 className="w-6 h-6 text-emerald-500" />
             <div>
-              <h1 className="text-xl font-semibold text-slate-100">ProManage</h1>
+              <h1 className="text-xl font-semibold text-slate-100">{t('app.title')}</h1>
               <p className="text-sm text-slate-400">{user?.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <LanguageSelector />
             <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
               <LogOut className="w-4 h-4 mr-2" />
-              Logout
+              {t('app.logout')}
             </Button>
           </div>
         </div>
@@ -42,11 +46,11 @@ export default function LandlordDashboard() {
           <TabsList className="bg-slate-800 border border-slate-700">
             <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
               <Building2 className="w-4 h-4 mr-2" />
-              Property
+              {t('property.properties')}
             </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
               <Settings className="w-4 h-4 mr-2" />
-              Settings
+              {t('settings.settings')}
             </TabsTrigger>
           </TabsList>
 

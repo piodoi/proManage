@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Upload, Plus, Pencil, Trash2, FileText, ArrowLeft } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 type Props = {
   onBack: () => void;
@@ -18,6 +19,7 @@ type Props = {
 
 export default function BillParserPage({ onBack }: Props) {
   const { token } = useAuth();
+  const { t } = useI18n();
   const [patterns, setPatterns] = useState<ExtractionPattern[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,7 +50,7 @@ export default function BillParserPage({ onBack }: Props) {
       const data = await api.extractionPatterns.list(token);
       setPatterns(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load patterns');
+      setError(err instanceof Error ? err.message : t('billParser.loadPatternsError'));
     } finally {
       setLoading(false);
     }
@@ -63,7 +65,7 @@ export default function BillParserPage({ onBack }: Props) {
       const result = await api.billParser.parse(token, file);
       setExtractionResult(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse PDF');
+      setError(err instanceof Error ? err.message : t('billParser.parsePdfError'));
     } finally {
       setParsing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -78,7 +80,7 @@ export default function BillParserPage({ onBack }: Props) {
       resetForm();
       loadPatterns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create pattern');
+      setError(err instanceof Error ? err.message : t('billParser.createPatternError'));
     }
   };
 
@@ -90,17 +92,17 @@ export default function BillParserPage({ onBack }: Props) {
       resetForm();
       loadPatterns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update pattern');
+      setError(err instanceof Error ? err.message : t('billParser.updatePatternError'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!token || !confirm('Delete this pattern?')) return;
+    if (!token || !confirm(t('billParser.deletePatternConfirm'))) return;
     try {
       await api.extractionPatterns.delete(token, id);
       loadPatterns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete pattern');
+      setError(err instanceof Error ? err.message : t('billParser.deletePatternError'));
     }
   };
 
@@ -110,7 +112,7 @@ export default function BillParserPage({ onBack }: Props) {
       await api.extractionPatterns.update(token, pattern.id, { enabled: !pattern.enabled });
       loadPatterns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle pattern');
+      setError(err instanceof Error ? err.message : t('billParser.togglePatternError'));
     }
   };
 
@@ -144,7 +146,7 @@ export default function BillParserPage({ onBack }: Props) {
   const PatternForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
       <div>
-        <Label className="text-slate-300">Name</Label>
+        <Label className="text-slate-300">{t('common.name')}</Label>
         <Input
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -153,7 +155,7 @@ export default function BillParserPage({ onBack }: Props) {
         />
       </div>
       <div>
-        <Label className="text-slate-300">Bill Type</Label>
+        <Label className="text-slate-300">{t('bill.billType')}</Label>
         <Select
           value={formData.bill_type}
           onValueChange={(v) => setFormData({ ...formData, bill_type: v as ExtractionPatternCreate['bill_type'] })}
@@ -162,15 +164,15 @@ export default function BillParserPage({ onBack }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-slate-700 border-slate-600">
-            <SelectItem value="utilities">Utilities</SelectItem>
-            <SelectItem value="rent">Rent</SelectItem>
-            <SelectItem value="ebloc">E-Bloc</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
+            <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
+            <SelectItem value="rent">{t('bill.rent')}</SelectItem>
+            <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
+            <SelectItem value="other">{t('bill.other')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label className="text-slate-300">Vendor Hint (regex to match vendor)</Label>
+        <Label className="text-slate-300">{t('billParser.vendorHint')}</Label>
         <Input
           value={formData.vendor_hint}
           onChange={(e) => setFormData({ ...formData, vendor_hint: e.target.value })}
@@ -179,7 +181,7 @@ export default function BillParserPage({ onBack }: Props) {
         />
       </div>
       <div>
-        <Label className="text-slate-300">IBAN Pattern (regex with capture group)</Label>
+        <Label className="text-slate-300">{t('billParser.ibanPattern')}</Label>
         <Input
           value={formData.iban_pattern}
           onChange={(e) => setFormData({ ...formData, iban_pattern: e.target.value })}
@@ -188,7 +190,7 @@ export default function BillParserPage({ onBack }: Props) {
         />
       </div>
       <div>
-        <Label className="text-slate-300">Amount Pattern (regex with capture group)</Label>
+        <Label className="text-slate-300">{t('billParser.amountPattern')}</Label>
         <Input
           value={formData.amount_pattern}
           onChange={(e) => setFormData({ ...formData, amount_pattern: e.target.value })}
@@ -197,7 +199,7 @@ export default function BillParserPage({ onBack }: Props) {
         />
       </div>
       <div>
-        <Label className="text-slate-300">Address Pattern (regex with capture group)</Label>
+        <Label className="text-slate-300">{t('billParser.addressPattern')}</Label>
         <Input
           value={formData.address_pattern}
           onChange={(e) => setFormData({ ...formData, address_pattern: e.target.value })}
@@ -206,7 +208,7 @@ export default function BillParserPage({ onBack }: Props) {
         />
       </div>
       <div>
-        <Label className="text-slate-300">Bill Number Pattern (regex with capture group)</Label>
+        <Label className="text-slate-300">{t('billParser.billNumberPattern')}</Label>
         <Input
           value={formData.bill_number_pattern}
           onChange={(e) => setFormData({ ...formData, bill_number_pattern: e.target.value })}
@@ -215,7 +217,7 @@ export default function BillParserPage({ onBack }: Props) {
         />
       </div>
       <div>
-        <Label className="text-slate-300">Priority (higher = tried first)</Label>
+        <Label className="text-slate-300">{t('billParser.priority')}</Label>
         <Input
           type="number"
           value={formData.priority}
@@ -266,27 +268,27 @@ export default function BillParserPage({ onBack }: Props) {
                   className="block w-full text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer"
                 />
               </div>
-              {parsing && <div className="text-slate-400">Parsing PDF...</div>}
+              {parsing && <div className="text-slate-400">{t('billParser.parsingPdf')}</div>}
               {extractionResult && (
                 <div className="space-y-3">
-                  <h4 className="text-slate-200 font-medium">Extraction Results:</h4>
+                  <h4 className="text-slate-200 font-medium">{t('billParser.extractionResults')}</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-slate-400">IBAN:</div>
+                    <div className="text-slate-400">{t('renter.iban')}:</div>
                     <div className="text-slate-200">{extractionResult.iban || '-'}</div>
-                    <div className="text-slate-400">Amount:</div>
+                    <div className="text-slate-400">{t('common.amount')}:</div>
                     <div className="text-slate-200">{extractionResult.amount?.toFixed(2) || '-'}</div>
-                    <div className="text-slate-400">Bill Number:</div>
+                    <div className="text-slate-400">{t('bill.billNumber')}:</div>
                     <div className="text-slate-200">{extractionResult.bill_number || '-'}</div>
-                    <div className="text-slate-400">Address:</div>
+                    <div className="text-slate-400">{t('property.address')}:</div>
                     <div className="text-slate-200">{extractionResult.address || '-'}</div>
-                    <div className="text-slate-400">Consumption Location:</div>
+                    <div className="text-slate-400">{t('billParser.consumptionLocation')}</div>
                     <div className="text-slate-200">{extractionResult.consumption_location || '-'}</div>
-                    <div className="text-slate-400">Matched Pattern:</div>
-                    <div className="text-slate-200">{extractionResult.matched_pattern_name || 'Default'}</div>
+                    <div className="text-slate-400">{t('billParser.matchedPattern')}</div>
+                    <div className="text-slate-200">{extractionResult.matched_pattern_name || t('billParser.default')}</div>
                   </div>
                   {extractionResult.all_addresses.length > 0 && (
                     <div>
-                      <div className="text-slate-400 text-sm mb-1">All Addresses Found:</div>
+                      <div className="text-slate-400 text-sm mb-1">{t('billParser.allAddressesFound')}</div>
                       <ul className="text-slate-300 text-sm list-disc list-inside">
                         {extractionResult.all_addresses.map((addr, i) => (
                           <li key={i}>{addr}</li>
@@ -296,7 +298,7 @@ export default function BillParserPage({ onBack }: Props) {
                   )}
                   <details className="mt-4">
                     <summary className="text-slate-400 cursor-pointer hover:text-slate-200">
-                      View Raw Text
+                      {t('billParser.viewRawText')}
                     </summary>
                     <Textarea
                       readOnly
@@ -314,46 +316,46 @@ export default function BillParserPage({ onBack }: Props) {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-slate-100 flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Extraction Patterns
+              {t('billParser.extractionPatterns')}
             </CardTitle>
             <Dialog open={showCreate} onOpenChange={setShowCreate}>
               <DialogTrigger asChild>
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
                   <Plus className="w-4 h-4 mr-1" />
-                  Add Pattern
+                  {t('admin.addPattern')}
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-100">Create Extraction Pattern</DialogTitle>
+                  <DialogTitle className="text-slate-100">{t('billParser.createExtractionPattern')}</DialogTitle>
                 </DialogHeader>
-                <PatternForm onSubmit={handleCreate} submitLabel="Create" />
+                <PatternForm onSubmit={handleCreate} submitLabel={t('common.add')} />
               </DialogContent>
             </Dialog>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-slate-400 text-center py-4">Loading...</div>
+              <div className="text-slate-400 text-center py-4">{t('common.loading')}</div>
             ) : patterns.length === 0 ? (
               <div className="text-slate-400 text-center py-4">
-                No patterns yet. Add one to customize extraction.
+                {t('billParser.noPatternsYet')}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-slate-700">
-                    <TableHead className="text-slate-400">Name</TableHead>
-                    <TableHead className="text-slate-400">Type</TableHead>
-                    <TableHead className="text-slate-400">Priority</TableHead>
-                    <TableHead className="text-slate-400">Enabled</TableHead>
-                    <TableHead className="text-slate-400">Actions</TableHead>
+                    <TableHead className="text-slate-400">{t('common.name')}</TableHead>
+                    <TableHead className="text-slate-400">{t('bill.billType')}</TableHead>
+                    <TableHead className="text-slate-400">{t('billParser.priority')}</TableHead>
+                    <TableHead className="text-slate-400">{t('admin.enabled')}</TableHead>
+                    <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {patterns.map((pattern) => (
                     <TableRow key={pattern.id} className="border-slate-700">
                       <TableCell className="text-slate-200">{pattern.name}</TableCell>
-                      <TableCell className="text-slate-300">{pattern.bill_type}</TableCell>
+                      <TableCell className="text-slate-300">{t(`bill.${pattern.bill_type}`)}</TableCell>
                       <TableCell className="text-slate-300">{pattern.priority}</TableCell>
                       <TableCell>
                         <Switch
@@ -393,9 +395,9 @@ export default function BillParserPage({ onBack }: Props) {
       <Dialog open={!!editPattern} onOpenChange={(open) => !open && setEditPattern(null)}>
         <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-slate-100">Edit Extraction Pattern</DialogTitle>
+            <DialogTitle className="text-slate-100">{t('billParser.editExtractionPattern')}</DialogTitle>
           </DialogHeader>
-          <PatternForm onSubmit={handleUpdate} submitLabel="Update" />
+          <PatternForm onSubmit={handleUpdate} submitLabel={t('admin.update')} />
         </DialogContent>
       </Dialog>
     </div>

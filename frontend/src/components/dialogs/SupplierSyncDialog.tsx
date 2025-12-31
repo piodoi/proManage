@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { useI18n } from '../../lib/i18n';
 
 type SupplierProgress = {
   supplier_name: string;
@@ -30,6 +31,7 @@ export default function SupplierSyncDialog({
   onSuccess,
   onError,
 }: SupplierSyncDialogProps) {
+  const { t } = useI18n();
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SupplierProgress[]>([]);
   const [totalBillsCreated, setTotalBillsCreated] = useState(0);
@@ -102,15 +104,15 @@ export default function SupplierSyncDialog({
   const getStatusText = (status: SupplierProgress['status']) => {
     switch (status) {
       case 'completed':
-        return 'Completed';
+        return t('supplier.completed');
       case 'error':
-        return 'Error';
+        return t('supplier.error');
       case 'processing':
-        return 'Processing...';
+        return t('supplier.processing');
       case 'starting':
-        return 'Starting...';
+        return t('supplier.starting');
       default:
-        return 'Pending';
+        return t('common.loading');
     }
   };
 
@@ -122,11 +124,11 @@ export default function SupplierSyncDialog({
     }}>
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Syncing Supplier Bills</DialogTitle>
+          <DialogTitle className="text-slate-100">{t('supplier.syncProgress')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-slate-300 font-medium mb-1">Property:</p>
+            <p className="text-sm text-slate-300 font-medium mb-1">{t('property.properties')}:</p>
             <p className="text-sm text-slate-100 font-semibold">{property.name}</p>
             {property.address && (
               <p className="text-xs text-slate-400 mt-1">{property.address}</p>
@@ -136,17 +138,17 @@ export default function SupplierSyncDialog({
           {syncing && progress.length === 0 && (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <Spinner className="w-8 h-8 text-slate-400" />
-              <p className="text-sm text-slate-400">Starting sync...</p>
+              <p className="text-sm text-slate-400">{t('supplier.starting')}</p>
             </div>
           )}
 
           {progress.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-slate-300 font-medium">Supplier Progress:</p>
+                <p className="text-sm text-slate-300 font-medium">{t('supplier.supplierProgress')}</p>
                 {!syncing && (
                   <p className="text-sm text-slate-100 font-semibold">
-                    Total Bills Created: {totalBillsCreated}
+                    {t('supplier.totalBillsCreated')} {totalBillsCreated}
                   </p>
                 )}
               </div>
@@ -170,16 +172,16 @@ export default function SupplierSyncDialog({
                           {item.status === 'completed' && (
                             <>
                               <span className="text-xs text-slate-400">
-                                Found: {item.bills_found}
+                                {t('supplier.found')} {item.bills_found}
                               </span>
                               <span className="text-xs text-emerald-400">
-                                Created: {item.bills_created}
+                                {t('supplier.created')} {item.bills_created}
                               </span>
                             </>
                           )}
                           {item.status === 'processing' && item.bills_found > 0 && (
                             <span className="text-xs text-slate-400">
-                              Found: {item.bills_found} bills
+                              {t('supplier.found')} {item.bills_found} {t('bill.bills')}
                             </span>
                           )}
                         </div>
@@ -199,7 +201,7 @@ export default function SupplierSyncDialog({
 
           {errors.length > 0 && (
             <div className="bg-red-900/20 border border-red-700 rounded-lg p-4">
-              <p className="text-sm font-medium text-red-400 mb-2">Errors:</p>
+              <p className="text-sm font-medium text-red-400 mb-2">{t('errors.generic')}:</p>
               <ul className="space-y-1">
                 {errors.map((error, index) => (
                   <li key={index} className="text-xs text-red-300">{error}</li>
@@ -217,7 +219,7 @@ export default function SupplierSyncDialog({
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
-                Close
+                {t('common.close')}
               </Button>
             </div>
           )}

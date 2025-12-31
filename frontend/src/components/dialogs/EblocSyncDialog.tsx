@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
+import { useI18n } from '../../lib/i18n';
 
 type EblocSyncDialogProps = {
   token: string | null;
@@ -23,6 +24,7 @@ export default function EblocSyncDialog({
   onSuccess,
   onError,
 }: EblocSyncDialogProps) {
+  const { t } = useI18n();
   const [matches, setMatches] = useState<Array<{ id: string; nume: string; address: string; score: number }> | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<string>('');
   const [syncing, setSyncing] = useState(false);
@@ -82,16 +84,16 @@ export default function EblocSyncDialog({
     }}>
       <DialogTrigger asChild>
         <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
-          Sync E-Bloc
+          {t('ebloc.syncEbloc')}
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Sync E-Bloc.ro</DialogTitle>
+          <DialogTitle className="text-slate-100">{t('ebloc.syncEblocRo')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-slate-300 font-medium mb-1">Syncing from Property:</p>
+            <p className="text-sm text-slate-300 font-medium mb-1">{t('ebloc.syncingFrom')}</p>
             <p className="text-sm text-slate-100 font-semibold">{property.name}</p>
             {property.address && (
               <p className="text-xs text-slate-400 mt-1">{property.address}</p>
@@ -102,7 +104,7 @@ export default function EblocSyncDialog({
           {syncing && !matches && (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <Spinner className="w-8 h-8 text-slate-400" />
-              <p className="text-sm text-slate-400">Searching for matching E-bloc association...</p>
+              <p className="text-sm text-slate-400">{t('ebloc.searching')}</p>
             </div>
           )}
 
@@ -112,15 +114,15 @@ export default function EblocSyncDialog({
               <div>
                 <Label className="text-slate-300">
                   {matches[0]?.score === 0
-                    ? 'No exact match found. Please select the correct association:'
-                    : 'Multiple matches found. Please select the correct association:'}
+                    ? t('ebloc.noMatch')
+                    : t('ebloc.multipleMatches')}
                 </Label>
                 <Select
                   value={selectedMatch}
                   onValueChange={setSelectedMatch}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                    <SelectValue placeholder="Select association" />
+                    <SelectValue placeholder={t('ebloc.selectAssociation')} />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-700 border-slate-600">
                     {matches.map((match) => (
@@ -140,10 +142,10 @@ export default function EblocSyncDialog({
                   {syncing ? (
                     <>
                       <Spinner className="w-4 h-4 mr-2" />
-                      Syncing...
+                      {t('ebloc.syncing')}
                     </>
                   ) : (
-                    'Sync Debts'
+                    t('ebloc.syncDebts')
                   )}
                 </Button>
               )}

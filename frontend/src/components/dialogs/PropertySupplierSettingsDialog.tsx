@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Lock } from 'lucide-react';
+import { useI18n } from '../../lib/i18n';
 
 type PropertySupplierSettingsDialogProps = {
   token: string | null;
@@ -25,6 +26,7 @@ export default function PropertySupplierSettingsDialog({
   onSuccess,
   onError,
 }: PropertySupplierSettingsDialogProps) {
+  const { t } = useI18n();
   const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
   const [propertySuppliers, setPropertySuppliers] = useState<PropertySupplier[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,7 @@ export default function PropertySupplierSettingsDialog({
       setAllSuppliers(suppliers);
       setPropertySuppliers(propertySuppliersList);
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to load suppliers');
+      onError(err instanceof Error ? err.message : t('supplier.loadError'));
     } finally {
       setLoading(false);
     }
@@ -63,7 +65,7 @@ export default function PropertySupplierSettingsDialog({
 
   const handleAddSupplier = async () => {
     if (!token || !selectedSupplierId) {
-      onError('Please select a supplier');
+      onError(t('supplier.selectSupplier'));
       return;
     }
 
@@ -74,7 +76,7 @@ export default function PropertySupplierSettingsDialog({
       await loadData();
       setSelectedSupplierId('');
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to add supplier');
+      onError(err instanceof Error ? err.message : t('supplier.addError'));
     }
   };
 
@@ -95,7 +97,7 @@ export default function PropertySupplierSettingsDialog({
       setCredentials({ username: '', password: '' });
       await loadData();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to save credentials');
+      onError(err instanceof Error ? err.message : t('supplier.saveCredentialsError'));
     }
   };
 
@@ -106,7 +108,7 @@ export default function PropertySupplierSettingsDialog({
 
   const handleDeleteSupplier = async (propertySupplierId: string) => {
     if (!token) return;
-    if (!confirm('Are you sure you want to remove this supplier from the property?')) {
+    if (!confirm(t('supplier.removeConfirm'))) {
       return;
     }
 
@@ -114,7 +116,7 @@ export default function PropertySupplierSettingsDialog({
       await api.suppliers.removeFromProperty(token, property.id, propertySupplierId);
       await loadData();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to remove supplier');
+      onError(err instanceof Error ? err.message : t('supplier.removeError'));
     }
   };
 
@@ -131,21 +133,21 @@ export default function PropertySupplierSettingsDialog({
       <DialogContent className="bg-slate-800 border-slate-700 max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-slate-100">
-            Bill Suppliers - {property.name}
+            {t('supplier.billSuppliers')} - {property.name}
           </DialogTitle>
         </DialogHeader>
 
         {loading ? (
-          <div className="text-slate-400 text-center py-8">Loading...</div>
+          <div className="text-slate-400 text-center py-8">{t('common.loading')}</div>
         ) : (
           <div className="space-y-6">
             {/* Add Supplier Section */}
             <div className="space-y-2">
-              <Label className="text-slate-300">Add Supplier to Property</Label>
+              <Label className="text-slate-300">{t('supplier.addSupplierToProperty')}</Label>
               <div className="flex gap-2">
                 <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
                   <SelectTrigger className="flex-1 bg-slate-700 border-slate-600 text-slate-100">
-                    <SelectValue placeholder="Select a supplier" />
+                    <SelectValue placeholder={t('supplier.selectSupplier')} />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-700 border-slate-600">
                     {availableSuppliers.map(supplier => (
@@ -161,7 +163,7 @@ export default function PropertySupplierSettingsDialog({
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  Add
+                  {t('common.add')}
                 </Button>
               </div>
             </div>
@@ -169,35 +171,35 @@ export default function PropertySupplierSettingsDialog({
             {/* Property Suppliers List */}
             {propertySuppliers.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-slate-300">Configured Suppliers for this Property</Label>
+                <Label className="text-slate-300">{t('supplier.configuredSuppliers')}</Label>
                 <div className="border border-slate-600 rounded-md overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-700 border-slate-600">
-                        <TableHead className="text-slate-200">Supplier</TableHead>
-                        <TableHead className="text-slate-200">Type</TableHead>
-                        <TableHead className="text-slate-200">API Support</TableHead>
-                        <TableHead className="text-slate-200">Credentials</TableHead>
-                        <TableHead className="text-slate-200">Actions</TableHead>
+                        <TableHead className="text-slate-200">{t('supplier.supplierName')}</TableHead>
+                        <TableHead className="text-slate-200">{t('bill.billType')}</TableHead>
+                        <TableHead className="text-slate-200">{t('supplier.apiSupport')}</TableHead>
+                        <TableHead className="text-slate-200">{t('supplier.credentials')}</TableHead>
+                        <TableHead className="text-slate-200">{t('common.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {propertySuppliers.map(ps => (
                         <TableRow key={ps.id} className="bg-slate-800 border-slate-600">
                           <TableCell className="text-slate-300">{ps.supplier.name}</TableCell>
-                          <TableCell className="text-slate-400 capitalize">{ps.supplier.bill_type}</TableCell>
+                          <TableCell className="text-slate-400 capitalize">{t(`bill.${ps.supplier.bill_type}`)}</TableCell>
                           <TableCell className="text-slate-400">
                             {ps.supplier.has_api ? (
-                              <span className="text-emerald-400">🔌 Available</span>
+                              <span className="text-emerald-400">🔌 {t('supplier.available')}</span>
                             ) : (
-                              <span className="text-slate-500">Not available</span>
+                              <span className="text-slate-500">{t('supplier.notAvailable')}</span>
                             )}
                           </TableCell>
                           <TableCell className="text-slate-400">
                             {ps.has_credentials ? (
-                              <span className="text-emerald-400">✓ Saved</span>
+                              <span className="text-emerald-400">✓ {t('supplier.saved')}</span>
                             ) : (
-                              <span className="text-slate-500">Not set</span>
+                              <span className="text-slate-500">{t('supplier.notSet')}</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -208,7 +210,7 @@ export default function PropertySupplierSettingsDialog({
                                 className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-8 px-3"
                               >
                                 <Lock className="w-3 h-3 mr-1" />
-                                {ps.has_credentials ? 'Update' : 'Set'} Credentials
+                                {ps.has_credentials ? t('supplier.updateCredentials') : t('supplier.setCredentials')}
                               </Button>
                               <Button
                                 size="sm"
@@ -232,32 +234,32 @@ export default function PropertySupplierSettingsDialog({
               <div className="space-y-4 border-t border-slate-600 pt-4">
                 <div>
                   <Label className="text-slate-300">
-                    Credentials for {editingSupplier.supplier.name}
+                    {t('supplier.credentialsFor')} {editingSupplier.supplier.name}
                   </Label>
                   <p className="text-xs text-slate-500 mt-1">
                     {editingSupplier.supplier.has_api
-                      ? 'Enter your login credentials to enable automatic bill fetching'
-                      : 'Save credentials for manual use'}
+                      ? t('supplier.credentialsDesc')
+                      : t('supplier.credentialsManualDesc')}
                   </p>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <Label className="text-slate-300">Username</Label>
+                    <Label className="text-slate-300">{t('supplier.username')}</Label>
                     <Input
                       value={credentials.username}
                       onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder="Enter username"
+                      placeholder={t('supplier.enterUsername')}
                     />
                   </div>
                   <div>
-                    <Label className="text-slate-300">Password</Label>
+                    <Label className="text-slate-300">{t('common.password')}</Label>
                     <Input
                       type="password"
                       value={credentials.password}
                       onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder={editingSupplier.has_credentials ? 'Enter new password (leave blank to keep existing)' : 'Enter password'}
+                      placeholder={editingSupplier.has_credentials ? t('supplier.newPasswordPlaceholder') : t('supplier.enterPassword')}
                     />
                   </div>
                   <div className="flex gap-2">
@@ -265,7 +267,7 @@ export default function PropertySupplierSettingsDialog({
                       onClick={handleSaveCredentials}
                       className="bg-emerald-600 hover:bg-emerald-700"
                     >
-                      Save Credentials
+                      {t('supplier.saveCredentials')}
                     </Button>
                     <Button
                       onClick={() => {
@@ -275,7 +277,7 @@ export default function PropertySupplierSettingsDialog({
                       variant="outline"
                       className="bg-slate-700 text-slate-300 hover:bg-slate-600"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                   </div>
                 </div>
@@ -284,15 +286,15 @@ export default function PropertySupplierSettingsDialog({
 
             {/* All Suppliers Table */}
             <div className="space-y-2 border-t border-slate-600 pt-4">
-              <Label className="text-slate-300">All Supported Suppliers</Label>
+              <Label className="text-slate-300">{t('supplier.allSupportedSuppliers')}</Label>
               <div className="border border-slate-600 rounded-md overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-700 border-slate-600">
-                      <TableHead className="text-slate-200">Supplier</TableHead>
-                      <TableHead className="text-slate-200">Type</TableHead>
-                      <TableHead className="text-slate-200">API Support</TableHead>
-                      <TableHead className="text-slate-200">Status</TableHead>
+                      <TableHead className="text-slate-200">{t('supplier.supplierName')}</TableHead>
+                      <TableHead className="text-slate-200">{t('bill.billType')}</TableHead>
+                      <TableHead className="text-slate-200">{t('supplier.apiSupport')}</TableHead>
+                      <TableHead className="text-slate-200">{t('common.status')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -301,19 +303,19 @@ export default function PropertySupplierSettingsDialog({
                       return (
                         <TableRow key={supplier.id} className="bg-slate-800 border-slate-600">
                           <TableCell className="text-slate-300">{supplier.name}</TableCell>
-                          <TableCell className="text-slate-400 capitalize">{supplier.bill_type}</TableCell>
+                          <TableCell className="text-slate-400 capitalize">{t(`bill.${supplier.bill_type}`)}</TableCell>
                           <TableCell className="text-slate-400">
                             {supplier.has_api ? (
-                              <span className="text-emerald-400">🔌 Available</span>
+                              <span className="text-emerald-400">🔌 {t('supplier.available')}</span>
                             ) : (
-                              <span className="text-slate-500">Not available</span>
+                              <span className="text-slate-500">{t('supplier.notAvailable')}</span>
                             )}
                           </TableCell>
                           <TableCell className="text-slate-400">
                             {ps ? (
-                              <span className="text-emerald-400">✓ Added</span>
+                              <span className="text-emerald-400">✓ {t('supplier.added')}</span>
                             ) : (
-                              <span className="text-slate-500">Not added</span>
+                              <span className="text-slate-500">{t('supplier.notAdded')}</span>
                             )}
                           </TableCell>
                         </TableRow>

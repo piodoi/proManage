@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus } from 'lucide-react';
+import { useI18n } from '../../lib/i18n';
 
 type PropertyDialogProps = {
   token: string | null;
@@ -22,6 +23,7 @@ export default function PropertyDialog({
   onError,
   canAddProperty,
 }: PropertyDialogProps) {
+  const { t } = useI18n();
   const [form, setForm] = useState({ name: '', address: '' });
 
   const handleSubmit = async () => {
@@ -33,7 +35,7 @@ export default function PropertyDialog({
       onOpenChange(false);
       onSuccess();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'An error occurred');
+      onError(err instanceof Error ? err.message : t('errors.generic'));
     }
   };
 
@@ -45,34 +47,34 @@ export default function PropertyDialog({
           disabled={!canAddProperty}
         >
           <Plus className="w-4 h-4 mr-2" />
-          Add Property
+          {t('property.addProperty')}
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Add Property</DialogTitle>
+          <DialogTitle className="text-slate-100">{t('property.addProperty')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="text-slate-300">Name</Label>
+            <Label className="text-slate-300">{t('common.name')}</Label>
             <Input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="My Apartment Building"
+              placeholder={t('property.propertyName')}
             />
           </div>
           <div>
-            <Label className="text-slate-300">Address</Label>
+            <Label className="text-slate-300">{t('property.address')}</Label>
             <Input
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="123 Main St, City"
+              placeholder={t('property.addressPlaceholder')}
             />
           </div>
           <Button onClick={handleSubmit} className="w-full bg-emerald-600 hover:bg-emerald-700">
-            Create Property
+            {t('property.addProperty')}
           </Button>
         </div>
       </DialogContent>

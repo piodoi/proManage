@@ -6,6 +6,7 @@ import LandlordDashboard from './pages/LandlordDashboard';
 import RenterView from './pages/RenterView';
 import Login from './pages/Login';
 import ConfirmEmail from './pages/ConfirmEmail';
+import { I18nProvider, useI18n } from './lib/i18n';
 import './App.css';
 
 type AuthContextType = {
@@ -57,42 +58,53 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-slate-400">Loading...</div>
-      </div>
+      <I18nProvider>
+        <LoadingScreen />
+      </I18nProvider>
     );
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
-      <BrowserRouter>
-        <Routes>
-                    <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-                    <Route path="/confirm-email" element={<ConfirmEmail />} />
-                    <Route path="/renter/:token" element={<RenterView />} />
-          <Route
-            path="/admin/*"
-            element={
-              user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />
-            }
-          />
-          <Route
-            path="/*"
-            element={
-              user ? (
-                user.role === 'admin' ? (
-                  <Navigate to="/admin" />
+    <I18nProvider>
+      <AuthContext.Provider value={{ user, token, login, logout }}>
+        <BrowserRouter>
+          <Routes>
+                      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+                      <Route path="/confirm-email" element={<ConfirmEmail />} />
+                      <Route path="/renter/:token" element={<RenterView />} />
+            <Route
+              path="/admin/*"
+              element={
+                user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />
+              }
+            />
+            <Route
+              path="/*"
+              element={
+                user ? (
+                  user.role === 'admin' ? (
+                    <Navigate to="/admin" />
+                  ) : (
+                    <LandlordDashboard />
+                  )
                 ) : (
-                  <LandlordDashboard />
+                  <Navigate to="/login" />
                 )
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-        </Routes>
-      </BrowserRouter>
-    </AuthContext.Provider>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </AuthContext.Provider>
+    </I18nProvider>
+  );
+}
+
+function LoadingScreen() {
+  const { t } = useI18n();
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="text-slate-400">{t('common.loading')}</div>
+    </div>
   );
 }
 

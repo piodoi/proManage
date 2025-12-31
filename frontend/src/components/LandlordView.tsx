@@ -8,6 +8,7 @@ import SettingsView from './SettingsView';
 import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
 import EblocImportDialog from './dialogs/EblocImportDialog';
+import { useI18n } from '../lib/i18n';
 
 type LandlordViewProps = {
   token: string | null;
@@ -17,6 +18,7 @@ type LandlordViewProps = {
 
 export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [properties, setProperties] = useState<Property[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
@@ -49,7 +51,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   };
 
   const handleError = (err: unknown) => {
-    const message = err instanceof Error ? err.message : 'An error occurred';
+    const message = err instanceof Error ? err.message : t('errors.generic');
     setError(message);
     if (onError) {
       onError(message);
@@ -83,7 +85,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
 
   const handleDeleteProperty = async (propertyId: string) => {
     if (!token) return;
-    if (!confirm('Are you sure you want to delete this property? This will also delete all renters and bills associated with it.')) {
+    if (!confirm(t('property.confirmDelete'))) {
       return;
     }
     try {
@@ -107,7 +109,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       {hideSettings ? (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-medium text-slate-100">Properties</h2>
+            <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
             <div className="flex gap-2">
               <EblocImportDialog
                 token={token}
@@ -128,11 +130,11 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
           </div>
 
           {loading ? (
-            <div className="text-slate-400 text-center py-8">Loading...</div>
+            <div className="text-slate-400 text-center py-8">{t('common.loading')}</div>
           ) : properties.length === 0 ? (
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="py-8 text-center text-slate-400">
-                No properties yet. Add your first property to get started.
+                {t('property.noProperties')}
               </CardContent>
             </Card>
           ) : (
@@ -156,17 +158,17 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
           <TabsList className="bg-slate-800 border border-slate-700">
             <TabsTrigger value="properties" className="data-[state=active]:bg-slate-700">
               <Building2 className="w-4 h-4 mr-2" />
-              Properties
+              {t('property.properties')}
             </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
               <Settings className="w-4 h-4 mr-2" />
-              Settings
+              {t('settings.settings')}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="properties" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-medium text-slate-100">Properties</h2>
+              <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
               <div className="flex gap-2">
                 <EblocImportDialog
                   token={token}
@@ -187,11 +189,11 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
             </div>
 
             {loading ? (
-              <div className="text-slate-400 text-center py-8">Loading...</div>
+              <div className="text-slate-400 text-center py-8">{t('common.loading')}</div>
             ) : properties.length === 0 ? (
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="py-8 text-center text-slate-400">
-                  No properties yet. Add your first property to get started.
+                  {t('property.noProperties')}
                 </CardContent>
               </Card>
             ) : (

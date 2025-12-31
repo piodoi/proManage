@@ -11,6 +11,7 @@ import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 import AddressWarningDialog from './dialogs/AddressWarningDialog';
 import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
 import SupplierSyncDialog from './dialogs/SupplierSyncDialog';
+import { useI18n } from '../lib/i18n';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -31,6 +32,7 @@ export default function PropertyBillsView({
   onError,
   onBillsChange 
 }: PropertyBillsViewProps) {
+  const { t } = useI18n();
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [billForm, setBillForm] = useState({
@@ -176,7 +178,7 @@ export default function PropertyBillsView({
 
   const handleDeleteBill = async (billId: string) => {
     if (!token) return;
-    if (!confirm('Are you sure you want to delete this bill?')) {
+    if (!confirm(t('bill.confirmDelete'))) {
       return;
     }
     try {
@@ -199,7 +201,7 @@ export default function PropertyBillsView({
         <div className="flex justify-between items-center">
           <CardTitle className="text-slate-100 flex items-center gap-2">
             <Receipt className="w-5 h-5" />
-            Bills
+            {t('bill.bills')}
           </CardTitle>
           <div className="flex gap-2">
             <input
@@ -251,7 +253,7 @@ export default function PropertyBillsView({
               className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
             >
               <Receipt className="w-4 h-4 mr-1" />
-              {parsingPdf ? 'Parsing...' : 'Upload PDF'}
+              {parsingPdf ? t('common.loading') : t('bill.uploadPdf')}
             </Button>
             {property && (
               <SupplierSyncDialog
@@ -279,14 +281,14 @@ export default function PropertyBillsView({
                 } else {
                   // Fallback: if property not provided, show error
                   if (onError) {
-                    onError('Property information is required for sync');
+                    onError(t('errors.generic'));
                   }
                 }
               }}
               className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
             >
               <Settings className="w-4 h-4 mr-1" />
-              Sync Bills
+              {t('bill.syncBills')}
             </Button>
             <Dialog open={showBillForm} onOpenChange={(open) => {
               setShowBillForm(open);
@@ -298,47 +300,47 @@ export default function PropertyBillsView({
               <DialogTrigger asChild>
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
                   <Plus className="w-4 h-4 mr-1" />
-                  Add Bill
+                  {t('bill.addBill')}
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-slate-800 border-slate-700">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-100">{editingBill ? 'Edit Bill' : 'Add Bill'}</DialogTitle>
+                  <DialogTitle className="text-slate-100">{editingBill ? t('bill.editBill') : t('bill.addBill')}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-slate-300">Renter</Label>
+                    <Label className="text-slate-300">{t('renter.renters')}</Label>
                     <Select value={billForm.renter_id} onValueChange={(v) => setBillForm({ ...billForm, renter_id: v })}>
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                        <SelectValue placeholder="Select renter" />
+                        <SelectValue placeholder={t('renter.renters')} />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="all">All / Property</SelectItem>
+                        <SelectItem value="all">{t('bill.allRenters')}</SelectItem>
                         {renters.map((renter) => (
                           <SelectItem key={renter.id} value={renter.id}>{renter.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-slate-500 mt-1">
-                      Select "All / Property" to apply bill to all renters, or select a specific renter
+                      {t('bill.allRenters')}
                     </p>
                   </div>
                   <div>
-                    <Label className="text-slate-300">Bill Type *</Label>
+                    <Label className="text-slate-300">{t('bill.billType')} *</Label>
                     <Select value={billForm.bill_type} onValueChange={(v) => setBillForm({ ...billForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}>
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                        <SelectValue placeholder="Select type" />
+                        <SelectValue placeholder={t('bill.billType')} />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="rent">Rent</SelectItem>
-                        <SelectItem value="utilities">Utilities</SelectItem>
-                        <SelectItem value="ebloc">E-Bloc</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        <SelectItem value="rent">{t('bill.rent')}</SelectItem>
+                        <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
+                        <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
+                        <SelectItem value="other">{t('bill.other')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-slate-300">Amount (RON) *</Label>
+                    <Label className="text-slate-300">{t('common.amount')} (RON) *</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -350,7 +352,7 @@ export default function PropertyBillsView({
                     />
                   </div>
                   <div>
-                    <Label className="text-slate-300">Due Date</Label>
+                    <Label className="text-slate-300">{t('bill.dueDate')}</Label>
                     <Input
                       type="date"
                       value={billForm.due_date}
@@ -359,7 +361,7 @@ export default function PropertyBillsView({
                     />
                   </div>
                   <Button onClick={handleSaveBill} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!billForm.amount}>
-                    {editingBill ? 'Update Bill' : 'Create Bill'}
+                    {editingBill ? t('bill.editBill') : t('bill.addBill')}
                   </Button>
                 </div>
               </DialogContent>
@@ -371,20 +373,20 @@ export default function PropertyBillsView({
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-400">Renter</TableHead>
-              <TableHead className="text-slate-400">Description</TableHead>
-              <TableHead className="text-slate-400">Type</TableHead>
-              <TableHead className="text-slate-400">Amount</TableHead>
-              <TableHead className="text-slate-400">Due Date</TableHead>
-              <TableHead className="text-slate-400">Status</TableHead>
-              <TableHead className="text-slate-400">Actions</TableHead>
+              <TableHead className="text-slate-400">{t('renter.renters')}</TableHead>
+              <TableHead className="text-slate-400">{t('common.description')}</TableHead>
+              <TableHead className="text-slate-400">{t('bill.billType')}</TableHead>
+              <TableHead className="text-slate-400">{t('common.amount')}</TableHead>
+              <TableHead className="text-slate-400">{t('bill.dueDate')}</TableHead>
+              <TableHead className="text-slate-400">{t('common.status')}</TableHead>
+              <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {propertyBills.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-slate-500 text-center py-4">
-                  No bills yet for this property
+                  {t('bill.noBills')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -392,9 +394,9 @@ export default function PropertyBillsView({
                 const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
                 return (
                   <TableRow key={bill.id} className="border-slate-700">
-                    <TableCell className="text-slate-300">{renter ? renter.name : 'All / Property'}</TableCell>
+                    <TableCell className="text-slate-300">{renter ? renter.name : t('bill.allProperty')}</TableCell>
                     <TableCell className="text-slate-200">{bill.description}</TableCell>
-                    <TableCell className="text-slate-300">{bill.bill_type}</TableCell>
+                    <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
                     <TableCell className="text-slate-200">{bill.amount.toFixed(2)} RON</TableCell>
                     <TableCell className="text-slate-300">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
                     <TableCell>
@@ -403,7 +405,7 @@ export default function PropertyBillsView({
                         bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
                         'bg-amber-900 text-amber-200'
                       }`}>
-                        {bill.status}
+                        {t(`bill.status.${bill.status}`)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -412,7 +414,7 @@ export default function PropertyBillsView({
                           size="sm"
                           onClick={() => handleEditBill(bill)}
                           className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
-                          title="Edit bill"
+                          title={t('bill.editBill')}
                         >
                           <Pencil className="w-3 h-3" />
                         </Button>
@@ -420,7 +422,7 @@ export default function PropertyBillsView({
                           size="sm"
                           onClick={() => handleDeleteBill(bill.id)}
                           className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600 h-6 px-2 w-6"
-                          title="Delete bill"
+                          title={t('bill.deleteBill')}
                         >
                           <Trash2 className="w-3 h-3" />
                         </Button>
@@ -475,11 +477,11 @@ export default function PropertyBillsView({
       <Dialog open={showContractSelector} onOpenChange={setShowContractSelector}>
         <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-slate-200">Select Contracts</DialogTitle>
+            <DialogTitle className="text-slate-200">{t('supplier.selectContracts')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <p className="text-slate-300 text-sm">
-              Multiple contracts were found. Please select which contract to use for each supplier.
+              {t('supplier.multipleContractsFound')}
             </p>
             {Object.entries(multipleContracts).map(([supplierId, info]) => (
               <div key={supplierId} className="space-y-2">
@@ -491,7 +493,7 @@ export default function PropertyBillsView({
                   }}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
-                    <SelectValue placeholder="Select contract" />
+                    <SelectValue placeholder={t('supplier.selectContract')} />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-700 border-slate-600">
                     {info.contracts.map((contract) => (
@@ -512,7 +514,7 @@ export default function PropertyBillsView({
                 }}
                 className="bg-slate-700 text-slate-200 hover:bg-slate-600"
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 onClick={async () => {
@@ -535,7 +537,7 @@ export default function PropertyBillsView({
                       onBillsChange();
                     }
                     if (onError) {
-                      onError('Contract selections saved. You can sync bills again to filter by selected contracts.');
+                      onError(t('supplier.contractSelectionsSaved'));
                     }
                   } catch (err) {
                     handleError(err);
@@ -543,7 +545,7 @@ export default function PropertyBillsView({
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
-                Save Selections
+                {t('common.save')}
               </Button>
             </div>
           </div>

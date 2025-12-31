@@ -14,9 +14,12 @@ import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/p
 import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
+import { useI18n } from '../lib/i18n';
+import { LanguageSelector } from '../components/LanguageSelector';
 
 export default function AdminDashboard() {
   const { user, token, logout } = useAuth();
+  const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,7 +71,7 @@ export default function AdminDashboard() {
   const handleCreate = async () => {
     if (!token) return;
     if (!formData.password) {
-      setError('Password is required for new users');
+      setError(t('admin.passwordRequired'));
       return;
     }
     try {
@@ -103,7 +106,7 @@ export default function AdminDashboard() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!token || !confirm('Delete this user?')) return;
+    if (!token || !confirm(t('admin.deleteUserConfirm'))) return;
     try {
       await api.admin.deleteUser(token, id);
       loadUsers();
@@ -217,12 +220,15 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <FileText className="w-6 h-6 text-emerald-500" />
-              <h1 className="text-xl font-semibold text-slate-100">Admin Dashboard</h1>
+              <h1 className="text-xl font-semibold text-slate-100">{t('admin.dashboard')}</h1>
             </div>
-            <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
+            <div className="flex items-center gap-2">
+              <LanguageSelector />
+              <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
+                <LogOut className="w-4 h-4 mr-2" />
+                {t('app.logout')}
+              </Button>
+            </div>
           </div>
         </header>
         <main className="p-6">
@@ -239,14 +245,15 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3">
             <Users className="w-6 h-6 text-emerald-500" />
             <div>
-              <h1 className="text-xl font-semibold text-slate-100">Admin Dashboard</h1>
+              <h1 className="text-xl font-semibold text-slate-100">{t('admin.dashboard')}</h1>
               {user && <p className="text-sm text-slate-400">{user.name}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <LanguageSelector />
             <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
               <LogOut className="w-4 h-4 mr-2" />
-              Logout
+              {t('app.logout')}
             </Button>
           </div>
         </div>
@@ -264,15 +271,15 @@ export default function AdminDashboard() {
           <TabsList className="bg-slate-800 border border-slate-700">
             <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
               <Building2 className="w-4 h-4 mr-2" />
-              Property
+              {t('property.properties')}
             </TabsTrigger>
             <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700">
               <Users className="w-4 h-4 mr-2" />
-              Admin
+              {t('admin.users')}
             </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
               <Settings className="w-4 h-4 mr-2" />
-              Settings
+              {t('settings.settings')}
             </TabsTrigger>
           </TabsList>
 
@@ -286,14 +293,14 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle className="text-slate-100 flex items-center gap-2">
                   <Wrench className="w-5 h-5" />
-                  Housekeeping
+                  {t('admin.housekeeping')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h3 className="text-slate-200 mb-2">Bill Extraction Patterns</h3>
+                  <h3 className="text-slate-200 mb-2">{t('admin.billExtractionPatterns')}</h3>
                   <p className="text-slate-400 text-sm mb-4">
-                    Refresh extraction patterns from JSON files. Only patterns with newer modification times than the database will be updated.
+                    {t('admin.refreshPatternsDesc')}
                   </p>
                   <div className="flex items-center gap-4 mb-4">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -303,7 +310,7 @@ export default function AdminDashboard() {
                         onChange={(e) => setForceRefresh(e.target.checked)}
                         className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-emerald-600 focus:ring-emerald-500"
                       />
-                      <span className="text-slate-300 text-sm">Force refresh (update even if JSON is not newer)</span>
+                      <span className="text-slate-300 text-sm">{t('admin.forceRefresh')}</span>
                     </label>
                   </div>
                   <Button
@@ -316,7 +323,7 @@ export default function AdminDashboard() {
                         const result = await api.admin.refreshPatterns(token, forceRefresh);
                         setRefreshResults(result.results);
                       } catch (err) {
-                        setError(err instanceof Error ? err.message : 'Failed to refresh patterns');
+                        setError(err instanceof Error ? err.message : t('errors.generic'));
                         setShowRefreshDialog(false);
                       } finally {
                         setRefreshingPatterns(false);
@@ -326,7 +333,7 @@ export default function AdminDashboard() {
                     className="bg-emerald-600 text-white hover:bg-emerald-700"
                   >
                     <RefreshCw className={`w-4 h-4 mr-2 ${refreshingPatterns ? 'animate-spin' : ''}`} />
-                    {refreshingPatterns ? 'Refreshing...' : 'Refresh Bill Patterns'}
+                    {refreshingPatterns ? t('admin.refreshing') : t('admin.refreshBillPatterns')}
                   </Button>
                 </div>
               </CardContent>
@@ -337,22 +344,22 @@ export default function AdminDashboard() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-slate-100 flex items-center gap-2">
                   <Package className="w-5 h-5" />
-                  Suppliers Management
+                  {t('admin.suppliersManagement')}
                 </CardTitle>
                 <Dialog open={showSupplierCreate} onOpenChange={setShowSupplierCreate}>
                   <DialogTrigger asChild>
                     <Button className="bg-emerald-600 hover:bg-emerald-700">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Supplier
+                      {t('admin.createSupplier')}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                     <DialogHeader>
-                      <DialogTitle className="text-slate-100">Create Supplier</DialogTitle>
+                      <DialogTitle className="text-slate-100">{t('admin.createSupplier')}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label className="text-slate-300">Name *</Label>
+                        <Label className="text-slate-300">{t('common.name')} *</Label>
                         <Input
                           value={supplierForm.name}
                           onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
@@ -361,7 +368,7 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
-                        <Label className="text-slate-300">Bill Type *</Label>
+                        <Label className="text-slate-300">{t('bill.billType')} *</Label>
                         <Select 
                           value={supplierForm.bill_type} 
                           onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}
@@ -370,20 +377,20 @@ export default function AdminDashboard() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-700 border-slate-600">
-                            <SelectItem value="utilities">Utilities</SelectItem>
-                            <SelectItem value="rent">Rent</SelectItem>
-                            <SelectItem value="ebloc">E-Bloc</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
+                            <SelectItem value="rent">{t('bill.rent')}</SelectItem>
+                            <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
+                            <SelectItem value="other">{t('bill.other')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-slate-300">Extraction Pattern Supplier Name</Label>
+                        <Label className="text-slate-300">{t('admin.extractionPatternSupplier')}</Label>
                         <Input
                           value={supplierForm.extraction_pattern_supplier || ''}
                           onChange={(e) => setSupplierForm({ ...supplierForm, extraction_pattern_supplier: e.target.value || undefined })}
                           className="bg-slate-700 border-slate-600 text-slate-100"
-                          placeholder="Optional: Name used in extraction patterns"
+                          placeholder={t('admin.extractionPatternSupplierPlaceholder')}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -393,14 +400,14 @@ export default function AdminDashboard() {
                           onChange={(e) => setSupplierForm({ ...supplierForm, has_api: e.target.checked })}
                           className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-emerald-600 focus:ring-emerald-500"
                         />
-                        <Label className="text-slate-300">Has API Integration</Label>
+                        <Label className="text-slate-300">{t('admin.hasApiIntegration')}</Label>
                       </div>
                       <DialogFooter>
                         <Button onClick={() => setShowSupplierCreate(false)} variant="outline" className="bg-slate-700 text-slate-100 hover:bg-slate-600">
-                          Cancel
+                          {t('common.cancel')}
                         </Button>
                         <Button onClick={handleSupplierCreate} className="bg-emerald-600 hover:bg-emerald-700">
-                          Create
+                          {t('common.add')}
                         </Button>
                       </DialogFooter>
                     </div>
@@ -409,19 +416,19 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 {loadingSuppliers ? (
-                  <div className="text-slate-400 text-center py-4">Loading suppliers...</div>
+                  <div className="text-slate-400 text-center py-4">{t('admin.loadingSuppliers')}</div>
                 ) : suppliers.length === 0 ? (
-                  <div className="text-slate-400 text-center py-4">No suppliers found</div>
+                  <div className="text-slate-400 text-center py-4">{t('admin.noSuppliersFound')}</div>
                 ) : (
                   <div className={suppliers.length > 10 ? "max-h-96 overflow-y-auto" : ""}>
                     <Table>
                       <TableHeader>
                         <TableRow className="border-slate-700">
-                          <TableHead className="text-slate-300">Name</TableHead>
-                          <TableHead className="text-slate-300">Bill Type</TableHead>
-                          <TableHead className="text-slate-300">Has API</TableHead>
-                          <TableHead className="text-slate-300">Extraction Pattern</TableHead>
-                          <TableHead className="text-slate-300">Actions</TableHead>
+                          <TableHead className="text-slate-300">{t('common.name')}</TableHead>
+                          <TableHead className="text-slate-300">{t('bill.billType')}</TableHead>
+                          <TableHead className="text-slate-300">{t('supplier.hasApi')}</TableHead>
+                          <TableHead className="text-slate-300">{t('admin.extractionPatterns')}</TableHead>
+                          <TableHead className="text-slate-300">{t('common.actions')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -430,7 +437,7 @@ export default function AdminDashboard() {
                             <TableCell className="text-slate-100">{supplier.name}</TableCell>
                             <TableCell className="text-slate-300 capitalize">{supplier.bill_type}</TableCell>
                             <TableCell className="text-slate-300">
-                              {supplier.has_api ? 'Yes' : 'No'}
+                              {supplier.has_api ? t('common.yes') : t('common.no')}
                             </TableCell>
                             <TableCell className="text-slate-300 text-sm">
                               {supplier.extraction_pattern_supplier || '-'}
@@ -468,11 +475,11 @@ export default function AdminDashboard() {
             <Dialog open={!!editSupplier} onOpenChange={(open) => !open && setEditSupplier(null)}>
               <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-100">Edit Supplier</DialogTitle>
+                  <DialogTitle className="text-slate-100">{t('admin.editSupplier')}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-slate-300">Name *</Label>
+                    <Label className="text-slate-300">{t('common.name')} *</Label>
                     <Input
                       value={supplierForm.name}
                       onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
@@ -481,7 +488,7 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <Label className="text-slate-300">Bill Type *</Label>
+                    <Label className="text-slate-300">{t('bill.billType')} *</Label>
                     <Select 
                       value={supplierForm.bill_type} 
                       onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}
@@ -490,20 +497,20 @@ export default function AdminDashboard() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="utilities">Utilities</SelectItem>
-                        <SelectItem value="rent">Rent</SelectItem>
-                        <SelectItem value="ebloc">E-Bloc</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
+                        <SelectItem value="rent">{t('bill.rent')}</SelectItem>
+                        <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
+                        <SelectItem value="other">{t('bill.other')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-slate-300">Extraction Pattern Supplier Name</Label>
+                    <Label className="text-slate-300">{t('admin.extractionPatternSupplier')}</Label>
                     <Input
                       value={supplierForm.extraction_pattern_supplier || ''}
                       onChange={(e) => setSupplierForm({ ...supplierForm, extraction_pattern_supplier: e.target.value || undefined })}
                       className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder="Optional: Name used in extraction patterns"
+                      placeholder={t('admin.extractionPatternSupplierPlaceholder')}
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -513,14 +520,14 @@ export default function AdminDashboard() {
                       onChange={(e) => setSupplierForm({ ...supplierForm, has_api: e.target.checked })}
                       className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-emerald-600 focus:ring-emerald-500"
                     />
-                    <Label className="text-slate-300">Has API Integration</Label>
+                    <Label className="text-slate-300">{t('admin.hasApiIntegration')}</Label>
                   </div>
                   <DialogFooter>
                     <Button onClick={() => setEditSupplier(null)} variant="outline" className="bg-slate-700 text-slate-100 hover:bg-slate-600">
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button onClick={handleSupplierUpdate} className="bg-emerald-600 hover:bg-emerald-700">
-                      Update
+                      {t('common.save')}
                     </Button>
                   </DialogFooter>
                 </div>
@@ -531,16 +538,16 @@ export default function AdminDashboard() {
             <Dialog open={!!deleteSupplier} onOpenChange={(open) => !open && setDeleteSupplier(null)}>
               <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-100">Delete Supplier</DialogTitle>
+                  <DialogTitle className="text-slate-100">{t('admin.deleteSupplier')}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <p className="text-slate-300">
-                    Are you sure you want to delete <strong className="text-slate-100">{deleteSupplier?.name}</strong>?
+                    {t('admin.supplierDeleteConfirm')} <strong className="text-slate-100">{deleteSupplier?.name}</strong>?
                   </p>
                   {supplierProperties.length > 0 && (
                     <div>
                       <p className="text-slate-300 mb-2">
-                        This supplier is connected to {supplierProperties.length} property/properties:
+                        {t('admin.supplierConnectedTo', { count: supplierProperties.length })}
                       </p>
                       <div className="max-h-48 overflow-y-auto bg-slate-700/50 rounded p-3 space-y-1">
                         {supplierProperties.map((prop) => (
@@ -550,7 +557,7 @@ export default function AdminDashboard() {
                         ))}
                       </div>
                       <p className="text-slate-400 text-sm mt-2">
-                        You can choose to also remove all property-supplier references.
+                        {t('admin.removeReferences')}
                       </p>
                     </div>
                   )}
@@ -560,21 +567,21 @@ export default function AdminDashboard() {
                       variant="outline" 
                       className="bg-slate-700 text-slate-100 hover:bg-slate-600 w-full sm:w-auto"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     {supplierProperties.length > 0 && (
                       <Button 
                         onClick={() => handleSupplierDelete(false)} 
                         className="bg-yellow-600 hover:bg-yellow-700 w-full sm:w-auto"
                       >
-                        Delete Supplier Only
+                        {t('admin.deleteSupplierOnly')}
                       </Button>
                     )}
                     <Button 
                       onClick={() => handleSupplierDelete(true)} 
                       className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
                     >
-                      {supplierProperties.length > 0 ? 'Delete Supplier & References' : 'Delete'}
+                      {supplierProperties.length > 0 ? t('admin.deleteSupplierAndReferences') : t('common.delete')}
                     </Button>
                   </DialogFooter>
                 </div>
@@ -585,36 +592,36 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle className="text-slate-100 flex items-center gap-2">
                   <FileText className="w-5 h-5" />
-                  Bill Parser
+                  {t('admin.billParser')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-slate-400 text-sm mb-4">
-                  Parse and extract bill information from PDF documents.
+                  {t('admin.billParserDesc')}
                 </p>
                 <Button onClick={() => setShowBillParser(true)} className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
                   <FileText className="w-4 h-4 mr-2" />
-                  Open Bill Parser
+                  {t('admin.openBillParser')}
                 </Button>
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-slate-100">User Management</CardTitle>
+                <CardTitle className="text-slate-100">{t('admin.userManagement')}</CardTitle>
                 <Dialog open={showCreate} onOpenChange={setShowCreate}>
                   <DialogTrigger asChild>
                     <Button className="bg-emerald-600 hover:bg-emerald-700">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add User
+                      {t('admin.createUser')}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="bg-slate-800 border-slate-700">
                     <DialogHeader>
-                      <DialogTitle className="text-slate-100">Create User</DialogTitle>
+                      <DialogTitle className="text-slate-100">{t('admin.createUser')}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label className="text-slate-300">Email</Label>
+                        <Label className="text-slate-300">{t('common.email')}</Label>
                         <Input
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -622,7 +629,7 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
-                        <Label className="text-slate-300">Password *</Label>
+                        <Label className="text-slate-300">{t('common.password')} *</Label>
                         <Input
                           type="password"
                           value={formData.password}
@@ -632,7 +639,7 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
-                        <Label className="text-slate-300">Name</Label>
+                        <Label className="text-slate-300">{t('common.name')}</Label>
                         <Input
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -640,19 +647,19 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
-                        <Label className="text-slate-300">Role</Label>
+                        <Label className="text-slate-300">{t('admin.role')}</Label>
                         <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v as 'admin' | 'landlord' })}>
                           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-700 border-slate-600">
-                            <SelectItem value="landlord">Landlord</SelectItem>
+                            <SelectItem value="landlord">{t('admin.landlord')}</SelectItem>
                             <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <Button onClick={handleCreate} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                        Create
+                        {t('common.add')}
                       </Button>
                     </div>
                   </DialogContent>
@@ -660,17 +667,17 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="text-slate-400 text-center py-8">Loading...</div>
+                  <div className="text-slate-400 text-center py-8">{t('common.loading')}</div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow className="border-slate-700">
-                        <TableHead className="text-slate-400">Name</TableHead>
-                        <TableHead className="text-slate-400">Email</TableHead>
-                        <TableHead className="text-slate-400">Password</TableHead>
-                        <TableHead className="text-slate-400">Role</TableHead>
-                        <TableHead className="text-slate-400">Subscription</TableHead>
-                        <TableHead className="text-slate-400">Actions</TableHead>
+                        <TableHead className="text-slate-400">{t('common.name')}</TableHead>
+                        <TableHead className="text-slate-400">{t('common.email')}</TableHead>
+                        <TableHead className="text-slate-400">{t('common.password')}</TableHead>
+                        <TableHead className="text-slate-400">{t('admin.role')}</TableHead>
+                        <TableHead className="text-slate-400">{t('admin.subscription')}</TableHead>
+                        <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -696,8 +703,8 @@ export default function AdminDashboard() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-700 border-slate-600">
-                                  <SelectItem value="0">Off</SelectItem>
-                                  <SelectItem value="1">On</SelectItem>
+                                  <SelectItem value="0">{t('admin.off')}</SelectItem>
+                                  <SelectItem value="1">{t('admin.on')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
@@ -730,7 +737,11 @@ export default function AdminDashboard() {
                 {totalPages > 1 && (
                   <div className="mt-4 flex items-center justify-between">
                     <p className="text-sm text-slate-400">
-                      Showing {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, totalUsers)} of {totalUsers} users
+                      {t('admin.showingUsers', { 
+                        from: ((currentPage - 1) * 50) + 1, 
+                        to: Math.min(currentPage * 50, totalUsers), 
+                        total: totalUsers 
+                      })}
                     </p>
                     <Pagination>
                       <PaginationContent>
@@ -743,7 +754,7 @@ export default function AdminDashboard() {
                             className="text-slate-400 hover:text-slate-100"
                           >
                             <ChevronLeft className="h-4 w-4 mr-1" />
-                            Previous
+                            {t('admin.previous')}
                           </Button>
                         </PaginationItem>
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -778,7 +789,7 @@ export default function AdminDashboard() {
                             disabled={currentPage === totalPages}
                             className="text-slate-400 hover:text-slate-100"
                           >
-                            Next
+                            {t('admin.next')}
                             <ChevronRight className="h-4 w-4 ml-1" />
                           </Button>
                         </PaginationItem>
@@ -792,11 +803,11 @@ export default function AdminDashboard() {
             <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
               <DialogContent className="bg-slate-800 border-slate-700">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-100">Edit User</DialogTitle>
+                  <DialogTitle className="text-slate-100">{t('admin.editUser')}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-slate-300">Email</Label>
+                    <Label className="text-slate-300">{t('common.email')}</Label>
                     <Input
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -804,20 +815,20 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <Label className="text-slate-300">Password</Label>
+                    <Label className="text-slate-300">{t('common.password')}</Label>
                     <Input
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder="Leave empty to keep current"
+                      placeholder={t('common.password')}
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                      Leave empty to keep current password
+                      {t('common.password')}
                     </p>
                   </div>
                   <div>
-                    <Label className="text-slate-300">Name</Label>
+                    <Label className="text-slate-300">{t('common.name')}</Label>
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -825,19 +836,19 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <Label className="text-slate-300">Role</Label>
+                    <Label className="text-slate-300">{t('admin.role')}</Label>
                     <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v as 'admin' | 'landlord' })}>
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="landlord">Landlord</SelectItem>
+                        <SelectItem value="landlord">{t('admin.landlord')}</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <Button onClick={handleUpdate} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                    Update
+                    {t('admin.update')}
                   </Button>
                 </div>
               </DialogContent>
@@ -856,21 +867,21 @@ export default function AdminDashboard() {
           <DialogHeader>
             <DialogTitle className="text-slate-100 flex items-center gap-2">
               <RefreshCw className="w-5 h-5" />
-              Refresh Bill Patterns
+              {t('admin.refreshBillPatternsTitle')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 text-slate-300">
             {refreshingPatterns ? (
               <div className="text-center py-4">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-emerald-500" />
-                <p>Refreshing patterns...</p>
+                <p>{t('admin.refreshingPatterns')}</p>
               </div>
             ) : refreshResults.length === 0 ? (
-              <p className="text-slate-400">No patterns were updated. All JSON files are up to date.</p>
+              <p className="text-slate-400">{t('admin.noPatternsUpdated')}</p>
             ) : (
               <div className="space-y-2">
                 <p className="text-slate-200 font-medium">
-                  Updated {refreshResults.filter(r => r.action === 'created' || r.action === 'updated').length} pattern(s):
+                  {t('admin.updatedPatterns', { count: refreshResults.filter(r => r.action === 'created' || r.action === 'updated').length })}
                 </p>
                 <div className="max-h-96 overflow-y-auto space-y-2">
                   {refreshResults.map((result, idx) => (
@@ -887,7 +898,7 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="font-medium">
-                            {result.action === 'created' ? '✓ Created' : result.action === 'updated' ? '↻ Updated' : '✗ Error'}
+                            {result.action === 'created' ? t('admin.created') : result.action === 'updated' ? t('admin.updated') : t('admin.error')}
                           </span>
                           <span className="ml-2">{result.pattern_name}</span>
                           {result.supplier && (

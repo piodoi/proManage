@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '../lib/i18n';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -39,6 +40,7 @@ type AuthMode = 'main' | 'demo' | 'register' | 'login' | 'confirm';
 
 export default function Login() {
   const { login } = useAuth();
+  const { t } = useI18n();
   const [error, setError] = useState('');
   const [authMode, setAuthMode] = useState<AuthMode>('main');
   const [demoEmail, setDemoEmail] = useState('');
@@ -114,7 +116,7 @@ export default function Login() {
 
   const handleDemoLogin = async () => {
     if (!demoEmail || !demoName) {
-      setError('Please enter email and name for demo');
+      setError(t('auth.demoEmailRequired'));
       return;
     }
     try {
@@ -174,7 +176,7 @@ export default function Login() {
 
   const handleEmailRegister = async () => {
     if (!formEmail || !formPassword || !formName) {
-      setError('Please fill in all fields');
+      setError(t('auth.fillAllFields'));
       return;
     }
     setLoading(true);
@@ -233,7 +235,7 @@ export default function Login() {
 
   const handleEmailLogin = async () => {
     if (!formEmail || !formPassword) {
-      setError('Please enter email and password');
+      setError(t('auth.enterEmailPassword'));
       return;
     }
     setLoading(true);
@@ -262,9 +264,9 @@ export default function Login() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-slate-800 border-slate-700">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl text-slate-100">ProManage</CardTitle>
+          <CardTitle className="text-2xl text-slate-100">{t('app.title')}</CardTitle>
           <CardDescription className="text-slate-400">
-            Property & Rent Management
+            {t('app.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -280,14 +282,14 @@ export default function Login() {
                 onClick={() => setAuthMode('login')}
                 className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
               >
-                Sign in with Email
+                {t('auth.signIn')}
               </Button>
 
               <Button
                 onClick={() => setAuthMode('register')}
                 className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
               >
-                Create Account
+                {t('auth.createAccount')}
               </Button>
 
               <div className="relative">
@@ -295,7 +297,7 @@ export default function Login() {
                   <span className="w-full border-t border-slate-600" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-slate-800 px-2 text-slate-400">Or</span>
+                  <span className="bg-slate-800 px-2 text-slate-400">{t('common.or')}</span>
                 </div>
               </div>
 
@@ -303,14 +305,14 @@ export default function Login() {
                 onClick={handleGoogleLogin}
                 className="w-full bg-white text-slate-900 hover:bg-slate-100"
               >
-                Continue with Google
+                {t('auth.continueWithGoogle')}
               </Button>
 
               <Button
                 onClick={handleFacebookLogin}
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
-                Continue with Facebook
+                {t('auth.continueWithFacebook')}
               </Button>
 
               {!hasAdmin && (
@@ -329,7 +331,7 @@ export default function Login() {
                     variant="ghost"
                     className="w-full text-slate-500 hover:text-slate-300 hover:bg-slate-700"
                   >
-                    Demo Mode
+                    {t('auth.demoMode')}
                   </Button>
                 </>
               )}
@@ -339,24 +341,24 @@ export default function Login() {
           {authMode === 'login' && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="login-email" className="text-slate-300">Email</Label>
+                <Label htmlFor="login-email" className="text-slate-300">{t('common.email')}</Label>
                 <Input
                   id="login-email"
                   type="email"
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="login-password" className="text-slate-300">Password</Label>
+                <Label htmlFor="login-password" className="text-slate-300">{t('common.password')}</Label>
                 <Input
                   id="login-password"
                   type="password"
                   value={formPassword}
                   onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder={t('auth.passwordPlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
@@ -365,18 +367,18 @@ export default function Login() {
                 disabled={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
               >
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? t('auth.signingIn') : t('auth.signInButton')}
               </Button>
               <Button
                 onClick={() => { setAuthMode('main'); setError(''); }}
                 className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
               >
-                Back
+                {t('common.back')}
               </Button>
               <p className="text-xs text-slate-500 text-center">
-                Don't have an account?{' '}
+                {t('auth.dontHaveAccount')}{' '}
                 <button onClick={() => setAuthMode('register')} className="text-emerald-400 hover:underline">
-                  Create one
+                  {t('auth.createOne')}
                 </button>
               </p>
             </>
@@ -385,34 +387,34 @@ export default function Login() {
           {authMode === 'register' && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="register-name" className="text-slate-300">Name</Label>
+                <Label htmlFor="register-name" className="text-slate-300">{t('common.name')}</Label>
                 <Input
                   id="register-name"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Your Name"
+                  placeholder={t('auth.namePlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="register-email" className="text-slate-300">Email</Label>
+                <Label htmlFor="register-email" className="text-slate-300">{t('common.email')}</Label>
                 <Input
                   id="register-email"
                   type="email"
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="register-password" className="text-slate-300">Password</Label>
+                <Label htmlFor="register-password" className="text-slate-300">{t('common.password')}</Label>
                 <Input
                   id="register-password"
                   type="password"
                   value={formPassword}
                   onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder="Min 6 characters"
+                  placeholder={t('auth.minPassword')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
@@ -421,18 +423,18 @@ export default function Login() {
                 disabled={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
               >
-                {loading ? 'Creating account...' : 'Create Account'}
+                {loading ? t('auth.creatingAccount') : t('auth.createAccountButton')}
               </Button>
               <Button
                 onClick={() => { setAuthMode('main'); setError(''); }}
                 className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
               >
-                Back
+                {t('common.back')}
               </Button>
               <p className="text-xs text-slate-500 text-center">
-                Already have an account?{' '}
+                {t('auth.alreadyHaveAccount')}{' '}
                 <button onClick={() => setAuthMode('login')} className="text-emerald-400 hover:underline">
-                  Sign in
+                  {t('auth.signInButton')}
                 </button>
               </p>
             </>
@@ -442,31 +444,29 @@ export default function Login() {
                       <>
                         {emailSent ? (
                           <div className="p-4 bg-emerald-900/30 border border-emerald-700 rounded text-emerald-200 text-sm">
-                            <p className="font-medium mb-2">Check your email</p>
+                            <p className="font-medium mb-2">{t('auth.checkEmail')}</p>
                             <p className="text-xs text-emerald-300">
-                              We sent a confirmation link to your email address.
-                              Click the link in the email to complete your registration.
+                              {t('auth.emailSent')}
                             </p>
                             <p className="text-xs text-emerald-300 mt-2">
-                              The link will expire in 1 hour.
+                              {t('auth.linkExpires')}
                             </p>
                           </div>
                         ) : (
                           <>
                             <div className="p-4 bg-amber-900/30 border border-amber-700 rounded text-amber-200 text-sm">
-                              <p className="font-medium mb-2">Email not configured (Dev Mode)</p>
+                              <p className="font-medium mb-2">{t('auth.emailNotConfigured')}</p>
                               <p className="text-xs text-amber-300">
-                                Email sending is not configured on the server.
-                                Use the token below to confirm your account manually.
+                                {t('auth.emailNotConfiguredDesc')}
                               </p>
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="confirm-token" className="text-slate-300">Confirmation Token</Label>
+                              <Label htmlFor="confirm-token" className="text-slate-300">{t('auth.confirmationToken')}</Label>
                               <Input
                                 id="confirm-token"
                                 value={confirmationToken}
                                 onChange={(e) => setConfirmationToken(e.target.value)}
-                                placeholder="Paste your confirmation token"
+                                placeholder={t('auth.pasteToken')}
                                 className="bg-slate-700 border-slate-600 text-slate-100 font-mono text-xs"
                               />
                             </div>
@@ -475,7 +475,7 @@ export default function Login() {
                               disabled={loading || !confirmationToken}
                               className="w-full bg-emerald-600 hover:bg-emerald-700"
                             >
-                              {loading ? 'Confirming...' : 'Confirm Email'}
+                              {loading ? t('auth.confirming') : t('auth.confirmEmail')}
                             </Button>
                           </>
                         )}
@@ -483,7 +483,7 @@ export default function Login() {
                           onClick={() => { setAuthMode('main'); setError(''); setConfirmationToken(''); setEmailSent(false); }}
                           className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
                         >
-                          {emailSent ? 'Back to Login' : 'Cancel'}
+                          {emailSent ? t('auth.backToLogin') : t('common.cancel')}
                         </Button>
                       </>
                     )}
@@ -491,23 +491,23 @@ export default function Login() {
           {authMode === 'demo' && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="demo-email" className="text-slate-300">Email</Label>
+                <Label htmlFor="demo-email" className="text-slate-300">{t('common.email')}</Label>
                 <Input
                   id="demo-email"
                   type="email"
                   value={demoEmail}
                   onChange={(e) => setDemoEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="demo-name" className="text-slate-300">Name</Label>
+                <Label htmlFor="demo-name" className="text-slate-300">{t('common.name')}</Label>
                 <Input
                   id="demo-name"
                   value={demoName}
                   onChange={(e) => setDemoName(e.target.value)}
-                  placeholder="Your Name"
+                  placeholder={t('auth.namePlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
@@ -515,19 +515,19 @@ export default function Login() {
                 onClick={handleDemoLogin}
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
               >
-                Start Demo
+                {t('auth.startDemo')}
               </Button>
               <Button
                 onClick={() => { setAuthMode('main'); setError(''); }}
                 className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
               >
-                Back
+                {t('common.back')}
               </Button>
             </>
           )}
 
           <p className="text-xs text-slate-500 text-center mt-4">
-            Renters: Use the link provided by your landlord
+            {t('auth.rentersUseLink')}
           </p>
         </CardContent>
       </Card>

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Users } from 'lucide-react';
+import { useI18n } from '../../lib/i18n';
 
 type RenterDialogProps = {
   token: string | null;
@@ -26,6 +27,7 @@ export default function RenterDialog({
   onSuccess,
   onError,
 }: RenterDialogProps) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     name: '',
     rent_day: '',
@@ -76,7 +78,7 @@ export default function RenterDialog({
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.name || !form.rent_amount || !form.rent_day) {
-      onError('Name, rent amount, and rent day are required');
+      onError(t('renter.requiredFields'));
       return;
     }
 
@@ -108,7 +110,7 @@ export default function RenterDialog({
       onOpenChange(false);
       onSuccess();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'An error occurred');
+      onError(err instanceof Error ? err.message : t('errors.generic'));
     }
   };
 
@@ -117,29 +119,29 @@ export default function RenterDialog({
       <DialogTrigger asChild>
         <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
           <Users className="w-4 h-4 mr-1" />
-          {renter ? 'Edit Renter' : 'Add Renter'}
+          {renter ? t('renter.editRenter') : t('renter.addRenter')}
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${renter?.id || 'new'}`}>
         <DialogHeader>
           <DialogTitle className="text-slate-100">
-            {renter ? 'Edit Renter' : 'Add Renter'}
+            {renter ? t('renter.editRenter') : t('renter.addRenter')}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="text-slate-300">Name *</Label>
+            <Label className="text-slate-300">{t('common.name')} *</Label>
             <Input
               key={`name-${renter?.id || 'new'}`}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="Renter name"
+              placeholder={t('renter.renterNamePlaceholder')}
               required
             />
           </div>
           <div>
-            <Label className="text-slate-300">Rent Day (Day of Month) *</Label>
+            <Label className="text-slate-300">{t('renter.rentDay')} *</Label>
             <Input
               key={`rent_day-${renter?.id || 'new'}`}
               type="number"
@@ -148,15 +150,15 @@ export default function RenterDialog({
               value={form.rent_day}
               onChange={(e) => setForm({ ...form, rent_day: e.target.value })}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="1-28"
+              placeholder={t('renter.rentDayPlaceholder')}
               required
             />
             <p className="text-xs text-slate-500 mt-1">
-              Day of month when rent is due (1-28)
+              {t('renter.rentDayHelp')}
             </p>
           </div>
           <div>
-            <Label className="text-slate-300">Start Contract Date (optional)</Label>
+            <Label className="text-slate-300">{t('renter.startContractDate')}</Label>
             <Input
               key={`start_contract_date-${renter?.id || 'new'}`}
               type="date"
@@ -165,11 +167,11 @@ export default function RenterDialog({
               className="bg-slate-700 border-slate-600 text-slate-100"
             />
             <p className="text-xs text-slate-500 mt-1">
-              Optional start date of the contract
+              {t('renter.startContractDateHelp')}
             </p>
           </div>
           <div>
-            <Label className="text-slate-300">Rent Amount *</Label>
+            <Label className="text-slate-300">{t('renter.rentAmount')}</Label>
             <div className="flex gap-2 items-center">
               <Input
                 key={`rent_amount-${renter?.id || 'new'}`}
@@ -197,29 +199,29 @@ export default function RenterDialog({
               </Select>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Will be converted to RON automatically if needed
+              {t('renter.rentAmountHelp')}
             </p>
           </div>
           <div>
-            <Label className="text-slate-300">Phone (optional)</Label>
+            <Label className="text-slate-300">{t('renter.phone')} ({t('common.or').toLowerCase()})</Label>
             <Input
               key={`phone-${renter?.id || 'new'}`}
               type="tel"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="+40 123 456 789"
+              placeholder={t('renter.phonePlaceholder')}
             />
           </div>
           <div>
-            <Label className="text-slate-300">Email (optional)</Label>
+            <Label className="text-slate-300">{t('common.email')} ({t('common.or').toLowerCase()})</Label>
             <Input
               key={`email-${renter?.id || 'new'}`}
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="renter@example.com"
+              placeholder={t('auth.emailPlaceholder')}
             />
           </div>
           <Button
@@ -227,7 +229,7 @@ export default function RenterDialog({
             className="w-full bg-emerald-600 hover:bg-emerald-700"
             disabled={!form.name || !form.rent_amount || !form.rent_day}
           >
-            {renter ? 'Update Renter' : 'Add Renter'}
+            {renter ? t('renter.updateRenter') : t('renter.addRenter')}
           </Button>
         </div>
       </DialogContent>

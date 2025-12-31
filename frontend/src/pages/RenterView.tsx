@@ -8,9 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Building2, Receipt, CreditCard, Banknote, Copy } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 export default function RenterView() {
   const { token } = useParams<{ token: string }>();
+  const { t } = useI18n();
   const [info, setInfo] = useState<RenterInfo | null>(null);
   const [bills, setBills] = useState<RenterBill[]>([]);
   const [balance, setBalance] = useState<RenterBalance | null>(null);
@@ -39,7 +41,7 @@ export default function RenterView() {
       setBills(billsData);
       setBalance(balanceData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid or expired link');
+      setError(err instanceof Error ? err.message : t('errors.invalidLink'));
     } finally {
       setLoading(false);
     }
@@ -56,7 +58,7 @@ export default function RenterView() {
       setPaymentResult(result);
       loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment failed');
+      setError(err instanceof Error ? err.message : t('errors.generic'));
     }
   };
 
@@ -74,7 +76,7 @@ export default function RenterView() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-slate-400">Loading...</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       </div>
     );
   }
@@ -86,7 +88,7 @@ export default function RenterView() {
           <CardContent className="py-8 text-center">
             <p className="text-red-400">{error}</p>
             <p className="text-slate-500 text-sm mt-2">
-              Please contact your landlord for a valid access link.
+              {t('renter.portal')}
             </p>
           </CardContent>
         </Card>
@@ -100,8 +102,8 @@ export default function RenterView() {
         <div className="flex items-center gap-3">
           <Building2 className="w-6 h-6 text-emerald-500" />
           <div>
-            <h1 className="text-xl font-semibold text-slate-100">ProManage</h1>
-            <p className="text-sm text-slate-400">Renter Portal</p>
+            <h1 className="text-xl font-semibold text-slate-100">{t('app.title')}</h1>
+            <p className="text-sm text-slate-400">{t('renter.portal')}</p>
           </div>
         </div>
       </header>
@@ -117,13 +119,13 @@ export default function RenterView() {
         {info && (
           <Card className="bg-slate-800 border-slate-700 mb-6">
             <CardHeader>
-              <CardTitle className="text-slate-100">Welcome, {info.renter.name}</CardTitle>
+              <CardTitle className="text-slate-100">{t('renter.welcome', { name: info.renter.name })}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {info.property && (
                   <div>
-                    <span className="text-slate-400">Property:</span>
+                    <span className="text-slate-400">{t('renter.property')}</span>
                     <p className="text-slate-200">{info.property.name}</p>
                     <p className="text-slate-400 text-xs">{info.property.address}</p>
                   </div>
@@ -137,19 +139,19 @@ export default function RenterView() {
           <div className="grid grid-cols-3 gap-4 mb-6">
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">Total Due</p>
+                <p className="text-slate-400 text-sm">{t('renter.totalDue')}</p>
                 <p className="text-2xl font-bold text-slate-100">{balance.total_due.toFixed(2)} RON</p>
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">Total Paid</p>
+                <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
                 <p className="text-2xl font-bold text-green-400">{balance.total_paid.toFixed(2)} RON</p>
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">Balance</p>
+                <p className="text-slate-400 text-sm">{t('renter.balance')}</p>
                 <p className={`text-2xl font-bold ${balance.balance > 0 ? 'text-amber-400' : 'text-green-400'}`}>
                   {balance.balance.toFixed(2)} RON
                 </p>
@@ -162,30 +164,30 @@ export default function RenterView() {
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2">
               <Receipt className="w-5 h-5" />
-              Bills
+              {t('renter.bills')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {bills.length === 0 ? (
-              <div className="p-6 text-center text-slate-400">No bills yet</div>
+              <div className="p-6 text-center text-slate-400">{t('renter.noBills')}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-slate-700">
-                    <TableHead className="text-slate-400">Description</TableHead>
-                    <TableHead className="text-slate-400">Type</TableHead>
-                    <TableHead className="text-slate-400">Amount</TableHead>
-                    <TableHead className="text-slate-400">Remaining</TableHead>
-                    <TableHead className="text-slate-400">Due Date</TableHead>
-                    <TableHead className="text-slate-400">Status</TableHead>
-                    <TableHead className="text-slate-400">Action</TableHead>
+                    <TableHead className="text-slate-400">{t('common.description')}</TableHead>
+                    <TableHead className="text-slate-400">{t('bill.billType')}</TableHead>
+                    <TableHead className="text-slate-400">{t('common.amount')}</TableHead>
+                    <TableHead className="text-slate-400">{t('renter.remaining')}</TableHead>
+                    <TableHead className="text-slate-400">{t('bill.dueDate')}</TableHead>
+                    <TableHead className="text-slate-400">{t('common.status')}</TableHead>
+                    <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {bills.map((item) => (
                     <TableRow key={item.bill.id} className="border-slate-700">
                       <TableCell className="text-slate-200">{item.bill.description}</TableCell>
-                      <TableCell className="text-slate-300">{item.bill.bill_type}</TableCell>
+                      <TableCell className="text-slate-300">{t(`bill.${item.bill.bill_type}`)}</TableCell>
                       <TableCell className="text-slate-200">{item.bill.amount.toFixed(2)} RON</TableCell>
                       <TableCell className={item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
                         {item.remaining.toFixed(2)} RON
@@ -199,7 +201,7 @@ export default function RenterView() {
                           item.bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
                           'bg-amber-900 text-amber-200'
                         }`}>
-                          {item.bill.status}
+                          {t(`bill.status.${item.bill.status}`)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -209,7 +211,7 @@ export default function RenterView() {
                             onClick={() => openPayDialog(item)}
                             className="bg-emerald-600 hover:bg-emerald-700"
                           >
-                            Pay
+                            {t('renter.pay')}
                           </Button>
                         )}
                       </TableCell>
@@ -224,17 +226,17 @@ export default function RenterView() {
         <Dialog open={!!payingBill} onOpenChange={(open) => !open && setPayingBill(null)}>
           <DialogContent className="bg-slate-800 border-slate-700">
             <DialogHeader>
-              <DialogTitle className="text-slate-100">Pay Bill</DialogTitle>
+              <DialogTitle className="text-slate-100">{t('renter.payBill')}</DialogTitle>
             </DialogHeader>
             {!paymentResult ? (
               <div className="space-y-4">
                 <div>
                   <p className="text-slate-300">{payingBill?.bill.description}</p>
-                  <p className="text-slate-400 text-sm">Remaining: {payingBill?.remaining.toFixed(2)} RON</p>
+                  <p className="text-slate-400 text-sm">{t('renter.remaining')}: {payingBill?.remaining.toFixed(2)} RON</p>
                 </div>
 
                 <div>
-                  <Label className="text-slate-300">Amount to Pay</Label>
+                  <Label className="text-slate-300">{t('renter.paymentAmount')}</Label>
                   <Input
                     type="number"
                     value={paymentAmount}
@@ -244,7 +246,7 @@ export default function RenterView() {
                 </div>
 
                 <div>
-                  <Label className="text-slate-300">Payment Method</Label>
+                  <Label className="text-slate-300">{t('renter.paymentMethod')}</Label>
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <Button
                       variant={paymentMethod === 'bank_transfer' ? 'default' : 'outline'}
@@ -252,7 +254,7 @@ export default function RenterView() {
                       className={paymentMethod === 'bank_transfer' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600'}
                     >
                       <Banknote className="w-4 h-4 mr-2" />
-                      Bank Transfer
+                      {t('renter.bankTransfer')}
                     </Button>
                     <Button
                       variant={paymentMethod === 'payment_service' ? 'default' : 'outline'}
@@ -260,30 +262,30 @@ export default function RenterView() {
                       className={paymentMethod === 'payment_service' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600'}
                     >
                       <CreditCard className="w-4 h-4 mr-2" />
-                      Card (2% fee)
+                      {t('renter.paymentService')}
                     </Button>
                   </div>
                 </div>
 
                 {paymentMethod === 'payment_service' && (
                   <p className="text-amber-400 text-sm">
-                    A 2% commission ({(parseFloat(paymentAmount || '0') * 0.02).toFixed(2)} RON) will be added to your payment.
+                    {t('renter.commission')}: {(parseFloat(paymentAmount || '0') * 0.02).toFixed(2)} RON {t('renter.totalWithCommission')}
                   </p>
                 )}
 
                 <Button onClick={handlePay} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                  {paymentMethod === 'bank_transfer' ? 'Get Bank Details' : 'Pay Now'}
+                  {paymentMethod === 'bank_transfer' ? t('renter.bankTransfer') : t('renter.pay')}
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
                 {paymentResult.bank_transfer_info ? (
                   <>
-                    <p className="text-green-400">Bank transfer details:</p>
+                    <p className="text-green-400">{t('renter.bankTransferDetails')}</p>
                     <div className="bg-slate-700 p-4 rounded space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-slate-400 text-xs">IBAN</p>
+                          <p className="text-slate-400 text-xs">{t('renter.iban')}</p>
                           <p className="text-slate-100 font-mono">{paymentResult.bank_transfer_info.iban}</p>
                         </div>
                         <Button
@@ -297,7 +299,7 @@ export default function RenterView() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-slate-400 text-xs">Reference</p>
+                          <p className="text-slate-400 text-xs">{t('renter.reference')}</p>
                           <p className="text-slate-100">{paymentResult.bank_transfer_info.reference}</p>
                         </div>
                         <Button
@@ -310,24 +312,24 @@ export default function RenterView() {
                         </Button>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-xs">Amount</p>
+                        <p className="text-slate-400 text-xs">{t('common.amount')}</p>
                         <p className="text-slate-100 text-lg font-bold">{paymentResult.bank_transfer_info.amount.toFixed(2)} RON</p>
                       </div>
                     </div>
                     <p className="text-slate-400 text-sm">
-                      Please make the transfer using the details above. Your payment will be recorded once confirmed.
+                      {t('renter.pleaseMakeTransfer')}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-green-400">Payment initiated!</p>
+                    <p className="text-green-400">{t('renter.paymentInitiated')}</p>
                     <div className="bg-slate-700 p-4 rounded">
-                      <p className="text-slate-300">Amount: {paymentResult.payment.amount.toFixed(2)} RON</p>
+                      <p className="text-slate-300">{t('common.amount')}: {paymentResult.payment.amount.toFixed(2)} RON</p>
                       {paymentResult.commission > 0 && (
-                        <p className="text-slate-400 text-sm">Commission: {paymentResult.commission.toFixed(2)} RON</p>
+                        <p className="text-slate-400 text-sm">{t('renter.commission')}: {paymentResult.commission.toFixed(2)} RON</p>
                       )}
                       <p className="text-slate-100 font-bold mt-2">
-                        Total: {paymentResult.total_with_commission.toFixed(2)} RON
+                        {t('renter.totalWithCommission')}: {paymentResult.total_with_commission.toFixed(2)} RON
                       </p>
                     </div>
                   </>
@@ -336,7 +338,7 @@ export default function RenterView() {
                   onClick={() => { setPayingBill(null); setPaymentResult(null); }}
                   className="w-full bg-slate-700 hover:bg-slate-600"
                 >
-                  Close
+                  {t('common.close')}
                 </Button>
               </div>
             )}
