@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Callable, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query
 import json
+import httpx
 
 from app.models import (
     Supplier, ExtractionPattern, Bill, BillType, BillStatus,
@@ -715,6 +716,12 @@ async def sync_ebloc(
         }
     except HTTPException:
         raise
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.NetworkError) as e:
+        logger.warning(f"[E-Bloc] Network error during sync: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Network connection error. Please check your internet connection and try again in a moment."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error syncing e-bloc: {str(e)}")
     finally:

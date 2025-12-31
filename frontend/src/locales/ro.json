@@ -226,7 +226,8 @@
     "failedToSaveCredentials": "Eșec la salvarea credențialelor",
     "propertiesDiscoveredButFailedToSave": "Proprietățile au fost descoperite, dar nu s-au putut salva credențialele: {error}. Te rog configurează credențialele manual.",
     "failedToDiscover": "Eșec la descoperirea proprietăților. Te rog verifică credențialele și încearcă din nou.",
-    "unexpectedResponse": "Răspuns neașteptat"
+    "unexpectedResponse": "Răspuns neașteptat",
+    "propertyNotFoundInMemory": "Proprietatea selectată nu a fost găsită în proprietățile descoperite. Te rog descoperă proprietățile din nou."
   },
   "billParser": {
     "title": "Test/Învață Analizor Facturi",

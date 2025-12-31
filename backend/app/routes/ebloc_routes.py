@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
+import httpx
 from app.models import (
     EblocConfigCreate, TokenData, UserRole, Supplier, PropertySupplier,
     UserSupplierCredential, BillType
@@ -60,6 +61,12 @@ async def discover_ebloc_properties(
     
     except HTTPException:
         raise
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.NetworkError) as e:
+        logger.warning(f"[E-Bloc] Network error: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Network connection error. Please check your internet connection and try again in a moment."
+        )
     except Exception as e:
         logger.error(f"[E-Bloc] Discovery error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error discovering properties: {str(e)}")
@@ -83,6 +90,12 @@ async def configure_ebloc(
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
     except HTTPException:
         raise
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.NetworkError) as e:
+        logger.warning(f"[E-Bloc] Network error during credential verification: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Network connection error. Please check your internet connection and try again in a moment."
+        )
     except Exception as e:
         logger.error(f"[E-Bloc] Login error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error verifying credentials: {str(e)}")

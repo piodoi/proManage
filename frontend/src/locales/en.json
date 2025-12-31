@@ -233,7 +233,8 @@
     "failedToSaveCredentials": "Failed to save credentials",
     "propertiesDiscoveredButFailedToSave": "Properties discovered, but failed to save credentials: {error}. Please configure credentials manually.",
     "failedToDiscover": "Failed to discover properties. Please check your credentials and try again.",
-    "unexpectedResponse": "Unexpected response"
+    "unexpectedResponse": "Unexpected response",
+    "propertyNotFoundInMemory": "Selected property not found in discovered properties. Please discover properties again."
   },
   "billParser": {
     "title": "Bill Parser Test/Learn",

@@ -105,8 +105,11 @@ export default function EblocImportDialog({
 
   const handleImportSelected = async () => {
     if (!token || !form.selectedPropertyId) return;
-    if (!form.username || !form.password) {
-      onError(t('ebloc.enterUsernamePassword'));
+    
+    // Use already discovered properties - no need to scrape again
+    const selectedProp = discoveredProperties.find(p => p.page_id === form.selectedPropertyId);
+    if (!selectedProp) {
+      onError(t('ebloc.propertyNotFoundInMemory'));
       return;
     }
 
@@ -114,30 +117,33 @@ export default function EblocImportDialog({
     onError('');
 
     try {
-      await api.ebloc.configure(token, {
-        username: form.username,
-        password: form.password,
+      // Just create the property from memory - no need to configure/scrape again
+      const newProperty = await api.properties.create(token, {
+        name: selectedProp.name,
+        address: selectedProp.address || selectedProp.name,
       });
-
-      const selectedProp = discoveredProperties.find(p => p.page_id === form.selectedPropertyId);
-      if (selectedProp) {
-        const newProperty = await api.properties.create(token, {
-          name: selectedProp.name,
-          address: selectedProp.address || selectedProp.name,
-        });
-        
-        // Auto-setup E-bloc supplier and credentials
-        try {
-          await api.ebloc.setupSupplierForProperties(token, [newProperty.id]);
-        } catch (setupErr) {
-          // Log but don't fail the import if setup fails
-          console.warn('Failed to auto-setup E-bloc supplier:', setupErr);
-        }
+      
+      // Auto-setup E-bloc supplier and credentials
+      try {
+        await api.ebloc.setupSupplierForProperties(token, [newProperty.id]);
+      } catch (setupErr) {
+        // Log but don't fail the import if setup fails
+        console.warn('Failed to auto-setup E-bloc supplier:', setupErr);
       }
 
-      onOpenChange(false);
-      setForm({ username: '', password: '', selectedPropertyId: '' });
-      setDiscoveredProperties([]);
+      // Remove imported property from discovered list, but keep others in memory
+      const remainingProperties = discoveredProperties.filter(p => p.page_id !== form.selectedPropertyId);
+      setDiscoveredProperties(remainingProperties);
+      
+      // Set new selection if there are properties left
+      if (remainingProperties.length > 0) {
+        setForm(prev => ({ ...prev, selectedPropertyId: remainingProperties[0].page_id }));
+      } else {
+        // All properties imported, close dialog
+        onOpenChange(false);
+        setForm({ username: '', password: '', selectedPropertyId: '' });
+      }
+      
       onSuccess();
     } catch (err) {
       onError(err instanceof Error ? err.message : t('errors.generic'));
@@ -149,22 +155,12 @@ export default function EblocImportDialog({
   const handleImportAll = async () => {
     if (!token) return;
     if (discoveredProperties.length === 0) return;
-    if (!form.username || !form.password) {
-      onError(t('ebloc.enterUsernamePassword'));
-      return;
-    }
 
     setImporting(true);
     onError('');
 
     try {
-      // Configure credentials first
-      await api.ebloc.configure(token, {
-        username: form.username,
-        password: form.password,
-      });
-
-      // Import all properties
+      // Import all properties from memory - no need to scrape again
       const importedPropertyIds: string[] = [];
       for (const prop of discoveredProperties) {
         const newProperty = await api.properties.create(token, {
@@ -184,6 +180,7 @@ export default function EblocImportDialog({
         }
       }
 
+      // All properties imported, close dialog
       onOpenChange(false);
       setForm({ username: '', password: '', selectedPropertyId: '' });
       setDiscoveredProperties([]);
