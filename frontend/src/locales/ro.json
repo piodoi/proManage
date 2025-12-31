@@ -157,7 +157,8 @@
       "paid": "Plătită",
       "overdue": "Restanță"
     },
-    "allProperty": "Toți / Proprietate"
+    "allProperty": "Toți / Proprietate",
+    "amountRequired": "Te rog completează suma"
   },
   "supplier": {
     "suppliers": "Furnizori",
@@ -197,7 +198,25 @@
     "syncing": "Se sincronizează...",
     "configure": "Configurează",
     "username": "Utilizator",
-    "password": "Parolă"
+    "password": "Parolă",
+    "importFromEbloc": "Importă din E-Bloc",
+    "importPropertiesFromEbloc": "Importă Proprietăți din E-Bloc.ro",
+    "importDesc": "Conectează-ți contul e-bloc.ro pentru a descoperi și importa proprietăți. Aceasta va importa și soldurile restante și chitanțele de plată.",
+    "eblocUsername": "Utilizator E-Bloc",
+    "eblocPassword": "Parolă E-Bloc",
+    "discoverProperties": "Descoperă Proprietăți",
+    "discovering": "Se descoperă...",
+    "selectPropertyToImport": "Selectează Proprietate de Importat",
+    "selectProperty": "Selectează proprietate",
+    "importSelected": "Importă Selectat",
+    "importing": "Se importă...",
+    "importAll": "Importă Toate ({count})",
+    "enterUsernamePassword": "Te rog introdu utilizatorul și parola",
+    "noPropertiesFound": "Nu s-au găsit proprietăți în contul tău e-bloc. Te rog verifică credențialele.",
+    "failedToSaveCredentials": "Eșec la salvarea credențialelor",
+    "propertiesDiscoveredButFailedToSave": "Proprietățile au fost descoperite, dar nu s-au putut salva credențialele: {error}. Te rog configurează credențialele manual.",
+    "failedToDiscover": "Eșec la descoperirea proprietăților. Te rog verifică credențialele și încearcă din nou.",
+    "unexpectedResponse": "Răspuns neașteptat"
   },
   "billParser": {
     "title": "Test/Învață Analizor Facturi",
@@ -327,6 +346,30 @@
     "deleteFailed": "Ștergere eșuată",
     "saveFailed": "Salvare eșuată",
     "loadFailed": "Încărcare date eșuată"
+  },
+  "addressWarning": {
+    "title": "Avertisment Neconcordanță Adresă",
+    "defaultMessage": "S-a detectat o neconcordanță de adresă. Te rog verifică că aceasta este proprietatea corectă.",
+    "confidenceScore": "Scor Încredere:",
+    "propertyAddress": "Adresă Proprietate:",
+    "extractedAddress": "Adresă Extrasă:",
+    "amount": "Sumă:",
+    "addBillAnyway": "Adaugă Factura Oricum",
+    "na": "N/A"
+  },
+  "patternSelection": {
+    "title": "Niciun Model Nu S-a Potrivit",
+    "warning": "⚠️ Avertisment: Nu s-a detectat automat niciun model de extracție pentru acest PDF.",
+    "warningDetail": "Deoarece modelul nu a fost detectat automat, extracția poate să nu funcționeze așa cum se așteaptă. Te rog verifică datele extrase cu atenție.",
+    "selectPattern": "Selectează un model de folosit pentru extracție:",
+    "loadingPatterns": "Se încarcă modelele...",
+    "noPatternsAvailable": "Nu sunt modele disponibile",
+    "selectPatternPlaceholder": "Selectează un model",
+    "extractedAmount": "Sumă Extrasă:",
+    "billNumber": "Număr Factură:",
+    "address": "Adresă:",
+    "useSelectedPattern": "Folosește Modelul Selectat",
+    "unknown": "Necunoscut"
   },
   "success": {
     "saved": "Salvat cu succes",

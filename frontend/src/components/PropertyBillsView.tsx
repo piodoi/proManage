@@ -52,7 +52,7 @@ export default function PropertyBillsView({
 
   const handleError = (err: unknown) => {
     console.error('[PropertyBillsView] Error:', err);
-    let message = 'An error occurred';
+    let message = t('errors.generic');
     if (err instanceof Error) {
       message = err.message;
     } else if (typeof err === 'string') {
@@ -123,7 +123,7 @@ export default function PropertyBillsView({
   const handleSaveBill = async () => {
     if (!token) return;
     if (!billForm.amount) {
-      handleError(new Error('Please fill in amount'));
+      handleError(new Error(t('bill.amountRequired')));
       return;
     }
     try {
@@ -131,7 +131,7 @@ export default function PropertyBillsView({
         property_id: propertyId,
         renter_id: billForm.renter_id === 'all' ? undefined : billForm.renter_id,  // 'all' becomes undefined (all renters)
         bill_type: billForm.bill_type,
-        description: billForm.bill_type === 'rent' ? 'Rent' : billForm.bill_type === 'utilities' ? 'Utilities' : billForm.bill_type === 'ebloc' ? 'E-Bloc' : 'Other',
+        description: t(`bill.${billForm.bill_type}`),
         amount: parseFloat(billForm.amount),
         due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
       };

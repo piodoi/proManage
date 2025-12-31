@@ -149,7 +149,8 @@
       "paid": "Paid",
       "overdue": "Overdue"
     },
-    "allProperty": "All / Property"
+    "allProperty": "All / Property",
+    "amountRequired": "Please fill in amount"
   },
   "supplier": {
     "suppliers": "Suppliers",
@@ -215,7 +216,25 @@
     "syncing": "Syncing...",
     "configure": "Configure",
     "username": "Username",
-    "password": "Password"
+    "password": "Password",
+    "importFromEbloc": "Import from E-Bloc",
+    "importPropertiesFromEbloc": "Import Properties from E-Bloc.ro",
+    "importDesc": "Connect your e-bloc.ro account to discover and import properties. This will also import outstanding balances and payment receipts.",
+    "eblocUsername": "E-Bloc Username",
+    "eblocPassword": "E-Bloc Password",
+    "discoverProperties": "Discover Properties",
+    "discovering": "Discovering...",
+    "selectPropertyToImport": "Select Property to Import",
+    "selectProperty": "Select property",
+    "importSelected": "Import Selected",
+    "importing": "Importing...",
+    "importAll": "Import All ({count})",
+    "enterUsernamePassword": "Please enter both username and password",
+    "noPropertiesFound": "No properties found in your e-bloc account. Please check your credentials.",
+    "failedToSaveCredentials": "Failed to save credentials",
+    "propertiesDiscoveredButFailedToSave": "Properties discovered, but failed to save credentials: {error}. Please configure credentials manually.",
+    "failedToDiscover": "Failed to discover properties. Please check your credentials and try again.",
+    "unexpectedResponse": "Unexpected response"
   },
   "billParser": {
     "title": "Bill Parser Test/Learn",
@@ -345,6 +364,30 @@
     "deleteFailed": "Failed to delete",
     "saveFailed": "Failed to save",
     "loadFailed": "Failed to load data"
+  },
+  "addressWarning": {
+    "title": "Address Mismatch Warning",
+    "defaultMessage": "Address mismatch detected. Please verify this is the correct property.",
+    "confidenceScore": "Confidence Score:",
+    "propertyAddress": "Property Address:",
+    "extractedAddress": "Extracted Address:",
+    "amount": "Amount:",
+    "addBillAnyway": "Add Bill Anyway",
+    "na": "N/A"
+  },
+  "patternSelection": {
+    "title": "No Pattern Matched",
+    "warning": "⚠️ Warning: No extraction pattern was automatically detected for this PDF.",
+    "warningDetail": "Since the pattern was not auto-detected, extraction may not work as expected. Please verify the extracted data carefully.",
+    "selectPattern": "Select a pattern to use for extraction:",
+    "loadingPatterns": "Loading patterns...",
+    "noPatternsAvailable": "No patterns available",
+    "selectPatternPlaceholder": "Select a pattern",
+    "extractedAmount": "Extracted Amount:",
+    "billNumber": "Bill Number:",
+    "address": "Address:",
+    "useSelectedPattern": "Use Selected Pattern",
+    "unknown": "Unknown"
   },
   "success": {
     "saved": "Saved successfully",

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { Building2 } from 'lucide-react';
+import { useI18n } from '../../lib/i18n';
 
 type EblocImportDialogProps = {
   token: string | null;
@@ -23,6 +24,7 @@ export default function EblocImportDialog({
   onSuccess,
   onError,
 }: EblocImportDialogProps) {
+  const { t } = useI18n();
   const [form, setForm] = useState({ username: '', password: '', selectedPropertyId: '' });
   const [discoveredProperties, setDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string; url: string }>>([]);
   const [discovering, setDiscovering] = useState(false);
@@ -53,7 +55,7 @@ export default function EblocImportDialog({
   const handleDiscover = async () => {
     if (!token) return;
     if (!form.username || !form.password) {
-      onError('Please enter both username and password');
+      onError(t('ebloc.enterUsernamePassword'));
       return;
     }
 
@@ -73,8 +75,8 @@ export default function EblocImportDialog({
             });
             setForm(prev => ({ ...prev, password: '' }));
           } catch (configErr) {
-            const errorMsg = configErr instanceof Error ? configErr.message : 'Failed to save credentials';
-            onError(`Properties discovered, but failed to save credentials: ${errorMsg}. Please configure credentials manually.`);
+            const errorMsg = configErr instanceof Error ? configErr.message : t('ebloc.failedToSaveCredentials');
+            onError(t('ebloc.propertiesDiscoveredButFailedToSave', { error: errorMsg }));
           }
 
           const propertiesWithUrl = result.properties.map(p => ({
@@ -85,16 +87,16 @@ export default function EblocImportDialog({
           setForm(prev => ({ ...prev, selectedPropertyId: propertiesWithUrl[0].page_id }));
           onError('');
         } else {
-          onError('No properties found in your e-bloc account. Please check your credentials.');
+          onError(t('ebloc.noPropertiesFound'));
           setDiscoveredProperties([]);
         }
       } else {
-        const errorMsg = (result as any)?.detail || (result as any)?.message || 'Unexpected response';
+        const errorMsg = (result as any)?.detail || (result as any)?.message || t('ebloc.unexpectedResponse');
         onError(errorMsg);
         setDiscoveredProperties([]);
       }
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to discover properties. Please check your credentials and try again.');
+      onError(err instanceof Error ? err.message : t('ebloc.failedToDiscover'));
       setDiscoveredProperties([]);
     } finally {
       setDiscovering(false);
@@ -104,7 +106,7 @@ export default function EblocImportDialog({
   const handleImportSelected = async () => {
     if (!token || !form.selectedPropertyId) return;
     if (!form.username || !form.password) {
-      onError('Please enter both username and password');
+      onError(t('ebloc.enterUsernamePassword'));
       return;
     }
 
@@ -130,7 +132,7 @@ export default function EblocImportDialog({
       setDiscoveredProperties([]);
       onSuccess();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'An error occurred');
+      onError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
       setImporting(false);
     }
@@ -156,7 +158,7 @@ export default function EblocImportDialog({
       setDiscoveredProperties([]);
       onSuccess();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'An error occurred');
+      onError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
       setImporting(false);
     }
@@ -167,19 +169,19 @@ export default function EblocImportDialog({
       <DialogTrigger asChild>
         <Button className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
           <Building2 className="w-4 h-4 mr-2" />
-          Import from E-Bloc
+          {t('ebloc.importFromEbloc')}
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Import Properties from E-Bloc.ro</DialogTitle>
+          <DialogTitle className="text-slate-100">{t('ebloc.importPropertiesFromEbloc')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-slate-400">
-            Connect your e-bloc.ro account to discover and import properties. This will also import outstanding balances and payment receipts.
+            {t('ebloc.importDesc')}
           </p>
           <div>
-            <Label className="text-slate-300">E-Bloc Username</Label>
+            <Label className="text-slate-300">{t('ebloc.eblocUsername')}</Label>
             <Input
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
@@ -189,7 +191,7 @@ export default function EblocImportDialog({
             />
           </div>
           <div>
-            <Label className="text-slate-300">E-Bloc Password</Label>
+            <Label className="text-slate-300">{t('ebloc.eblocPassword')}</Label>
             <Input
               type="password"
               value={form.password}
@@ -207,23 +209,23 @@ export default function EblocImportDialog({
               {discovering ? (
                 <>
                   <Spinner className="w-4 h-4 mr-2" />
-                  Discovering...
+                  {t('ebloc.discovering')}
                 </>
               ) : (
-                'Discover Properties'
+                t('ebloc.discoverProperties')
               )}
             </Button>
           ) : (
             <div className="space-y-4">
               <div>
-                <Label className="text-slate-300">Select Property to Import</Label>
+                <Label className="text-slate-300">{t('ebloc.selectPropertyToImport')}</Label>
                 <Select
                   value={form.selectedPropertyId}
                   onValueChange={(v) => setForm({ ...form, selectedPropertyId: v })}
                   disabled={importing}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                    <SelectValue placeholder="Select property" />
+                    <SelectValue placeholder={t('ebloc.selectProperty')} />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-700 border-slate-600">
                     {discoveredProperties.map((prop) => (
@@ -243,10 +245,10 @@ export default function EblocImportDialog({
                   {importing ? (
                     <>
                       <Spinner className="w-4 h-4 mr-2" />
-                      Importing...
+                      {t('ebloc.importing')}
                     </>
                   ) : (
-                    'Import Selected'
+                    t('ebloc.importSelected')
                   )}
                 </Button>
                 {discoveredProperties.length > 1 && (
@@ -258,10 +260,10 @@ export default function EblocImportDialog({
                     {importing ? (
                       <>
                         <Spinner className="w-4 h-4 mr-2" />
-                        Importing...
+                        {t('ebloc.importing')}
                       </>
                     ) : (
-                      `Import All (${discoveredProperties.length})`
+                      t('ebloc.importAll', { count: discoveredProperties.length })
                     )}
                   </Button>
                 )}
