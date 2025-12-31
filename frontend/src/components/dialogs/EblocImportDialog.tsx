@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { Building2 } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
@@ -175,11 +175,11 @@ export default function EblocImportDialog({
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('ebloc.importPropertiesFromEbloc')}</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            {t('ebloc.importDesc')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-slate-400">
-            {t('ebloc.importDesc')}
-          </p>
           <div>
             <Label className="text-slate-300">{t('ebloc.eblocUsername')}</Label>
             <Input

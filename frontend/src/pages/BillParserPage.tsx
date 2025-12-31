@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Upload, Plus, Pencil, Trash2, FileText, ArrowLeft } from 'lucide-react';
@@ -328,6 +328,9 @@ export default function BillParserPage({ onBack }: Props) {
               <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
                 <DialogHeader>
                   <DialogTitle className="text-slate-100">{t('billParser.createExtractionPattern')}</DialogTitle>
+                  <DialogDescription className="text-slate-400 sr-only">
+                    {t('billParser.createExtractionPattern')}
+                  </DialogDescription>
                 </DialogHeader>
                 <PatternForm onSubmit={handleCreate} submitLabel={t('common.add')} />
               </DialogContent>
@@ -396,6 +399,9 @@ export default function BillParserPage({ onBack }: Props) {
         <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-slate-100">{t('billParser.editExtractionPattern')}</DialogTitle>
+            <DialogDescription className="text-slate-400 sr-only">
+              {t('billParser.editExtractionPattern')}
+            </DialogDescription>
           </DialogHeader>
           <PatternForm onSubmit={handleUpdate} submitLabel={t('admin.update')} />
         </DialogContent>

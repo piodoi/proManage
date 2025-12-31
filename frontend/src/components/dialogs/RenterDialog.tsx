@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Users } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
@@ -127,6 +127,9 @@ export default function RenterDialog({
           <DialogTitle className="text-slate-100">
             {renter ? t('renter.editRenter') : t('renter.addRenter')}
           </DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {renter ? t('renter.editRenter') : t('renter.addRenter')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

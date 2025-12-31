@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import { ExtractionResult } from '@/api';
@@ -28,6 +28,9 @@ export default function AddressWarningDialog({
             <AlertTriangle className="w-5 h-5 text-yellow-500" />
             {t('addressWarning.title')}
           </DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {t('addressWarning.title')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 text-slate-300">
           {pdfResult && (

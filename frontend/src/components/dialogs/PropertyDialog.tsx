@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Plus } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
@@ -53,6 +53,9 @@ export default function PropertyDialog({
       <DialogContent className="bg-slate-800 border-slate-700">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('property.addProperty')}</DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {t('property.addProperty')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 import AddressWarningDialog from './dialogs/AddressWarningDialog';
@@ -478,6 +478,9 @@ export default function PropertyBillsView({
         <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-slate-200">{t('supplier.selectContracts')}</DialogTitle>
+            <DialogDescription className="text-slate-400 sr-only">
+              {t('supplier.selectContracts')}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <p className="text-slate-300 text-sm">

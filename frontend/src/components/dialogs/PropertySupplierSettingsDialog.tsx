@@ -3,7 +3,7 @@ import { api, Property, Supplier, PropertySupplier } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Lock } from 'lucide-react';
@@ -135,6 +135,9 @@ export default function PropertySupplierSettingsDialog({
           <DialogTitle className="text-slate-100">
             {t('supplier.billSuppliers')} - {property.name}
           </DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {t('supplier.billSuppliers')} - {property.name}
+          </DialogDescription>
         </DialogHeader>
 
         {loading ? (

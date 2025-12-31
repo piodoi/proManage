@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, RefreshCw, Wrench, Package } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
@@ -356,6 +356,9 @@ export default function AdminDashboard() {
                   <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                     <DialogHeader>
                       <DialogTitle className="text-slate-100">{t('admin.createSupplier')}</DialogTitle>
+                      <DialogDescription className="text-slate-400 sr-only">
+                        {t('admin.createSupplier')}
+                      </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
@@ -476,6 +479,9 @@ export default function AdminDashboard() {
               <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                 <DialogHeader>
                   <DialogTitle className="text-slate-100">{t('admin.editSupplier')}</DialogTitle>
+                  <DialogDescription className="text-slate-400 sr-only">
+                    {t('admin.editSupplier')}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -539,6 +545,9 @@ export default function AdminDashboard() {
               <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                 <DialogHeader>
                   <DialogTitle className="text-slate-100">{t('admin.deleteSupplier')}</DialogTitle>
+                  <DialogDescription className="text-slate-400 sr-only">
+                    {t('admin.deleteSupplier')}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <p className="text-slate-300">
@@ -618,6 +627,9 @@ export default function AdminDashboard() {
                   <DialogContent className="bg-slate-800 border-slate-700">
                     <DialogHeader>
                       <DialogTitle className="text-slate-100">{t('admin.createUser')}</DialogTitle>
+                      <DialogDescription className="text-slate-400 sr-only">
+                        {t('admin.createUser')}
+                      </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
@@ -804,6 +816,9 @@ export default function AdminDashboard() {
               <DialogContent className="bg-slate-800 border-slate-700">
                 <DialogHeader>
                   <DialogTitle className="text-slate-100">{t('admin.editUser')}</DialogTitle>
+                  <DialogDescription className="text-slate-400 sr-only">
+                    {t('admin.editUser')}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -869,6 +884,9 @@ export default function AdminDashboard() {
               <RefreshCw className="w-5 h-5" />
               {t('admin.refreshBillPatternsTitle')}
             </DialogTitle>
+            <DialogDescription className="text-slate-400 sr-only">
+              {t('admin.refreshBillPatternsTitle')}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 text-slate-300">
             {refreshingPatterns ? (

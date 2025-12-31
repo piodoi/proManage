@@ -4,7 +4,7 @@ import { api, RenterInfo, RenterBill, RenterBalance, PaymentResponse } from '../
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Building2, Receipt, CreditCard, Banknote, Copy } from 'lucide-react';
@@ -227,6 +227,9 @@ export default function RenterView() {
           <DialogContent className="bg-slate-800 border-slate-700">
             <DialogHeader>
               <DialogTitle className="text-slate-100">{t('renter.payBill')}</DialogTitle>
+              <DialogDescription className="text-slate-400 sr-only">
+                {t('renter.payBill')}
+              </DialogDescription>
             </DialogHeader>
             {!paymentResult ? (
               <div className="space-y-4">

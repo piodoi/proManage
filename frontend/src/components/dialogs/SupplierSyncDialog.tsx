@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api, Property } from '../../api';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
@@ -58,7 +58,7 @@ export default function SupplierSyncDialog({
 
           // Update progress from result
           if (result.progress && Array.isArray(result.progress)) {
-            setProgress(result.progress);
+            setProgress(result.progress as SupplierProgress[]);
           }
 
           if (result.bills_created !== undefined) {
@@ -125,6 +125,9 @@ export default function SupplierSyncDialog({
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('supplier.syncProgress')}</DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {t('supplier.syncProgress')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

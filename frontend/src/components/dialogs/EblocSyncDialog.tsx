@@ -3,7 +3,7 @@ import { api, Property } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '../../lib/i18n';
 
@@ -90,6 +90,9 @@ export default function EblocSyncDialog({
       <DialogContent className="bg-slate-800 border-slate-700">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('ebloc.syncEblocRo')}</DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {t('ebloc.syncEblocRo')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

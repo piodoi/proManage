@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle } from 'lucide-react';
@@ -63,6 +63,9 @@ export default function PatternSelectionDialog({
             <AlertTriangle className="w-5 h-5 text-yellow-500" />
             {t('patternSelection.title')}
           </DialogTitle>
+          <DialogDescription className="text-slate-400 sr-only">
+            {t('patternSelection.title')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 text-slate-300">
           <div className="bg-red-900/30 border border-red-700 rounded p-3">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, Property, Renter, Bill } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ExternalLink, Trash2, Pencil, Copy, Settings } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
@@ -208,6 +208,9 @@ export default function PropertyCard({
         <DialogContent className="bg-slate-800 border-slate-700">
           <DialogHeader>
             <DialogTitle className="text-slate-100">{t('renter.accessLinkTitle')}</DialogTitle>
+            <DialogDescription className="text-slate-400 sr-only">
+              {t('renter.accessLinkTitle')}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-slate-400 text-sm">
