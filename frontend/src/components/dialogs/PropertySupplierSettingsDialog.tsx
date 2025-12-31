@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, Property, Supplier, PropertySupplier } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,6 +30,7 @@ export default function PropertySupplierSettingsDialog({
   const [propertySuppliers, setPropertySuppliers] = useState<PropertySupplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const prevOpenRef = useRef(open);
 
   // Load suppliers and property suppliers when dialog opens
   useEffect(() => {
@@ -40,6 +41,24 @@ export default function PropertySupplierSettingsDialog({
       setSelectedSupplierId('');
     }
   }, [open, token, property.id]);
+
+  // Notify parent when dialog closes (only on transition from open to closed)
+  useEffect(() => {
+    // Only call onSuccess when dialog transitions from open (true) to closed (false)
+    if (prevOpenRef.current === true && open === false) {
+      // Use a small delay to ensure this runs after the dialog has fully closed
+      const timer = setTimeout(() => {
+        onSuccess();
+      }, 100);
+      
+      // Update ref for next render
+      prevOpenRef.current = open;
+      
+      return () => clearTimeout(timer);
+    }
+    // Update ref on every render to track previous value
+    prevOpenRef.current = open;
+  }, [open, onSuccess]);
 
   const loadData = async () => {
     if (!token) return;
@@ -69,8 +88,9 @@ export default function PropertySupplierSettingsDialog({
         supplier_id: selectedSupplierId,
       });
       await loadData();
+      // Reset selection but keep dialog open so user can add more
+      // Don't call onSuccess() here - it will be called when dialog closes
       setSelectedSupplierId('');
-      onSuccess();
     } catch (err) {
       onError(err instanceof Error ? err.message : t('supplier.addError'));
     }
@@ -85,7 +105,7 @@ export default function PropertySupplierSettingsDialog({
     try {
       await api.suppliers.removeFromProperty(token, property.id, propertySupplierId);
       await loadData();
-      onSuccess();
+      // Don't call onSuccess() here - it will be called when dialog closes
     } catch (err) {
       onError(err instanceof Error ? err.message : t('supplier.removeError'));
     }

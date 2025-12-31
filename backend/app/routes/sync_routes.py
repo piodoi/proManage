@@ -405,26 +405,51 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
             logger.error(f"[Suppliers Sync] Access denied for property {property_id}, user {current_user.user_id}")
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Get all property suppliers with credentials
+        # Get all property suppliers
         logger.info(f"[Suppliers Sync] Getting property suppliers for property {property_id}")
         property_suppliers = db.list_property_suppliers(property_id)
         logger.info(f"[Suppliers Sync] Found {len(property_suppliers)} property supplier(s)")
         
         suppliers_to_sync = []
+        suppliers_without_credentials = []
+        
         for ps in property_suppliers:
             supplier = db.get_supplier(ps.supplier_id)
-            if supplier and ps.username and ps.password_hash:
-                logger.debug(f"[Suppliers Sync] Checking supplier {supplier.name}: has_api={supplier.has_api}, has_username={bool(ps.username)}, has_password={bool(ps.password_hash)}")
-                suppliers_to_sync.append((supplier, ps))
+            if not supplier:
+                continue
+                
+            # Check if credentials are configured
+            if ps.credential_id:
+                credential = db.get_user_supplier_credential(ps.credential_id)
+                if credential and credential.username and credential.password_hash:
+                    logger.debug(f"[Suppliers Sync] Checking supplier {supplier.name}: has_api={supplier.has_api}, has_credentials=True")
+                    suppliers_to_sync.append((supplier, ps))
+                else:
+                    suppliers_without_credentials.append(supplier.name)
+                    logger.warning(f"[Suppliers Sync] Supplier {supplier.name} has credential_id but credential is invalid")
+            else:
+                suppliers_without_credentials.append(supplier.name)
+                logger.warning(f"[Suppliers Sync] Supplier {supplier.name} has no credentials configured")
         
-        logger.info(f"[Suppliers Sync] {len(suppliers_to_sync)} supplier(s) ready to sync")
+        logger.info(f"[Suppliers Sync] {len(suppliers_to_sync)} supplier(s) ready to sync, {len(suppliers_without_credentials)} without credentials")
         
+        # If no suppliers to sync, return early but include info about missing credentials
         if not suppliers_to_sync:
             logger.warning(f"[Suppliers Sync] No suppliers with credentials configured for property {property_id}")
+            progress = []
+            if suppliers_without_credentials:
+                for supplier_name in suppliers_without_credentials:
+                    progress.append({
+                        "supplier_name": supplier_name,
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": "No credentials configured. Please set credentials in Settings."
+                    })
             return {
                 "status": "no_suppliers",
                 "message": "No suppliers with credentials configured for this property",
-                "progress": []
+                "progress": progress
             }
         
         # Find extraction pattern for supplier matching
@@ -454,16 +479,37 @@ async def sync_supplier_bills(property_id: str, current_user: TokenData = Depend
                     "error": error
                 })
         
+        # Add suppliers without credentials to progress with error status
+        for supplier_name in suppliers_without_credentials:
+            update_progress(supplier_name, "error", 0, 0, "No credentials configured. Please set credentials in Settings.")
+        
         for idx, (supplier, property_supplier) in enumerate(suppliers_to_sync, 1):
             # Get credentials from user-supplier credential
             username = None
             password = None
-            if property_supplier.credential_id:
-                credential = db.get_user_supplier_credential(property_supplier.credential_id)
-                if credential:
-                    username = decrypt_password(credential.username) if credential.username else None
-                    password = decrypt_password(credential.password_hash) if credential.password_hash else None
-                    logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
+            try:
+                if property_supplier.credential_id:
+                    credential = db.get_user_supplier_credential(property_supplier.credential_id)
+                    if credential and credential.username and credential.password_hash:
+                        username = decrypt_password(credential.username) if credential.username else None
+                        password = decrypt_password(credential.password_hash) if credential.password_hash else None
+                    else:
+                        # Credential exists but is invalid
+                        update_progress(supplier.name, "error", 0, 0, "Invalid credentials. Please reconfigure in Settings.")
+                        continue
+                else:
+                    # No credential_id, should not happen but handle gracefully
+                    update_progress(supplier.name, "error", 0, 0, "No credentials configured. Please set credentials in Settings.")
+                    continue
+            except Exception as e:
+                logger.error(f"[Suppliers Sync] Error getting credentials for supplier {supplier.name}: {e}", exc_info=True)
+                update_progress(supplier.name, "error", 0, 0, f"Error loading credentials: {str(e)}")
+                continue
+            
+            if not username or not password:
+                update_progress(supplier.name, "error", 0, 0, "Missing username or password. Please configure credentials in Settings.")
+                continue
+            logger.debug(f"[Suppliers Sync] Credentials decrypted for {supplier.name}")
             
             try:
                 logger.info(f"[Suppliers Sync] Syncing {supplier.name} ({idx}/{len(suppliers_to_sync)}) for property {property_id}")

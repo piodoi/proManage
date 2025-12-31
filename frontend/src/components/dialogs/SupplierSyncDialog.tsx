@@ -51,8 +51,14 @@ export default function SupplierSyncDialog({
           setSyncing(false);
           
           if (result.status === 'no_suppliers') {
-            onError(result.message || 'No suppliers with credentials configured');
-            onOpenChange(false);
+            // Still show progress if there are suppliers without credentials
+            if (result.progress && Array.isArray(result.progress) && result.progress.length > 0) {
+              setProgress(result.progress as SupplierProgress[]);
+            } else {
+              // Only close if there's truly nothing to show
+              onError(result.message || 'No suppliers with credentials configured');
+              onOpenChange(false);
+            }
             return;
           }
 
@@ -68,25 +74,22 @@ export default function SupplierSyncDialog({
           if (result.errors && result.errors.length > 0) {
             setErrors(result.errors);
           }
-
-          // Call success callback after a short delay to show the results
-          setTimeout(() => {
-            onOpenChange(false);
-            onSuccess();
-            if (result.bills_created > 0 || (result.errors && result.errors.length > 0)) {
-              const message = result.bills_created > 0 
-                ? `Successfully synced ${result.bills_created} bill(s) from suppliers`
-                : 'Sync completed with errors';
-              onError(message);
-            }
-          }, 2000);
         })
         .catch((err) => {
           setSyncing(false);
-          onError(err instanceof Error ? err.message : 'Failed to sync supplier bills');
+          const errorMsg = err instanceof Error ? err.message : 'Failed to sync supplier bills';
+          onError(errorMsg);
+          // Add error to progress for display
+          setProgress([{
+            supplier_name: 'Sync Error',
+            status: 'error',
+            bills_found: 0,
+            bills_created: 0,
+            error: errorMsg
+          }]);
         });
     }
-  }, [open, token, property.id, syncing, onOpenChange, onSuccess, onError]);
+  }, [open, token, property.id]);
 
   const getStatusIcon = (status: SupplierProgress['status']) => {
     switch (status) {
@@ -122,14 +125,14 @@ export default function SupplierSyncDialog({
         onOpenChange(false);
       }
     }}>
-      <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('supplier.syncProgress')}</DialogTitle>
           <DialogDescription className="text-slate-400 sr-only">
             {t('supplier.syncProgress')}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex flex-col flex-1 min-h-0 space-y-4">
           <div>
             <p className="text-sm text-slate-300 font-medium mb-1">{t('property.properties')}:</p>
             <p className="text-sm text-slate-100 font-semibold">{property.name}</p>
@@ -146,7 +149,7 @@ export default function SupplierSyncDialog({
           )}
 
           {progress.length > 0 && (
-            <div className="space-y-3">
+            <div className="flex flex-col flex-1 min-h-0">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm text-slate-300 font-medium">{t('supplier.supplierProgress')}</p>
                 {!syncing && (
@@ -156,49 +159,52 @@ export default function SupplierSyncDialog({
                 )}
               </div>
 
-              {progress.map((item, index) => (
-                <div
-                  key={index}
-                  className="bg-slate-700 rounded-lg p-4 border border-slate-600"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3 flex-1">
-                      {getStatusIcon(item.status)}
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-100">
-                          {item.supplier_name}
-                        </p>
-                        <div className="flex items-center space-x-4 mt-1">
-                          <span className="text-xs text-slate-400">
-                            {getStatusText(item.status)}
-                          </span>
-                          {item.status === 'completed' && (
-                            <>
-                              <span className="text-xs text-slate-400">
-                                {t('supplier.found')} {item.bills_found}
-                              </span>
-                              <span className="text-xs text-emerald-400">
-                                {t('supplier.created')} {item.bills_created}
-                              </span>
-                            </>
-                          )}
-                          {item.status === 'processing' && item.bills_found > 0 && (
+              {/* Scrolling progress box */}
+              <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-3">
+                {progress.map((item, index) => (
+                  <div
+                    key={index}
+                    className="bg-slate-700 rounded-lg p-4 border border-slate-600"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3 flex-1">
+                        {getStatusIcon(item.status)}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-100">
+                            {item.supplier_name}
+                          </p>
+                          <div className="flex items-center space-x-4 mt-1">
                             <span className="text-xs text-slate-400">
-                              {t('supplier.found')} {item.bills_found} {t('bill.bills')}
+                              {getStatusText(item.status)}
                             </span>
+                            {item.status === 'completed' && (
+                              <>
+                                <span className="text-xs text-slate-400">
+                                  {t('supplier.found')} {item.bills_found}
+                                </span>
+                                <span className="text-xs text-emerald-400">
+                                  {t('supplier.created')} {item.bills_created}
+                                </span>
+                              </>
+                            )}
+                            {item.status === 'processing' && item.bills_found > 0 && (
+                              <span className="text-xs text-slate-400">
+                                {t('supplier.found')} {item.bills_found} {t('bill.bills')}
+                              </span>
+                            )}
+                          </div>
+                          {item.error && (
+                            <div className="mt-2 flex items-start space-x-2">
+                              <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-red-400">{item.error}</p>
+                            </div>
                           )}
                         </div>
-                        {item.error && (
-                          <div className="mt-2 flex items-start space-x-2">
-                            <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-red-400">{item.error}</p>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 
@@ -213,12 +219,14 @@ export default function SupplierSyncDialog({
             </div>
           )}
 
-          {!syncing && progress.length > 0 && (
-            <div className="flex justify-end pt-2">
+          {!syncing && (
+            <div className="flex justify-end pt-2 border-t border-slate-700">
               <Button
                 onClick={() => {
                   onOpenChange(false);
-                  onSuccess();
+                  if (totalBillsCreated > 0 || progress.some(p => p.status === 'completed')) {
+                    onSuccess();
+                  }
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
