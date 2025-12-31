@@ -218,6 +218,7 @@ async def list_property_suppliers(
                 "property_id": ps.property_id,
                 "supplier_id": ps.supplier_id,
                 "credential_id": ps.credential_id,
+                "contract_id": ps.contract_id,
                 "has_credentials": has_credentials,
                 "created_at": ps.created_at,
                 "updated_at": ps.updated_at,
@@ -265,6 +266,7 @@ async def create_property_supplier(
         property_id=property_id,
         supplier_id=data.supplier_id,
         credential_id=credential_id,
+        contract_id=data.contract_id if data.contract_id else None,
     )
     db.save_property_supplier(property_supplier)
     
@@ -279,6 +281,7 @@ async def create_property_supplier(
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
         "credential_id": property_supplier.credential_id,
+        "contract_id": property_supplier.contract_id,
         "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,
@@ -318,6 +321,10 @@ async def update_property_supplier(
                 raise HTTPException(status_code=400, detail="Credential does not match supplier")
         property_supplier.credential_id = data.credential_id
     
+    # Update contract_id if provided
+    if data.contract_id is not None:
+        property_supplier.contract_id = data.contract_id if data.contract_id else None
+    
     property_supplier.updated_at = datetime.utcnow()
     db.save_property_supplier(property_supplier)
     
@@ -334,6 +341,7 @@ async def update_property_supplier(
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
         "credential_id": property_supplier.credential_id,
+        "contract_id": property_supplier.contract_id,
         "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,

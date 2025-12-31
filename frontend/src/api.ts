@@ -232,6 +232,7 @@ export type PropertySupplier = {
   property_id: string;
   supplier_id: string;
   credential_id?: string | null;
+  contract_id?: string | null;
   has_credentials: boolean;
   created_at: string;
   updated_at: string;
@@ -240,6 +241,7 @@ export type PropertySupplier = {
 export type PropertySupplierCreate = {
   supplier_id: string;
   credential_id?: string | null;
+  contract_id?: string | null;
 };
 
 export type PropertySupplierUpdate = {

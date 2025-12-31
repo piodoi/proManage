@@ -191,6 +191,8 @@
     "error": "Eroare",
     "noSuppliers": "Niciun furnizor cu credențiale configurate pentru această proprietate",
     "noAssignedSuppliers": "Niciun furnizor asignat proprietăților. Adaugă furnizori în panoul de Proprietăți pentru a configura credențiale.",
+    "contractId": "ID Contract",
+    "contractIdPlaceholder": "ID Contract (opțional)",
     "selectContract": "Selectează Contract",
     "selectContracts": "Selectează Contracte",
     "multipleContractsFound": "Au fost găsite mai multe contracte. Te rog selectează ce contract să folosești pentru fiecare furnizor.",

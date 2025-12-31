@@ -353,10 +353,12 @@ class SupplierUpdate(BaseModel):
 class PropertySupplierCreate(BaseModel):
     supplier_id: str
     credential_id: Optional[str] = None  # Link to existing user-supplier credential
+    contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
 
 
 class PropertySupplierUpdate(BaseModel):
     credential_id: Optional[str] = None  # Link to existing user-supplier credential
+    contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
 
 
 class UserSupplierCredentialCreate(BaseModel):

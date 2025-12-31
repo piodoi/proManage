@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
@@ -30,6 +31,7 @@ export default function PropertySupplierSettingsDialog({
   const [propertySuppliers, setPropertySuppliers] = useState<PropertySupplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [contractId, setContractId] = useState<string>('');
   const prevOpenRef = useRef(open);
 
   // Load suppliers and property suppliers when dialog opens
@@ -39,6 +41,7 @@ export default function PropertySupplierSettingsDialog({
     } else if (!open) {
       // Reset state when dialog closes
       setSelectedSupplierId('');
+      setContractId('');
     }
   }, [open, token, property.id]);
 
@@ -86,11 +89,13 @@ export default function PropertySupplierSettingsDialog({
     try {
       await api.suppliers.addToProperty(token, property.id, {
         supplier_id: selectedSupplierId,
+        contract_id: contractId.trim() || undefined,
       });
       await loadData();
       // Reset selection but keep dialog open so user can add more
       // Don't call onSuccess() here - it will be called when dialog closes
       setSelectedSupplierId('');
+      setContractId('');
     } catch (err) {
       onError(err instanceof Error ? err.message : t('supplier.addError'));
     }
@@ -150,6 +155,13 @@ export default function PropertySupplierSettingsDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                <Input
+                  type="text"
+                  value={contractId}
+                  onChange={(e) => setContractId(e.target.value)}
+                  placeholder={t('supplier.contractIdPlaceholder') || 'Contract ID (optional)'}
+                  className="w-48 bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-500"
+                />
                 <Button
                   onClick={handleAddSupplier}
                   disabled={!selectedSupplierId}
@@ -171,6 +183,7 @@ export default function PropertySupplierSettingsDialog({
                       <TableRow className="bg-slate-700 border-slate-600">
                         <TableHead className="text-slate-200">{t('supplier.supplierName')}</TableHead>
                         <TableHead className="text-slate-200">{t('bill.billType')}</TableHead>
+                        <TableHead className="text-slate-200">{t('supplier.contractId') || 'Contract ID'}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.apiSupport')}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.credentials')}</TableHead>
                         <TableHead className="text-slate-200">{t('common.actions')}</TableHead>
@@ -181,6 +194,7 @@ export default function PropertySupplierSettingsDialog({
                         <TableRow key={ps.id} className="bg-slate-800 border-slate-600">
                           <TableCell className="text-slate-300">{ps.supplier.name}</TableCell>
                           <TableCell className="text-slate-400 capitalize">{t(`bill.${ps.supplier.bill_type}`)}</TableCell>
+                          <TableCell className="text-slate-400">{ps.contract_id || <span className="text-slate-500">—</span>}</TableCell>
                           <TableCell className="text-slate-400">
                             {ps.supplier.has_api ? (
                               <span className="text-emerald-400">🔌 {t('supplier.available')}</span>

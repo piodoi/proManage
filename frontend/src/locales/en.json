@@ -181,6 +181,8 @@
     "addSupplierToProperty": "Add Supplier to Property",
     "selectSupplier": "Select a supplier",
     "configuredSuppliers": "Configured Suppliers for this Property",
+    "contractId": "Contract ID",
+    "contractIdPlaceholder": "Contract ID (optional)",
     "apiSupport": "API Support",
     "credentials": "Credentials",
     "available": "Available",
