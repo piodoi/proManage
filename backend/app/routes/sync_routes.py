@@ -449,13 +449,11 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                 if not supplier:
                     continue
                     
-                # Check if credentials are configured
-                if ps.credential_id:
-                    credential = db.get_user_supplier_credential(ps.credential_id)
-                    if credential and credential.username and credential.password_hash:
-                        suppliers_to_sync.append((supplier, ps))
-                    else:
-                        suppliers_without_credentials.append(supplier.name)
+                # Check if credentials are configured - source of truth is user_supplier_credentials table
+                # Check directly by user_id and supplier_id, not just by credential_id link
+                credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, ps.supplier_id)
+                if credential and credential.username and credential.password_hash:
+                    suppliers_to_sync.append((supplier, ps))
                 else:
                     suppliers_without_credentials.append(supplier.name)
             
@@ -522,24 +520,15 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                     yield send_event("cancelled", {"message": "Sync cancelled"})
                     return
                 
-                # Get credentials
+                # Get credentials - source of truth is user_supplier_credentials table
+                # Check directly by user_id and supplier_id
                 username = None
                 password = None
                 try:
-                    if property_supplier.credential_id:
-                        credential = db.get_user_supplier_credential(property_supplier.credential_id)
-                        if credential and credential.username and credential.password_hash:
-                            username = decrypt_password(credential.username) if credential.username else None
-                            password = decrypt_password(credential.password_hash) if credential.password_hash else None
-                        else:
-                            yield send_event("progress", {
-                                "supplier_name": supplier.name,
-                                "status": "error",
-                                "bills_found": 0,
-                                "bills_created": 0,
-                                "error": "Invalid credentials. Please reconfigure in Settings."
-                            })
-                            continue
+                    credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, supplier.id)
+                    if credential and credential.username and credential.password_hash:
+                        username = decrypt_password(credential.username) if credential.username else None
+                        password = decrypt_password(credential.password_hash) if credential.password_hash else None
                     else:
                         yield send_event("progress", {
                             "supplier_name": supplier.name,
