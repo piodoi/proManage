@@ -241,10 +241,11 @@ async def create_property_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     
-    # Check if already exists
-    existing = db.get_property_supplier_by_supplier(property_id, data.supplier_id)
+    # Check if exact duplicate exists (same supplier + same contract_id, including both None)
+    contract_id_value = data.contract_id if data.contract_id else None
+    existing = db.get_property_supplier_by_supplier_and_contract(property_id, data.supplier_id, contract_id_value)
     if existing:
-        raise HTTPException(status_code=400, detail="Supplier already configured for this property")
+        raise HTTPException(status_code=400, detail="Supplier with this contract ID already configured for this property")
     
     # If credential_id provided, verify it belongs to the user
     credential_id = data.credential_id

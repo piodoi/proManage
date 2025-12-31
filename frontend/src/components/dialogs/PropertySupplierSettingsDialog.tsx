@@ -116,9 +116,8 @@ export default function PropertySupplierSettingsDialog({
     }
   };
 
-  const availableSuppliers = allSuppliers.filter(s => 
-    !propertySuppliers.some(ps => ps.supplier_id === s.id)
-  );
+  // Show all suppliers - allow adding same supplier multiple times with different contract IDs
+  const availableSuppliers = allSuppliers;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

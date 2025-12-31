@@ -3,6 +3,7 @@ import { api, Supplier, UserSupplierCredential } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Lock, Pencil, Trash2 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 
@@ -248,165 +249,171 @@ export default function SupplierCredentialsSettings({ token, onError }: Supplier
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {assignedSuppliers.map(supplier => {
-            const credential = getCredentialForSupplier(supplier.id);
-            // Only consider editing if both exist and IDs match (explicit check to avoid undefined === undefined)
-            const isEditing = !!(editingCredential && credential && editingCredential.id && credential.id && editingCredential.id === credential.id);
-            // Only consider creating if editingCredential exists, matches supplier, and no credential exists
-            const isCreating = !!(editingCredential && !credential && editingCredential.supplier_id === supplier.id);
+        <div className="border border-slate-600 rounded-md overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-700 border-slate-600">
+                <TableHead className="text-slate-200">{t('common.actions')}</TableHead>
+                <TableHead className="text-slate-200">{t('supplier.supplierName')}</TableHead>
+                <TableHead className="text-slate-200">{t('bill.billType')}</TableHead>
+                <TableHead className="text-slate-200">{t('supplier.apiSupport')}</TableHead>
+                <TableHead className="text-slate-200">{t('supplier.credentials')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {assignedSuppliers.map(supplier => {
+                const credential = getCredentialForSupplier(supplier.id);
+                // Only consider editing if both exist and IDs match (explicit check to avoid undefined === undefined)
+                const isEditing = !!(editingCredential && credential && editingCredential.id && credential.id && editingCredential.id === credential.id);
+                // Only consider creating if editingCredential exists, matches supplier, and no credential exists
+                const isCreating = !!(editingCredential && !credential && editingCredential.supplier_id === supplier.id);
 
-            return (
-              <div
-                key={supplier.id}
-                className="flex items-center gap-3 p-3 bg-slate-700/50 rounded border border-slate-600"
-              >
-                {/* Set Credentials Button (first) */}
-                <div className="flex-shrink-0">
-                  {isEditing || isCreating ? (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          
-                          // Re-compute state inside handler to avoid stale closures
-                          const currentCredential = getCredentialForSupplier(supplier.id);
-                          const actuallyEditing = !!(editingCredential && currentCredential && editingCredential.id && currentCredential.id && editingCredential.id === currentCredential.id);
-                          const actuallyCreating = !!(editingCredential && !currentCredential && editingCredential.supplier_id === supplier.id);
-                          
-                          if (actuallyEditing && currentCredential && currentCredential.id) {
-                            // Pass the credential directly to avoid stale closure
-                            handleSaveWithCredential(currentCredential);
-                          } else if (actuallyCreating && editingCredential) {
-                            handleCreate(supplier.id);
-                          } else {
-                            console.error('[SupplierCredentials] Invalid save state', { 
-                              isEditing, 
-                              actuallyEditing,
-                              isCreating, 
-                              actuallyCreating,
-                              currentCredential, 
-                              editingCredential, 
-                              supplierId: supplier.id 
-                            });
-                            if (onError) {
-                              onError('Cannot save: Invalid state. Please refresh and try again.');
-                            }
-                          }
-                        }}
-                        disabled={saving}
-                        className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs disabled:opacity-50"
-                      >
-                        {saving ? t('common.saving') || 'Saving...' : t('common.save')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleCancel}
-                        variant="outline"
-                        className="bg-slate-600 text-slate-300 hover:bg-slate-500 h-7 text-xs"
-                      >
-                        {t('common.cancel')}
-                      </Button>
-                    </div>
-                  ) : credential ? (
-                    <Button
-                      size="sm"
-                      onClick={() => handleEdit(credential)}
-                      className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-8"
-                    >
-                      <Pencil className="w-3 h-3 mr-1" />
-                      {t('common.edit')}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        const newCredential = { id: '', supplier, user_id: '', supplier_id: supplier.id, has_credentials: false, created_at: '', updated_at: '' };
-                        setEditingCredential(newCredential);
-                        // Initialize form data for this supplier
-                        setFormData(prev => ({
-                          ...prev,
-                          [supplier.id]: { username: '', password: '' }
-                        }));
-                      }}
-                      className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-8"
-                    >
-                      <Lock className="w-3 h-3 mr-1" />
-                      {t('supplier.setCredentials')}
-                    </Button>
-                  )}
-                </div>
+                return (
+                  <TableRow key={supplier.id} className="bg-slate-800 border-slate-600">
+                    {/* Actions Column */}
+                    <TableCell>
+                      {isEditing || isCreating ? (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              
+                              // Re-compute state inside handler to avoid stale closures
+                              const currentCredential = getCredentialForSupplier(supplier.id);
+                              const actuallyEditing = !!(editingCredential && currentCredential && editingCredential.id && currentCredential.id && editingCredential.id === currentCredential.id);
+                              const actuallyCreating = !!(editingCredential && !currentCredential && editingCredential.supplier_id === supplier.id);
+                              
+                              if (actuallyEditing && currentCredential && currentCredential.id) {
+                                // Pass the credential directly to avoid stale closure
+                                handleSaveWithCredential(currentCredential);
+                              } else if (actuallyCreating && editingCredential) {
+                                handleCreate(supplier.id);
+                              } else {
+                                console.error('[SupplierCredentials] Invalid save state', { 
+                                  isEditing, 
+                                  actuallyEditing,
+                                  isCreating, 
+                                  actuallyCreating,
+                                  currentCredential, 
+                                  editingCredential, 
+                                  supplierId: supplier.id 
+                                });
+                                if (onError) {
+                                  onError('Cannot save: Invalid state. Please refresh and try again.');
+                                }
+                              }
+                            }}
+                            disabled={saving}
+                            className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs disabled:opacity-50"
+                          >
+                            {saving ? t('common.saving') || 'Saving...' : t('common.save')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleCancel}
+                            variant="outline"
+                            className="bg-slate-600 text-slate-300 hover:bg-slate-500 h-7 text-xs"
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                        </div>
+                      ) : credential ? (
+                        <Button
+                          size="sm"
+                          onClick={() => handleEdit(credential)}
+                          className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-8"
+                        >
+                          <Pencil className="w-3 h-3 mr-1" />
+                          {t('common.edit')}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const newCredential = { id: '', supplier, user_id: '', supplier_id: supplier.id, has_credentials: false, created_at: '', updated_at: '' };
+                            setEditingCredential(newCredential);
+                            // Initialize form data for this supplier
+                            setFormData(prev => ({
+                              ...prev,
+                              [supplier.id]: { username: '', password: '' }
+                            }));
+                          }}
+                          className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-8"
+                        >
+                          <Lock className="w-3 h-3 mr-1" />
+                          {t('supplier.setCredentials')}
+                        </Button>
+                      )}
+                    </TableCell>
 
-                {/* Supplier Name */}
-                <div className="flex-shrink-0 min-w-[150px]">
-                  <div className="text-slate-200 font-medium">{supplier.name}</div>
-                </div>
+                    {/* Supplier Name */}
+                    <TableCell className="text-slate-300 font-medium">{supplier.name}</TableCell>
 
-                {/* Bill Type */}
-                <div className="flex-shrink-0 min-w-[100px]">
-                  <div className="text-slate-400 text-sm capitalize">{t(`bill.${supplier.bill_type}`)}</div>
-                </div>
+                    {/* Bill Type */}
+                    <TableCell className="text-slate-400 capitalize">{t(`bill.${supplier.bill_type}`)}</TableCell>
 
-                {/* Has API */}
-                <div className="flex-shrink-0 min-w-[120px]">
-                  {supplier.has_api ? (
-                    <span className="text-emerald-400 text-sm">🔌 {t('supplier.available')}</span>
-                  ) : (
-                    <span className="text-slate-500 text-sm">{t('supplier.notAvailable')}</span>
-                  )}
-                </div>
+                    {/* Has API */}
+                    <TableCell className="text-slate-400">
+                      {supplier.has_api ? (
+                        <span className="text-emerald-400">🔌 {t('supplier.available')}</span>
+                      ) : (
+                        <span className="text-slate-500">{t('supplier.notAvailable')}</span>
+                      )}
+                    </TableCell>
 
-                {/* Credentials Status / Input Fields */}
-                <div className="flex-1">
-                  {isEditing || isCreating ? (
-                    <div className="flex gap-2">
-                      <Input
-                        value={formData[credential?.id || supplier.id]?.username || ''}
-                        onChange={(e) => {
-                          const key = credential?.id || supplier.id;
-                          setFormData(prev => ({
-                            ...prev,
-                            [key]: { ...(prev[key] || { username: '', password: '' }), username: e.target.value }
-                          }));
-                        }}
-                        placeholder={t('supplier.enterUsername')}
-                        className="bg-slate-700 border-slate-600 text-slate-100 h-8 text-sm flex-1"
-                      />
-                      <Input
-                        type="password"
-                        value={formData[credential?.id || supplier.id]?.password || ''}
-                        onChange={(e) => {
-                          const key = credential?.id || supplier.id;
-                          setFormData(prev => ({
-                            ...prev,
-                            [key]: { ...(prev[key] || { username: '', password: '' }), password: e.target.value }
-                          }));
-                        }}
-                        placeholder={credential?.has_credentials ? t('supplier.newPasswordPlaceholder') : t('supplier.enterPassword')}
-                        className="bg-slate-700 border-slate-600 text-slate-100 h-8 text-sm flex-1"
-                      />
-                    </div>
-                  ) : credential ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-emerald-400 text-sm">✓ {t('supplier.saved')}</span>
-                      <Button
-                        size="sm"
-                        onClick={() => handleDelete(credential.id)}
-                        variant="ghost"
-                        className="text-red-400 hover:text-red-300 hover:bg-slate-600 h-6 w-6 p-0"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <span className="text-slate-500 text-sm">{t('supplier.notSet')}</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                    {/* Credentials Status / Input Fields */}
+                    <TableCell>
+                      {isEditing || isCreating ? (
+                        <div className="flex gap-2">
+                          <Input
+                            value={formData[credential?.id || supplier.id]?.username || ''}
+                            onChange={(e) => {
+                              const key = credential?.id || supplier.id;
+                              setFormData(prev => ({
+                                ...prev,
+                                [key]: { ...(prev[key] || { username: '', password: '' }), username: e.target.value }
+                              }));
+                            }}
+                            placeholder={t('supplier.enterUsername')}
+                            className="bg-slate-700 border-slate-600 text-slate-100 h-8 text-sm flex-1"
+                          />
+                          <Input
+                            type="password"
+                            value={formData[credential?.id || supplier.id]?.password || ''}
+                            onChange={(e) => {
+                              const key = credential?.id || supplier.id;
+                              setFormData(prev => ({
+                                ...prev,
+                                [key]: { ...(prev[key] || { username: '', password: '' }), password: e.target.value }
+                              }));
+                            }}
+                            placeholder={credential?.has_credentials ? t('supplier.newPasswordPlaceholder') : t('supplier.enterPassword')}
+                            className="bg-slate-700 border-slate-600 text-slate-100 h-8 text-sm flex-1"
+                          />
+                        </div>
+                      ) : credential ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-400">✓ {t('supplier.saved')}</span>
+                          <Button
+                            size="sm"
+                            onClick={() => handleDelete(credential.id)}
+                            variant="ghost"
+                            className="text-red-400 hover:text-red-300 hover:bg-slate-600 h-6 w-6 p-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-slate-500">{t('supplier.notSet')}</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       </CardContent>
     </Card>

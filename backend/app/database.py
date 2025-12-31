@@ -527,6 +527,25 @@ class Database:
                 )
             ).fetchone()
             return _deserialize(PropertySupplier, result.data) if result else None
+    
+    def get_property_supplier_by_supplier_and_contract(self, property_id: str, supplier_id: str, contract_id: Optional[str]) -> Optional[PropertySupplier]:
+        """Get property supplier by supplier_id and contract_id (to check for exact duplicates)"""
+        with engine.connect() as conn:
+            # Get all property suppliers for this property and supplier
+            results = conn.execute(
+                property_suppliers_table.select().where(
+                    (property_suppliers_table.c.property_id == property_id) &
+                    (property_suppliers_table.c.supplier_id == supplier_id)
+                )
+            ).fetchall()
+            
+            # Check if any match the contract_id (handling None case)
+            for row in results:
+                ps = _deserialize(PropertySupplier, row.data)
+                # Both None or both equal
+                if (not contract_id and not ps.contract_id) or (contract_id == ps.contract_id):
+                    return ps
+            return None
 
     def save_property_supplier(self, property_supplier: PropertySupplier) -> PropertySupplier:
         with engine.connect() as conn:
