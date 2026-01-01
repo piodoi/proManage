@@ -1,0 +1,28 @@
+{
+  "supplier_name": "E-bloc",
+  "base_url": "https://www.e-bloc.ro",
+  "login_url": "https://www.e-bloc.ro/index.php",
+  "bills_url": "https://www.e-bloc.ro/index.php?page=19",
+  "login_method": "form",
+  "login_form_selector": "form",
+  "username_field": "pUser",
+  "password_field": "pPass",
+  "login_submit_button_selector": "#pConectare",
+  "login_success_indicator": "url:page=",
+  "bills_list_selector": "#tabel-datorii-curente",
+  "bill_item_selector": "#tabel-datorii-curente tbody tr",
+  "bill_number_pattern": "Lista de plată afişată\\s+(\\w+\\s+\\d{4})",
+  "bill_amount_selector": "#suma-de-plata",
+  "bill_due_date_selector": null,
+  "bill_contract_id_selector": "#cod-bare",
+  "bill_pdf_link_selector": null,
+  "cookie_config": {
+    "asoc-cur": "{association_id}",
+    "home-ap-cur": "{association_id}_{apartment_id}"
+  },
+  "timeout": 15.0,
+  "wait_after_login": 2.0,
+  "multiple_contracts_possible": true,
+  "requires_js": true
+}
+

@@ -450,8 +450,22 @@ async def sync_supplier_bills(
                             "bills_created": 0
                         })
                         
-                        from app.ebloc_scraper import EblocScraper
-                        scraper = EblocScraper()
+                        # Use web_scraper for e-bloc
+                        from app.web_scraper import WebScraper, load_scraper_config
+                        from app.utils.ebloc_association_matcher import find_matching_associations
+                        
+                        config = load_scraper_config("e-bloc")
+                        if not config:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "error",
+                                "bills_found": 0,
+                                "bills_created": 0,
+                                "error": "E-bloc scraper config not found"
+                            })
+                            continue
+                        
+                        scraper = WebScraper(config, save_html_dumps=False)
                         logged_in = await scraper.login(username, password)
                         if not logged_in:
                             yield send_event("progress", {
@@ -461,6 +475,7 @@ async def sync_supplier_bills(
                                 "bills_created": 0,
                                 "error": "Invalid E-bloc credentials"
                             })
+                            await scraper.close()
                             continue
                         
                         if is_cancelled():
@@ -468,7 +483,9 @@ async def sync_supplier_bills(
                             yield send_event("cancelled", {"message": "Sync cancelled"})
                             return
                         
-                        matches = await scraper.find_matching_associations(prop.name)
+                        # Get login page HTML for association matching
+                        login_html = await scraper.page.content()
+                        matches = await find_matching_associations(login_html, prop.name)
                         if not matches:
                             yield send_event("progress", {
                                 "supplier_name": supplier.name,
@@ -482,46 +499,7 @@ async def sync_supplier_bills(
                         
                         selected_match = max(matches, key=lambda m: m.get("score", 0))
                         selected_association_id = selected_match["id"]
-                        selected_apartment_index = selected_match.get("apartment_index")
                         selected_apartment_id = selected_match.get("apartment_id")
-                        
-                        matched_asoc_id, soup = await scraper.ensure_cookies_and_navigate(
-                            property_name=prop.name,
-                            association_id=selected_association_id,
-                            apartment_index=selected_apartment_index,
-                            apartment_id=selected_apartment_id
-                        )
-                        
-                        if soup is None:
-                            yield send_event("progress", {
-                                "supplier_name": supplier.name,
-                                "status": "error",
-                                "bills_found": 0,
-                                "bills_created": 0,
-                                "error": "Could not navigate to E-bloc page"
-                            })
-                            await scraper.close()
-                            continue
-                        
-                        if is_cancelled():
-                            await scraper.close()
-                            yield send_event("cancelled", {"message": "Sync cancelled"})
-                            return
-                        
-                        balance = await scraper.get_balance(
-                            property_name=prop.name,
-                            association_id=selected_association_id,
-                            apartment_index=selected_apartment_index,
-                            apartment_id=selected_apartment_id,
-                            soup=soup
-                        )
-                        payments = await scraper.get_payments(
-                            property_name=prop.name,
-                            association_id=selected_association_id,
-                            apartment_index=selected_apartment_index,
-                            apartment_id=selected_apartment_id,
-                            soup=soup
-                        )
                         
                         # Delete existing E-bloc bills
                         existing_bills = db.list_bills(property_id=property_id)
@@ -529,11 +507,24 @@ async def sync_supplier_bills(
                         for existing_bill in existing_ebloc_bills:
                             db.delete_bill(existing_bill.id)
                         
+                        # Get bills with association/apartment cookies set
+                        scraped_bills = await scraper.get_bills(selected_association_id, selected_apartment_id)
+                        
+                        if is_cancelled():
+                            await scraper.close()
+                            yield send_event("cancelled", {"message": "Sync cancelled"})
+                            return
+                        
                         bills_count = 0
-                        outstanding_debt = balance.outstanding_debt if balance else 0.0
-                        if outstanding_debt > 0 or balance:
-                            bill_status = BillStatus.OVERDUE if outstanding_debt > 0 else BillStatus.PAID
-                            due_date = balance.last_payment_date if balance and balance.last_payment_date else datetime.utcnow()
+                        discovered_bills_list = []
+                        
+                        for scraped_bill in scraped_bills:
+                            if not scraped_bill.bill_number or scraped_bill.amount is None:
+                                continue
+                            
+                            # Determine bill status based on amount
+                            bill_status = BillStatus.OVERDUE if scraped_bill.amount > 0 else BillStatus.PAID
+                            due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
                             
                             if discover_only:
                                 # Collect bill data without saving
@@ -542,58 +533,45 @@ async def sync_supplier_bills(
                                     "renter_id": None,
                                     "bill_type": BillType.EBLOC,
                                     "description": "E-Bloc",
-                                    "amount": outstanding_debt,
+                                    "amount": scraped_bill.amount,
                                     "due_date": due_date.isoformat(),
-                                    "status": bill_status.value
+                                    "status": bill_status.value,
+                                    "bill_number": scraped_bill.bill_number,
+                                    "contract_id": scraped_bill.contract_id
                                 }
-                                yield send_event("progress", {
-                                    "supplier_name": supplier.name,
-                                    "status": "processing",
-                                    "bills_found": 1,
-                                    "bills_created": 0,
-                                    "bills": [bill_data]
-                                })
-                                bills_count = 1
+                                discovered_bills_list.append(bill_data)
                             else:
                                 bill = Bill(
                                     property_id=property_id,
                                     renter_id=None,
                                     bill_type=BillType.EBLOC,
                                     description="E-Bloc",
-                                    amount=outstanding_debt,
+                                    amount=scraped_bill.amount,
                                     due_date=due_date,
-                                    status=bill_status
+                                    status=bill_status,
+                                    bill_number=scraped_bill.bill_number,
+                                    contract_id=scraped_bill.contract_id
                                 )
                                 db.save_bill(bill)
-                                bills_count = 1
+                                bills_count += 1
                         
-                        # Create payment records
-                        if payments:
-                            all_payments = db.list_payments()
-                            existing_payments = [p for p in all_payments if p.bill_id is None]
-                            for payment in payments:
-                                if not any(
-                                    p.bill_id is None and
-                                    abs((p.payment_date - payment.payment_date).total_seconds()) < 86400
-                                    for p in existing_payments
-                                ):
-                                    payment_record = Payment(
-                                        bill_id=None,
-                                        amount=0.0,
-                                        payment_date=payment.payment_date,
-                                        payment_method="E-bloc"
-                                    )
-                                    db.save_payment(payment_record)
-                                    existing_payments.append(payment_record)
+                        if discover_only:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "processing",
+                                "bills_found": len(discovered_bills_list),
+                                "bills_created": 0,
+                                "bills": discovered_bills_list
+                            })
+                        else:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "status": "completed",
+                                "bills_found": len(scraped_bills),
+                                "bills_created": bills_count
+                            })
                         
                         await scraper.close()
-                        
-                        yield send_event("progress", {
-                            "supplier_name": supplier.name,
-                            "status": "completed",
-                            "bills_found": 1,
-                            "bills_created": bills_count
-                        })
                         
                     elif supplier.has_api:
                         yield send_event("progress", {
@@ -821,7 +799,8 @@ async def sync_ebloc(
     current_user: TokenData = Depends(require_landlord)
 ):
     """Sync E-bloc bills and payments for a property."""
-    from app.ebloc_scraper import EblocScraper
+    from app.web_scraper import WebScraper, load_scraper_config
+    from app.utils.ebloc_association_matcher import find_matching_associations
     
     prop = db.get_property(property_id)
     if not prop:
@@ -840,13 +819,19 @@ async def sync_ebloc(
         logger.error(f"[E-Bloc] Error decrypting password: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error decrypting E-bloc password. Please reconfigure your credentials.")
     
-    scraper = EblocScraper()
+    config = load_scraper_config("e-bloc")
+    if not config:
+        raise HTTPException(status_code=500, detail="E-bloc scraper config not found")
+    
+    scraper = WebScraper(config, save_html_dumps=False)
     try:
         logged_in = await scraper.login(user.ebloc_username, password)
         if not logged_in:
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
         
-        matches = await scraper.find_matching_associations(prop.name)
+        # Get login page HTML for association matching
+        login_html = await scraper.page.content()
+        matches = await find_matching_associations(login_html, prop.name)
         
         if not matches:
             raise HTTPException(status_code=404, detail=f"Could not find matching E-bloc association for property: {prop.name}")
@@ -872,23 +857,9 @@ async def sync_ebloc(
         
         selected_match = next((m for m in matches if m["id"] == association_id), matches[0]) if association_id else matches[0]
         selected_association_id = selected_match["id"]
-        selected_apartment_index = selected_match.get("apartment_index")
         selected_apartment_id = selected_match.get("apartment_id")
         
-        matched_asoc_id, soup = await scraper.ensure_cookies_and_navigate(
-            property_name=prop.name, 
-            association_id=selected_association_id, 
-            apartment_index=selected_apartment_index, 
-            apartment_id=selected_apartment_id
-        )
-        
-        if soup is None:
-            raise HTTPException(status_code=500, detail="Could not navigate to Datorii page")
-        
-        balance = await scraper.get_balance(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id, soup=soup)
-        payments = await scraper.get_payments(property_name=prop.name, association_id=selected_association_id, apartment_index=selected_apartment_index, apartment_id=selected_apartment_id, soup=soup)
-        
-        bills_created = []
+        # Delete existing E-bloc bills
         existing_bills = db.list_bills(property_id=property_id)
         existing_ebloc_bills = [b for b in existing_bills if b.bill_type == BillType.EBLOC and b.renter_id is None]
         
@@ -896,56 +867,38 @@ async def sync_ebloc(
             db.delete_bill(existing_bill.id)
             logger.info(f"[E-Bloc] Deleted existing E-Bloc bill {existing_bill.id} for property {property_id}")
         
-        outstanding_debt = balance.outstanding_debt if balance else 0.0
-        if outstanding_debt > 0:
-            bill_status = BillStatus.OVERDUE
-        else:
-            bill_status = BillStatus.PAID
+        # Get bills with association/apartment cookies set
+        scraped_bills = await scraper.get_bills(selected_association_id, selected_apartment_id)
         
-        bill = Bill(
-            property_id=property_id,
-            renter_id=None,
-            bill_type=BillType.EBLOC,
-            description="E-Bloc",
-            amount=outstanding_debt,
-            due_date=balance.last_payment_date if balance and balance.last_payment_date else datetime.utcnow(),
-            status=bill_status
-        )
-        db.save_bill(bill)
-        bills_created.append(bill.id)
-        logger.info(f"[E-Bloc] Created E-Bloc bill {bill.id} for property {property_id} with amount {outstanding_debt} Lei, status: {bill_status}")
+        bills_created = []
+        outstanding_debt = 0.0
+        last_payment_date = None
         
-        payments_created = []
-        for payment in payments:
-            matching_bills = [b for b in db.list_bills(property_id=property_id) 
-                            if b.bill_type == BillType.EBLOC and b.renter_id is None and abs(b.amount - payment.amount) < 0.01]
+        for scraped_bill in scraped_bills:
+            if not scraped_bill.bill_number or scraped_bill.amount is None:
+                continue
             
-            if matching_bills:
-                bill = matching_bills[0]
-            else:
-                bill = Bill(
-                    property_id=property_id,
-                    renter_id=None,
-                    bill_type=BillType.EBLOC,
-                    description=f"E-bloc payment receipt {payment.receipt_number}",
-                    amount=payment.amount,
-                    due_date=payment.payment_date,
-                    status=BillStatus.PAID,
-                    bill_number=payment.receipt_number
-                )
-                db.save_bill(bill)
+            outstanding_debt += scraped_bill.amount if scraped_bill.amount > 0 else 0
+            if scraped_bill.due_date and (not last_payment_date or scraped_bill.due_date > last_payment_date):
+                last_payment_date = scraped_bill.due_date
             
-            existing_payment = next((p for p in db.list_payments() if p.bill_id == bill.id and abs(p.amount - payment.amount) < 0.01), None)
-            if not existing_payment:
-                payment_record = Payment(
-                    bill_id=bill.id,
-                    amount=payment.amount,
-                    method=PaymentMethod.BANK_TRANSFER,
-                    status=PaymentStatus.COMPLETED,
-                    payment_date=payment.payment_date
-                )
-                db.save_payment(payment_record)
-                payments_created.append(payment_record.id)
+            bill_status = BillStatus.OVERDUE if scraped_bill.amount > 0 else BillStatus.PAID
+            due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
+            
+            bill = Bill(
+                property_id=property_id,
+                renter_id=None,
+                bill_type=BillType.EBLOC,
+                description="E-Bloc",
+                amount=scraped_bill.amount,
+                due_date=due_date,
+                status=bill_status,
+                bill_number=scraped_bill.bill_number,
+                contract_id=scraped_bill.contract_id
+            )
+            db.save_bill(bill)
+            bills_created.append(bill.id)
+            logger.info(f"[E-Bloc] Created E-Bloc bill {bill.id} for property {property_id} with amount {scraped_bill.amount} Lei, status: {bill_status}")
         
         await scraper.close()
         
@@ -954,12 +907,12 @@ async def sync_ebloc(
             "property_id": property_id,
             "property_name": prop.name,
             "bills_created": len(bills_created),
-            "payments_created": len(payments_created),
+            "payments_created": 0,  # Payments not extracted with web_scraper
             "balance": {
                 "outstanding_debt": outstanding_debt,
-                "last_payment_date": balance.last_payment_date.isoformat() if balance and balance.last_payment_date else None,
-                "oldest_debt_month": balance.oldest_debt_month.isoformat() if balance and balance.oldest_debt_month else None
-            } if balance else None
+                "last_payment_date": last_payment_date.isoformat() if last_payment_date else None,
+                "oldest_debt_month": None  # Not extracted with web_scraper
+            }
         }
     except HTTPException:
         raise

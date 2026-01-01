@@ -29,10 +29,14 @@ async def discover_ebloc_properties(
         logger.warning("[E-Bloc] Missing username or password")
         raise HTTPException(status_code=400, detail="Username and password required")
     
-    from app.ebloc_scraper import EblocScraper, EblocProperty
+    from app.web_scraper import WebScraper, load_scraper_config
+    from app.utils.ebloc_property_parser import parse_ebloc_properties
     
-    # Enable debug mode to save HTML for inspection
-    scraper = EblocScraper(debug=True)
+    config = load_scraper_config("e-bloc")
+    if not config:
+        raise HTTPException(status_code=500, detail="E-bloc scraper config not found")
+    
+    scraper = WebScraper(config, save_html_dumps=False)
     try:
         logger.info("[E-Bloc] Attempting login...")
         logged_in = await scraper.login(username, password)
@@ -41,7 +45,9 @@ async def discover_ebloc_properties(
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
         
         logger.info("[E-Bloc] Login successful, fetching properties...")
-        properties = await scraper.get_available_properties()
+        # Get login page HTML and parse properties
+        login_html = await scraper.page.content()
+        properties = await parse_ebloc_properties(login_html)
         logger.info(f"[E-Bloc] Found {len(properties)} properties")
         
         result = {
@@ -78,12 +84,16 @@ async def discover_ebloc_properties(
 async def configure_ebloc(
     data: EblocConfigCreate, current_user: TokenData = Depends(require_landlord)
 ):
-    from app.ebloc_scraper import EblocScraper
+    from app.web_scraper import WebScraper, load_scraper_config
     
     logger.info(f"[E-Bloc] Configure request from user {current_user.user_id}")
     
     # Verify credentials by attempting login
-    scraper = EblocScraper()
+    config = load_scraper_config("e-bloc")
+    if not config:
+        raise HTTPException(status_code=500, detail="E-bloc scraper config not found")
+    
+    scraper = WebScraper(config, save_html_dumps=False)
     try:
         logged_in = await scraper.login(data.username, data.password)
         if not logged_in:
