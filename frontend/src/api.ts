@@ -360,6 +360,7 @@ export type Preferences = {
   view_mode: string;
   rent_warning_days: number;
   rent_currency: string;
+  bill_currency: string;
 };
 
 export type AuthResponse = {

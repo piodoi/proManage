@@ -385,7 +385,9 @@
     "warningBeforeRentDue": "Warning Before Rent is Due (days)",
     "rentWarningHelp": "Set the number of days (1-30) before rent due date to show a warning. Default is 5 days.",
     "rentCurrency": "Preferred Rent Currency",
-    "rentCurrencyHelp": "Select the preferred currency for displaying rent amounts. RON values will be converted and shown alongside."
+    "rentCurrencyHelp": "Select the preferred currency for displaying rent amounts. RON values will be converted and shown alongside.",
+    "billCurrency": "Preferred Bill Currency",
+    "billCurrencyHelp": "Select the preferred currency for displaying bill amounts. RON values will be converted and shown alongside."
   },
   "errors": {
     "generic": "An error occurred",

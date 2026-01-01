@@ -17,6 +17,7 @@ class PreferencesUpdate(BaseModel):
     view_mode: Optional[str] = None
     rent_warning_days: Optional[int] = None
     rent_currency: Optional[str] = None
+    bill_currency: Optional[str] = None
 
 
 @router.get("")
@@ -29,13 +30,15 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
             "language": "en",
             "view_mode": "list",
             "rent_warning_days": 5,
-            "rent_currency": "EUR"
+            "rent_currency": "EUR",
+            "bill_currency": "RON"
         }
     return {
         "language": preferences.language or "en",
         "view_mode": preferences.view_mode or "list",
         "rent_warning_days": preferences.rent_warning_days if preferences.rent_warning_days is not None else 5,
-        "rent_currency": preferences.rent_currency if preferences.rent_currency else "EUR"
+        "rent_currency": preferences.rent_currency if preferences.rent_currency else "EUR",
+        "bill_currency": preferences.bill_currency if preferences.bill_currency else "EUR"
     }
 
 
@@ -58,6 +61,8 @@ async def save_preferences(
             existing.rent_warning_days = data.rent_warning_days
         if data.rent_currency is not None:
             existing.rent_currency = data.rent_currency
+        if data.bill_currency is not None:
+            existing.bill_currency = data.bill_currency
         preferences = existing
     else:
         # Create new preferences
@@ -66,16 +71,18 @@ async def save_preferences(
             language=data.language or "en",
             view_mode=data.view_mode or "list",
             rent_warning_days=data.rent_warning_days if data.rent_warning_days is not None else 5,
-            rent_currency=data.rent_currency if data.rent_currency else "EUR"
+            rent_currency=data.rent_currency if data.rent_currency else "EUR",
+            bill_currency=data.bill_currency if data.bill_currency else "EUR"
         )
     
     db.save_user_preferences(preferences)
-    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}")
+    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}")
     
     return {
         "language": preferences.language,
         "view_mode": preferences.view_mode,
         "rent_warning_days": preferences.rent_warning_days if preferences.rent_warning_days is not None else 5,
-        "rent_currency": preferences.rent_currency if preferences.rent_currency else "EUR"
+        "rent_currency": preferences.rent_currency if preferences.rent_currency else "EUR",
+        "bill_currency": preferences.bill_currency if preferences.bill_currency else "EUR"
     }
 

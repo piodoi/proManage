@@ -387,4 +387,5 @@ class UserPreferences(BaseModel):
     view_mode: Optional[str] = "list"  # View mode: "list" or "grid"
     rent_warning_days: Optional[int] = 5  # Number of days before rent due date to show warning
     rent_currency: Optional[str] = "EUR"  # Preferred currency for rent: "EUR", "RON", or "USD"
+    bill_currency: Optional[str] = "RON"  # Preferred currency for bills: "EUR", "RON", or "USD"
     updated_at: datetime = Field(default_factory=datetime.utcnow)

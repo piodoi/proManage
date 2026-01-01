@@ -18,7 +18,7 @@ type SettingsViewProps = {
 
 export default function SettingsView({ token, onError }: SettingsViewProps) {
   const { t } = useI18n();
-  const { preferences, setRentWarningDays, setRentCurrency } = usePreferences();
+  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
@@ -190,24 +190,45 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
                 {t('settings.rentWarningHelp')}
               </p>
             </div>
-            <div>
-              <Label className="text-slate-300">{t('settings.rentCurrency')}</Label>
-              <Select
-                value={preferences.rent_currency || 'EUR'}
-                onValueChange={(value) => setRentCurrency(value)}
-              >
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-700 border-slate-600">
-                  <SelectItem value="EUR">EUR</SelectItem>
-                  <SelectItem value="RON">RON</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500 mt-1">
-                {t('settings.rentCurrencyHelp')}
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-slate-300">{t('settings.rentCurrency')}</Label>
+                <Select
+                  value={preferences.rent_currency || 'EUR'}
+                  onValueChange={(value) => setRentCurrency(value)}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="RON">RON</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500 mt-1">
+                  {t('settings.rentCurrencyHelp')}
+                </p>
+              </div>
+              <div>
+                <Label className="text-slate-300">{t('settings.billCurrency')}</Label>
+                <Select
+                  value={preferences.bill_currency || 'RON'}
+                  onValueChange={(value) => setBillCurrency(value)}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="RON">RON</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500 mt-1">
+                  {t('settings.billCurrencyHelp')}
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>

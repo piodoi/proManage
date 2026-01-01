@@ -10,7 +10,8 @@ export function usePreferences() {
     language: 'en',
     view_mode: 'list',
     rent_warning_days: 5,
-    rent_currency: 'EUR'
+    rent_currency: 'EUR',
+    bill_currency: 'RON'
   });
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -87,6 +88,7 @@ export function usePreferences() {
     setViewMode: (view_mode: string) => savePreferences({ view_mode }),
     setRentWarningDays: (rent_warning_days: number) => savePreferences({ rent_warning_days }),
     setRentCurrency: (rent_currency: string) => savePreferences({ rent_currency }),
+    setBillCurrency: (bill_currency: string) => savePreferences({ bill_currency }),
     savePreferences,
   };
 }
