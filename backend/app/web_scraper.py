@@ -119,13 +119,16 @@ class WebScraper:
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             )
             self.page = await self.context.new_page()
-            # Set initial cookies if configured (after page is created)
-            if self.config.cookie_config:
-                await self._set_cookies_from_config()
+            # Note: Cookies with association_id/apartment_id will be set later in get_bills() when IDs are available
     
     async def _set_cookies_from_config(self, association_id: Optional[str] = None, apartment_id: Optional[str] = None):
-        """Set cookies from config, replacing placeholders with actual values"""
+        """Set cookies from config, replacing placeholders with actual values.
+        Only sets cookies when association_id is provided (required for cookie placeholders)."""
         if not self.config.cookie_config or not self.page:
+            return
+        
+        # Only set cookies if we have association_id (required for placeholders)
+        if not association_id:
             return
         
         try:
@@ -310,9 +313,7 @@ class WebScraper:
         if login_success:
             self.logged_in = True
             logger.info(f"[{self.config.supplier_name} Scraper] Login successful ({success_reason})")
-            # Set cookies after login if config requires it (but without association_id yet)
-            if self.config.cookie_config:
-                await self._set_cookies_from_config()
+            # Note: Cookies with association_id/apartment_id will be set in get_bills() when IDs are available
             return True
         
         logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - URL: {current_url}")
@@ -419,19 +420,20 @@ class WebScraper:
                     # Use bill number from header if available and bill doesn't have one
                     if bill_number_from_header and not bill.bill_number:
                         bill.bill_number = bill_number_from_header
-                        logger.info(f"[{self.config.supplier_name} Scraper] Set bill number from header: {bill.bill_number}")
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Set bill number from header: {bill.bill_number}")
                     
                     # Validate bill: must have both amount (can be 0) and bill_number (not None/empty)
                     if bill.bill_number and bill.amount is not None:
                         bills.append(bill)
-                        logger.info(f"[{self.config.supplier_name} Scraper] Extracted bill #{idx+1}: number={bill.bill_number}, amount={bill.amount}, contract_id={bill.contract_id}")
+                        # Only log at debug level to reduce noise
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Extracted bill #{idx+1}: number={bill.bill_number}, amount={bill.amount}, contract_id={bill.contract_id}")
                     else:
                         missing = []
                         if not bill.bill_number:
                             missing.append("bill_number")
                         if bill.amount is None:
                             missing.append("amount")
-                        logger.warning(f"[{self.config.supplier_name} Scraper] Skipping bill #{idx+1} - missing required fields: {', '.join(missing)}")
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Skipping bill #{idx+1} - missing required fields: {', '.join(missing)}")
                 else:
                     logger.warning(f"[{self.config.supplier_name} Scraper] Failed to extract bill from item #{idx+1}")
             
@@ -486,9 +488,10 @@ class WebScraper:
                 if elem:
                     amount_text = elem.get_text(strip=True)
                     bill.amount = self._parse_amount(amount_text)
-                    logger.info(f"[{self.config.supplier_name} Scraper] Extracted amount: {bill.amount} from selector {self.config.bill_amount_selector}")
+                    # Only log at debug level to reduce noise
+                    logger.debug(f"[{self.config.supplier_name} Scraper] Extracted amount: {bill.amount} from selector {self.config.bill_amount_selector}")
                 else:
-                    logger.warning(f"[{self.config.supplier_name} Scraper] Amount selector '{self.config.bill_amount_selector}' not found")
+                    logger.debug(f"[{self.config.supplier_name} Scraper] Amount selector '{self.config.bill_amount_selector}' not found")
             elif self.config.bill_amount_pattern:
                 text = item.get_text()
                 match = re.search(self.config.bill_amount_pattern, text)

@@ -94,58 +94,33 @@ async def _sync_supplier_scraper(
         scraped_bills = await scraper.get_bills()
         bills_found = len(scraped_bills)
         logger.info(f"[{supplier.name} Scraper] Found {bills_found} bill(s)")
-        # Log contract_ids from scraped bills for debugging
-        for idx, bill in enumerate(scraped_bills):
-            logger.info(f"[{supplier.name} Scraper] Scraped bill #{idx+1}: bill_number={bill.bill_number}, contract_id={bill.contract_id}, amount={bill.amount}")
         
         if progress_callback:
             progress_callback(supplier.name, "processing", bills_found, 0)
         
         existing_bills = db.list_bills(property_id=property_id)
         
+        # Process all bills in a single pass
         for scraped_bill in scraped_bills:
-            # Check if bill already exists
-            existing = None
-            if scraped_bill.bill_number:
-                existing = next(
-                    (b for b in existing_bills 
-                     if b.bill_number == scraped_bill.bill_number 
-                     and b.bill_type == supplier.bill_type),
-                    None
-                )
-            
-            if not existing and scraped_bill.due_date and scraped_bill.amount:
-                for b in existing_bills:
-                    if (b.bill_type == supplier.bill_type and 
-                        b.description == supplier.name and
-                        abs(b.amount - scraped_bill.amount) < 0.01):
-                        if b.due_date:
-                            days_diff = abs((b.due_date - scraped_bill.due_date).days)
-                            if days_diff <= 5:
-                                existing = b
-                                break
-            
-            # In discover_only mode, show all bills even if they exist (user can decide)
-            # In normal mode, skip duplicates to avoid creating duplicates
-            if existing and not discover_only:
-                logger.debug(f"[{supplier.name} Scraper] Bill {scraped_bill.bill_number} already exists, skipping")
-                continue
-            elif existing and discover_only:
-                logger.info(f"[{supplier.name} Scraper] Bill {scraped_bill.bill_number} already exists in DB, but showing in discover mode")
-            
+            # Extract basic fields first
             iban = scraped_bill.raw_data.get("iban") if scraped_bill.raw_data else None
             bill_number = scraped_bill.bill_number
             amount = scraped_bill.amount
             due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
             extracted_contract_id = scraped_bill.contract_id
-            logger.info(f"[{supplier.name} Scraper] Processing bill - bill_number: {bill_number}, amount: {amount}, extracted_contract_id: {extracted_contract_id}")
+            
+            # Filter by contract_id EARLY - before expensive operations
+            if contract_id_filter:
+                filter_str = str(contract_id_filter).strip()
+                extracted_str = str(extracted_contract_id).strip() if extracted_contract_id else None
+                if not extracted_str or extracted_str != filter_str:
+                    continue  # Skip early, no logging needed
             
             # Only parse PDF if we're missing critical information that might be in the PDF
-            # If we already have bill_number, amount, due_date, and contract_id from the page, skip PDF parsing
             needs_pdf_parsing = (
                 scraped_bill.pdf_content and 
                 supplier_pattern and 
-                (not scraped_bill.bill_number or not scraped_bill.amount or not scraped_bill.contract_id)
+                (not bill_number or not amount or not extracted_contract_id)
             )
             
             if needs_pdf_parsing:
@@ -179,22 +154,33 @@ async def _sync_supplier_scraper(
                 except Exception as e:
                     logger.warning(f"[{supplier.name} Scraper] Error parsing PDF: {e}")
             
-            # Filter by contract_id if specified
-            # If supplier has contract_id configured, only include bills with matching contract_id
-            # If supplier has no contract_id configured, include all bills
-            if contract_id_filter:
-                # Normalize both to strings for comparison (handle int/string differences)
-                filter_str = str(contract_id_filter).strip()
-                extracted_str = str(extracted_contract_id).strip() if extracted_contract_id else None
-                
-                # Supplier has contract_id configured - only show bills with matching contract_id
-                if not extracted_str or extracted_str != filter_str:
-                    logger.info(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch (expected: '{filter_str}', got: '{extracted_str}')")
-                    continue
-                logger.info(f"[{supplier.name} Scraper] Bill matches contract_id filter: '{filter_str}' (bill_number: {bill_number}, amount: {amount})")
-            else:
-                # Supplier has no contract_id configured - show all bills
-                logger.info(f"[{supplier.name} Scraper] No contract_id filter, including bill (contract_id: {extracted_contract_id}, bill_number: {bill_number}, amount: {amount})")
+            # Check if bill already exists (only check after filtering by contract_id)
+            existing = None
+            if bill_number:
+                existing = next(
+                    (b for b in existing_bills 
+                     if b.bill_number == bill_number 
+                     and b.bill_type == supplier.bill_type),
+                    None
+                )
+            
+            if not existing and due_date and amount:
+                for b in existing_bills:
+                    if (b.bill_type == supplier.bill_type and 
+                        b.description == supplier.name and
+                        abs(b.amount - amount) < 0.01):
+                        if b.due_date:
+                            days_diff = abs((b.due_date - due_date).days)
+                            if days_diff <= 5:
+                                existing = b
+                                break
+            
+            # In discover_only mode, show all bills even if they exist (user can decide)
+            # In normal mode, skip duplicates to avoid creating duplicates
+            if existing and not discover_only:
+                continue  # Skip silently
+            elif existing and discover_only:
+                logger.debug(f"[{supplier.name} Scraper] Bill {bill_number} already exists in DB, but showing in discover mode")
             
             if extracted_contract_id and not contract_id_to_save:
                 contract_id_to_save = extracted_contract_id
@@ -223,18 +209,16 @@ async def _sync_supplier_scraper(
                 if bills_callback:
                     bills_callback(bill_data)
                 bills_created += 1
-                logger.info(f"[{supplier.name} Scraper] Discovered bill: {supplier.name} - {amount} RON")
             else:
                 # Create and save bill
                 bill = Bill(**bill_data)
                 db.save_bill(bill)
                 bills_created += 1
-                logger.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
         
         if contract_id_to_save and property_supplier and not property_supplier.contract_id:
             property_supplier.contract_id = contract_id_to_save
             db.save_property_supplier(property_supplier)
-            logger.info(f"[{supplier.name} Scraper] Saved contract_id {contract_id_to_save} to property supplier")
+            logger.debug(f"[{supplier.name} Scraper] Saved contract_id {contract_id_to_save} to property supplier")
         
         if progress_callback:
             progress_callback(supplier.name, "completed", bills_found, bills_created)
