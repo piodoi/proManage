@@ -156,6 +156,14 @@
     "allProperty": "All / Property",
     "amountRequired": "Please fill in amount"
   },
+  "summary": {
+    "summary": "Summary",
+    "billsDue": "Bills Due",
+    "overdue": "Overdue",
+    "rentDueSoon": "Rent Due Soon",
+    "recentBills": "Recent Bills",
+    "rentsDue": "Rents Due"
+  },
   "supplier": {
     "suppliers": "Suppliers",
     "addSupplier": "Add Supplier",
@@ -370,7 +378,13 @@
     "expires": "Expires",
     "upgradeMessage": "Upgrade to add more properties. Contact admin for subscription.",
     "loadSubscriptionError": "Failed to load subscription",
-    "configureEmailError": "Failed to configure email"
+    "configureEmailError": "Failed to configure email",
+    "rentWarning": "Rent Warning Settings",
+    "rentWarningDesc": "Configure how many days before rent is due to show a warning in the summary.",
+    "warningBeforeRentDue": "Warning Before Rent is Due (days)",
+    "rentWarningHelp": "Set the number of days (1-30) before rent due date to show a warning. Default is 5 days.",
+    "rentCurrency": "Preferred Rent Currency",
+    "rentCurrencyHelp": "Select the preferred currency for displaying rent amounts. RON values will be converted and shown alongside."
   },
   "errors": {
     "generic": "An error occurred",

@@ -8,7 +8,9 @@ export function usePreferences() {
   const { token } = useAuth();
   const [preferences, setPreferences] = useState<Preferences>({
     language: 'en',
-    view_mode: 'list'
+    view_mode: 'list',
+    rent_warning_days: 5,
+    rent_currency: 'EUR'
   });
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -83,6 +85,8 @@ export function usePreferences() {
     loading,
     setLanguage: (language: string) => savePreferences({ language }),
     setViewMode: (view_mode: string) => savePreferences({ view_mode }),
+    setRentWarningDays: (rent_warning_days: number) => savePreferences({ rent_warning_days }),
+    setRentCurrency: (rent_currency: string) => savePreferences({ rent_currency }),
     savePreferences,
   };
 }

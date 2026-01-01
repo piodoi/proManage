@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useAuth } from '../App';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, Building2, Settings } from 'lucide-react';
+import { LogOut, Building2, Settings, FileText } from 'lucide-react';
 import LandlordView from '../components/LandlordView';
+import SummaryView from '../components/SummaryView';
 import SettingsView from '../components/SettingsView';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
@@ -42,8 +43,12 @@ export default function LandlordDashboard() {
           </div>
         )}
 
-        <Tabs defaultValue="property" className="space-y-4">
+        <Tabs defaultValue="summary" className="space-y-4">
           <TabsList className="bg-slate-800 border border-slate-700">
+            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700">
+              <FileText className="w-4 h-4 mr-2" />
+              {t('summary.summary')}
+            </TabsTrigger>
             <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
               <Building2 className="w-4 h-4 mr-2" />
               {t('property.properties')}
@@ -53,6 +58,10 @@ export default function LandlordDashboard() {
               {t('settings.settings')}
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="summary" className="space-y-4">
+            <SummaryView />
+          </TabsContent>
 
           <TabsContent value="property" className="space-y-4">
             <LandlordView token={token} onError={setError} hideSettings />

@@ -9,8 +9,10 @@ import SettingsView from './SettingsView';
 import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
 import EblocImportDialog from './dialogs/EblocImportDialog';
+import SummaryView from './SummaryView';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
+import { FileText } from 'lucide-react';
 
 type LandlordViewProps = {
   token: string | null;
@@ -182,8 +184,12 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
           )}
         </div>
       ) : (
-        <Tabs defaultValue="properties" className="space-y-4">
+        <Tabs defaultValue="summary" className="space-y-4">
           <TabsList className="bg-slate-800 border border-slate-700">
+            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700">
+              <FileText className="w-4 h-4 mr-2" />
+              {t('summary.summary')}
+            </TabsTrigger>
             <TabsTrigger value="properties" className="data-[state=active]:bg-slate-700">
               <Building2 className="w-4 h-4 mr-2" />
               {t('property.properties')}
@@ -193,6 +199,10 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
               {t('settings.settings')}
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="summary" className="space-y-4">
+            <SummaryView />
+          </TabsContent>
 
           <TabsContent value="properties" className="space-y-4">
             <div className="flex justify-between items-center">

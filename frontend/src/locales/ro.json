@@ -164,6 +164,14 @@
     "allProperty": "Toți / Proprietate",
     "amountRequired": "Te rog completează suma"
   },
+  "summary": {
+    "summary": "Rezumat",
+    "billsDue": "Facturi Scadente",
+    "overdue": "Restante",
+    "rentDueSoon": "Chirie Scadenta Curand",
+    "recentBills": "Facturi Recente",
+    "rentsDue": "Chirii Scadente"
+  },
   "supplier": {
     "suppliers": "Furnizori",
     "addSupplier": "Adaugă Furnizor",
@@ -363,7 +371,13 @@
     "expires": "Expiră",
     "upgradeMessage": "Actualizează pentru a adăuga mai multe proprietăți. Contactează administratorul pentru abonament.",
     "loadSubscriptionError": "Eșec la încărcarea abonamentului",
-    "configureEmailError": "Eșec la configurarea email-ului"
+    "configureEmailError": "Eșec la configurarea email-ului",
+    "rentWarning": "Setări Avertisment Chirie",
+    "rentWarningDesc": "Configurați câte zile înainte de scadența chiriei să se afișeze un avertisment în rezumat.",
+    "warningBeforeRentDue": "Avertisment Înainte de Scadența Chiriei (zile)",
+    "rentWarningHelp": "Setați numărul de zile (1-30) înainte de data scadenței chiriei pentru a afișa un avertisment. Implicit este 5 zile.",
+    "rentCurrency": "Monedă Preferată pentru Chirie",
+    "rentCurrencyHelp": "Selectați moneda preferată pentru afișarea sumelor de chirie. Valorile în RON vor fi convertite și afișate alături."
   },
   "errors": {
     "generic": "A apărut o eroare",

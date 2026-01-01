@@ -1,0 +1,498 @@
+import { useState, useEffect, useMemo } from 'react';
+import { api, Property, Renter, Bill } from '../api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useI18n } from '../lib/i18n';
+import { useAuth } from '../App';
+import { usePreferences } from '../hooks/usePreferences';
+
+export default function SummaryView() {
+  const { t } = useI18n();
+  const { token } = useAuth();
+  const { preferences } = usePreferences();
+  const rentWarningDays = preferences.rent_warning_days || 5;
+  const rentCurrency = preferences.rent_currency || 'EUR';
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [renters, setRenters] = useState<Record<string, Renter[]>>({});
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
+
+  useEffect(() => {
+    if (token) {
+      loadData();
+      loadExchangeRates();
+    }
+  }, [token]);
+
+  const loadExchangeRates = async () => {
+    try {
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/EUR');
+      if (!response.ok) throw new Error('Failed to fetch exchange rates');
+      const data = await response.json();
+      setExchangeRates({
+        EUR: 1,
+        USD: data.rates?.USD || 1.1,
+        RON: data.rates?.RON || 4.97,
+      });
+    } catch (err) {
+      console.error('[SummaryView] Failed to load exchange rates:', err);
+      setExchangeRates({ EUR: 1, USD: 1.1, RON: 4.97 });
+    }
+  };
+
+  const loadData = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const [propsData, billsData] = await Promise.all([
+        api.properties.list(token),
+        api.bills.list(token),
+      ]);
+
+      setProperties(propsData);
+      setBills(billsData);
+
+      const rentersMap: Record<string, Renter[]> = {};
+      for (const prop of propsData) {
+        const rentersData = await api.renters.list(token, prop.id);
+        rentersMap[prop.id] = rentersData;
+      }
+      setRenters(rentersMap);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const summaryData = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Group properties by whether they have renters
+    const propertiesWithRenters: Array<{
+      property: Property;
+      renters: Renter[];
+      billsDue: Bill[];
+      overdueBills: Bill[];
+      rentBillsDueSoon: Bill[];
+      totalBillsDue: number;
+      totalRentDue: number;
+      totalOtherBillsDue: number;
+      totalOverdue: number;
+      totalRentDueSoon: number;
+      billsForDescription: Bill[];
+      hasMoreBills: boolean;
+      suppliers: Set<string>;
+    }> = [];
+    
+    const propertiesWithoutRenters: Array<{
+      property: Property;
+      billsDue: Bill[];
+      overdueBills: Bill[];
+      rentBillsDueSoon: Bill[];
+      totalBillsDue: number;
+      totalRentDue: number;
+      totalOtherBillsDue: number;
+      totalOverdue: number;
+      totalRentDueSoon: number;
+      billsForDescription: Bill[];
+      hasMoreBills: boolean;
+      suppliers: Set<string>;
+    }> = [];
+
+    properties.forEach(property => {
+      const propertyRenters = renters[property.id] || [];
+      const propertyBills = bills.filter(b => b.property_id === property.id);
+      
+      // Calculate bills due (pending bills with due_date >= today) - EXCLUDE RENT BILLS
+      const billsDue = propertyBills.filter(b => {
+        if (b.status !== 'pending') return false;
+        if (b.bill_type === 'rent') return false; // Exclude rent bills
+        const billDate = new Date(b.due_date);
+        billDate.setHours(0, 0, 0, 0);
+        return billDate >= today;
+      });
+      
+      // Calculate overdue bills (pending or overdue status with due_date < today) - EXCLUDE RENT BILLS
+      const overdueBills = propertyBills.filter(b => {
+        if (b.bill_type === 'rent') return false; // Exclude rent bills
+        if (b.status !== 'pending' && b.status !== 'overdue') return false;
+        const billDate = new Date(b.due_date);
+        billDate.setHours(0, 0, 0, 0);
+        return billDate < today;
+      });
+      
+      // Calculate rent bills due within configured warning days (0-N days from today)
+      const rentBillsDueSoon = propertyBills.filter(b => {
+        if (b.bill_type !== 'rent') return false;
+        if (b.status !== 'pending' && b.status !== 'overdue') return false;
+        const billDate = new Date(b.due_date);
+        billDate.setHours(0, 0, 0, 0);
+        const daysUntilDue = Math.ceil((billDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        return daysUntilDue >= 0 && daysUntilDue <= rentWarningDays;
+      });
+      
+      // Get first 4 bills for description
+      const billsForDescription = billsDue.slice(0, 4);
+      const hasMoreBills = billsDue.length > 4;
+      
+      // Extract supplier names from non-rent bills (from description or bill_type)
+      const suppliers = new Set<string>();
+      [...billsDue, ...overdueBills].forEach(bill => {
+        if (bill.bill_type === 'ebloc') {
+          suppliers.add('E-bloc');
+        } else if (bill.bill_type === 'utilities') {
+          // Try to extract supplier name from description
+          const desc = bill.description || '';
+          // Common patterns: "Hidroelectrica", "Enel", etc.
+          const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+          if (supplierMatch) {
+            suppliers.add(supplierMatch[1].trim());
+          } else {
+            suppliers.add('Utilities');
+          }
+        } else if (bill.bill_type === 'other') {
+          const desc = bill.description || '';
+          const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+          if (supplierMatch) {
+            suppliers.add(supplierMatch[1].trim());
+          } else {
+            suppliers.add('Other');
+          }
+        }
+      });
+      
+      // Calculate totals - separate rent bills from other bills
+      const rentBillsDue = propertyBills.filter(b => {
+        if (b.bill_type !== 'rent') return false;
+        if (b.status !== 'pending') return false;
+        const billDate = new Date(b.due_date);
+        billDate.setHours(0, 0, 0, 0);
+        return billDate >= today;
+      });
+      const totalRentDue = rentBillsDue.reduce((sum, b) => sum + b.amount, 0);
+      const totalOtherBillsDue = billsDue.reduce((sum, b) => sum + b.amount, 0);
+      const totalBillsDue = totalRentDue + totalOtherBillsDue; // For property display
+      const totalOverdue = overdueBills.reduce((sum, b) => sum + b.amount, 0);
+      const totalRentDueSoon = rentBillsDueSoon.reduce((sum, b) => sum + b.amount, 0);
+      
+      const propertyData = {
+        property,
+        billsDue,
+        overdueBills,
+        rentBillsDueSoon,
+        billsForDescription,
+        hasMoreBills,
+        totalBillsDue,
+        totalRentDue,
+        totalOtherBillsDue,
+        totalOverdue,
+        totalRentDueSoon,
+        suppliers,
+      };
+
+      if (propertyRenters.length > 0) {
+        propertiesWithRenters.push({
+          ...propertyData,
+          renters: propertyRenters,
+        });
+      } else {
+        propertiesWithoutRenters.push(propertyData);
+      }
+    });
+
+    // Calculate overall totals - grouped by properties with/without renters
+    const totalsWithRenters = {
+      totalBillsDue: propertiesWithRenters.reduce((sum, p) => sum + p.totalBillsDue, 0),
+      totalRentDue: propertiesWithRenters.reduce((sum, p) => sum + p.totalRentDue, 0),
+      totalOtherBillsDue: propertiesWithRenters.reduce((sum, p) => sum + p.totalOtherBillsDue, 0),
+      totalOverdue: propertiesWithRenters.reduce((sum, p) => sum + p.totalOverdue, 0),
+      totalRentDueSoon: propertiesWithRenters.reduce((sum, p) => sum + p.totalRentDueSoon, 0),
+      suppliers: new Set<string>(),
+    };
+    propertiesWithRenters.forEach(p => {
+      p.suppliers.forEach(s => totalsWithRenters.suppliers.add(s));
+    });
+    
+    const totalsWithoutRenters = {
+      totalBillsDue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalBillsDue, 0),
+      totalRentDue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalRentDue, 0),
+      totalOtherBillsDue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalOtherBillsDue, 0),
+      totalOverdue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalOverdue, 0),
+      totalRentDueSoon: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalRentDueSoon, 0),
+      suppliers: new Set<string>(),
+    };
+    propertiesWithoutRenters.forEach(p => {
+      p.suppliers.forEach(s => totalsWithoutRenters.suppliers.add(s));
+    });
+
+    // Combine all properties for display (no separation)
+    const allProperties = [
+      ...propertiesWithRenters.map(p => ({ ...p, hasRenters: true })),
+      ...propertiesWithoutRenters.map(p => ({ ...p, hasRenters: false }))
+    ];
+
+    return {
+      allProperties,
+      totalsWithRenters,
+      totalsWithoutRenters,
+      overallBillsDue: totalsWithRenters.totalOtherBillsDue + totalsWithoutRenters.totalOtherBillsDue, // Only non-rent bills
+      overallOverdue: totalsWithRenters.totalOverdue + totalsWithoutRenters.totalOverdue,
+      overallRentDueSoon: totalsWithRenters.totalRentDueSoon + totalsWithoutRenters.totalRentDueSoon,
+    };
+  }, [properties, renters, bills, rentWarningDays]);
+
+  const formatAmount = (amount: number, currency: string = 'RON') => {
+    return new Intl.NumberFormat('ro-RO', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
+
+  const formatRentAmount = (amountRON: number) => {
+    const rentCurrencyUpper = rentCurrency.toUpperCase();
+    
+    // If preferred currency is RON, show only RON
+    if (rentCurrencyUpper === 'RON') {
+      return formatAmount(amountRON, 'RON');
+    }
+    
+    // Convert RON to preferred currency
+    // Exchange rates are relative to EUR: RON = 4.97 means 1 EUR = 4.97 RON
+    // So: amountRON / RON_rate = amount in EUR
+    const ronRate = exchangeRates.RON;
+    let convertedAmount = 0;
+    
+    if (rentCurrencyUpper === 'EUR') {
+      convertedAmount = amountRON / ronRate;
+    } else if (rentCurrencyUpper === 'USD') {
+      const usdRate = exchangeRates.USD; // USD per EUR
+      convertedAmount = (amountRON / ronRate) * usdRate;
+    } else {
+      // Fallback to RON only
+      return formatAmount(amountRON, 'RON');
+    }
+    
+    // Show both RON and preferred currency
+    return (
+      <span>
+        {formatAmount(amountRON, 'RON')} / {formatAmount(convertedAmount, rentCurrencyUpper)}
+      </span>
+    );
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return dateString;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-slate-400 text-center py-8">{t('common.loading')}</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-400 text-center py-8">{error}</div>
+    );
+  }
+
+  const { allProperties, totalsWithRenters, totalsWithoutRenters, overallBillsDue, overallOverdue, overallRentDueSoon } = summaryData;
+
+  return (
+    <div className="space-y-6">
+      {/* Overall Summary Header */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-slate-100 text-xl">Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+              <p className="text-xs text-slate-400 mb-1">{t('summary.billsDue')}</p>
+              <p className="text-2xl font-semibold text-slate-100">
+                {formatAmount(overallBillsDue)}
+              </p>
+            </div>
+            {overallOverdue > 0 && (
+              <div className="bg-red-900/20 rounded-lg p-4 border border-red-700/50">
+                <p className="text-xs text-red-400 mb-1">{t('summary.overdue')}</p>
+                <p className="text-2xl font-semibold text-red-300">
+                  {formatAmount(overallOverdue)}
+                </p>
+              </div>
+            )}
+            {overallRentDueSoon > 0 && (
+              <div className="bg-yellow-900/20 rounded-lg p-4 border border-yellow-700/50">
+                <p className="text-xs text-yellow-400 mb-1">{t('summary.rentDueSoon')}</p>
+                <p className="text-2xl font-semibold text-yellow-300">
+                  {formatRentAmount(overallRentDueSoon)}
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Grouped Totals */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Properties with Renters - Totals */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-slate-100 text-lg">
+              Properties with Renters - Totals
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+              <p className="text-xs text-slate-400 mb-1">{t('summary.rentsDue')}</p>
+              <p className="text-xl font-semibold text-slate-100">
+                {formatRentAmount(totalsWithRenters.totalRentDue)}
+              </p>
+            </div>
+            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+              <p className="text-xs text-slate-400 mb-1">{t('summary.billsDue')}</p>
+              <p className="text-xl font-semibold text-slate-100">
+                {formatAmount(totalsWithRenters.totalOtherBillsDue)}
+              </p>
+              {totalsWithRenters.suppliers.size > 0 && (
+                <p className="text-xs text-slate-500 mt-2">
+                  {Array.from(totalsWithRenters.suppliers).join(', ')}
+                </p>
+              )}
+            </div>
+            {totalsWithRenters.totalOverdue > 0 && (
+              <div className="bg-red-900/20 rounded-lg p-3 border border-red-700/50">
+                <p className="text-xs text-red-400 mb-1">{t('summary.overdue')}</p>
+                <p className="text-xl font-semibold text-red-300">
+                  {formatAmount(totalsWithRenters.totalOverdue)}
+                </p>
+              </div>
+            )}
+            {totalsWithRenters.totalRentDueSoon > 0 && (
+              <div className="bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/50">
+                <p className="text-xs text-yellow-400 mb-1">{t('summary.rentDueSoon')}</p>
+                <p className="text-xl font-semibold text-yellow-300">
+                  {formatRentAmount(totalsWithRenters.totalRentDueSoon)}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Properties without Renters - Totals */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-slate-100 text-lg">
+              Properties without Renters - Totals
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+              <p className="text-xs text-slate-400 mb-1">{t('summary.rentsDue')}</p>
+              <p className="text-xl font-semibold text-slate-100">
+                {formatRentAmount(totalsWithoutRenters.totalRentDue)}
+              </p>
+            </div>
+            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+              <p className="text-xs text-slate-400 mb-1">{t('summary.billsDue')}</p>
+              <p className="text-xl font-semibold text-slate-100">
+                {formatAmount(totalsWithoutRenters.totalOtherBillsDue)}
+              </p>
+              {totalsWithoutRenters.suppliers.size > 0 && (
+                <p className="text-xs text-slate-500 mt-2">
+                  {Array.from(totalsWithoutRenters.suppliers).join(', ')}
+                </p>
+              )}
+            </div>
+            {totalsWithoutRenters.totalOverdue > 0 && (
+              <div className="bg-red-900/20 rounded-lg p-3 border border-red-700/50">
+                <p className="text-xs text-red-400 mb-1">{t('summary.overdue')}</p>
+                <p className="text-xl font-semibold text-red-300">
+                  {formatAmount(totalsWithoutRenters.totalOverdue)}
+                </p>
+              </div>
+            )}
+            {totalsWithoutRenters.totalRentDueSoon > 0 && (
+              <div className="bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/50">
+                <p className="text-xs text-yellow-400 mb-1">{t('summary.rentDueSoon')}</p>
+                <p className="text-xl font-semibold text-yellow-300">
+                  {formatRentAmount(totalsWithoutRenters.totalRentDueSoon)}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Compact Property List */}
+      {allProperties.length > 0 && (
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-slate-100 text-lg">Properties</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {allProperties.map(({ property, renters: propertyRenters, totalBillsDue, totalOverdue, totalRentDueSoon, hasRenters }) => (
+                <div key={property.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-100 truncate">{property.name}</h3>
+                    {hasRenters && propertyRenters && propertyRenters.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {propertyRenters.slice(0, 2).map(renter => (
+                          <span
+                            key={renter.id}
+                            className="px-1.5 py-0.5 bg-slate-600 text-slate-200 rounded text-xs"
+                          >
+                            {renter.name}
+                          </span>
+                        ))}
+                        {propertyRenters.length > 2 && (
+                          <span className="px-1.5 py-0.5 bg-slate-600 text-slate-400 rounded text-xs">
+                            +{propertyRenters.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2 ml-3 flex-shrink-0">
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">{t('summary.billsDue')}</p>
+                      <p className="text-sm font-semibold text-slate-100">{formatAmount(totalBillsDue)}</p>
+                    </div>
+                    {totalOverdue > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-red-400">{t('summary.overdue')}</p>
+                        <p className="text-sm font-semibold text-red-300">{formatAmount(totalOverdue)}</p>
+                      </div>
+                    )}
+                    {totalRentDueSoon > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-yellow-400">{t('summary.rentDueSoon')}</p>
+                        <p className="text-sm font-semibold text-yellow-300">{formatRentAmount(totalRentDueSoon)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {properties.length === 0 && (
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="py-8 text-center text-slate-400">
+            {t('property.noProperties')}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

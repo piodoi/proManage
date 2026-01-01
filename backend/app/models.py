@@ -385,4 +385,6 @@ class UserPreferences(BaseModel):
     user_id: str  # Reference to User.id
     language: Optional[str] = "en"  # Language code: "en" or "ro"
     view_mode: Optional[str] = "list"  # View mode: "list" or "grid"
+    rent_warning_days: Optional[int] = 5  # Number of days before rent due date to show warning
+    rent_currency: Optional[str] = "EUR"  # Preferred currency for rent: "EUR", "RON", or "USD"
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -200,7 +200,9 @@ async def auth_login(data: LoginRequest, request: Request):
     preferences = db.get_user_preferences(user.id)
     preferences_data = {
         "language": preferences.language if preferences else "en",
-        "view_mode": preferences.view_mode if preferences else "list"
+        "view_mode": preferences.view_mode if preferences else "list",
+        "rent_warning_days": preferences.rent_warning_days if preferences and preferences.rent_warning_days is not None else 5,
+        "rent_currency": preferences.rent_currency if preferences and preferences.rent_currency else "EUR"
     }
     
     return {
@@ -263,7 +265,9 @@ async def auth_google(id_token: str, request: Request):
     preferences = db.get_user_preferences(user.id)
     preferences_data = {
         "language": preferences.language if preferences else "en",
-        "view_mode": preferences.view_mode if preferences else "list"
+        "view_mode": preferences.view_mode if preferences else "list",
+        "rent_warning_days": preferences.rent_warning_days if preferences and preferences.rent_warning_days is not None else 5,
+        "rent_currency": preferences.rent_currency if preferences and preferences.rent_currency else "EUR"
     }
     
     return {
@@ -315,7 +319,9 @@ async def auth_facebook(token: str, request: Request):
     preferences = db.get_user_preferences(user.id)
     preferences_data = {
         "language": preferences.language if preferences else "en",
-        "view_mode": preferences.view_mode if preferences else "list"
+        "view_mode": preferences.view_mode if preferences else "list",
+        "rent_warning_days": preferences.rent_warning_days if preferences and preferences.rent_warning_days is not None else 5,
+        "rent_currency": preferences.rent_currency if preferences and preferences.rent_currency else "EUR"
     }
     
     return {
@@ -354,7 +360,9 @@ async def auth_demo(email: str, name: str, request: Request):
     preferences = db.get_user_preferences(user.id)
     preferences_data = {
         "language": preferences.language if preferences else "en",
-        "view_mode": preferences.view_mode if preferences else "list"
+        "view_mode": preferences.view_mode if preferences else "list",
+        "rent_warning_days": preferences.rent_warning_days if preferences and preferences.rent_warning_days is not None else 5,
+        "rent_currency": preferences.rent_currency if preferences and preferences.rent_currency else "EUR"
     }
     
     return {

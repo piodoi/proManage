@@ -14,6 +14,7 @@ import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/p
 import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
+import SummaryView from '../components/SummaryView';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
 
@@ -267,8 +268,12 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <Tabs defaultValue="property" className="space-y-4">
+        <Tabs defaultValue="summary" className="space-y-4">
           <TabsList className="bg-slate-800 border border-slate-700">
+            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700">
+              <FileText className="w-4 h-4 mr-2" />
+              {t('summary.summary')}
+            </TabsTrigger>
             <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
               <Building2 className="w-4 h-4 mr-2" />
               {t('property.properties')}
@@ -282,6 +287,10 @@ export default function AdminDashboard() {
               {t('admin.adminTab')}
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="summary" className="space-y-4">
+            <SummaryView />
+          </TabsContent>
 
           <TabsContent value="property" className="space-y-4">
             <LandlordView token={token} onError={setError} hideSettings />

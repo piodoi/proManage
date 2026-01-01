@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, Settings } from 'lucide-react';
+import { Mail, Settings, AlertCircle } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { usePreferences } from '../hooks/usePreferences';
 import SupplierCredentialsSettings from './SupplierCredentialsSettings';
 
 type SettingsViewProps = {
@@ -17,15 +18,23 @@ type SettingsViewProps = {
 
 export default function SettingsView({ token, onError }: SettingsViewProps) {
   const { t } = useI18n();
+  const { preferences, setRentWarningDays, setRentCurrency } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
+  const [rentWarningDaysInput, setRentWarningDaysInput] = useState<string>('');
 
   useEffect(() => {
     if (token) {
       loadSubscription();
     }
   }, [token]);
+
+  useEffect(() => {
+    if (preferences.rent_warning_days !== undefined) {
+      setRentWarningDaysInput(preferences.rent_warning_days.toString());
+    }
+  }, [preferences.rent_warning_days]);
 
   const loadSubscription = async () => {
     if (!token) return;
@@ -144,6 +153,63 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-slate-100 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            {t('settings.rentWarning')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-slate-400 text-sm">
+            {t('settings.rentWarningDesc')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-slate-300">{t('settings.warningBeforeRentDue')}</Label>
+              <Input
+                type="number"
+                min="1"
+                max="30"
+                value={rentWarningDaysInput}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setRentWarningDaysInput(value);
+                  const numValue = parseInt(value, 10);
+                  if (!isNaN(numValue) && numValue >= 1 && numValue <= 30) {
+                    setRentWarningDays(numValue);
+                  }
+                }}
+                className="bg-slate-700 border-slate-600 text-slate-100 mt-1"
+                placeholder="5"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {t('settings.rentWarningHelp')}
+              </p>
+            </div>
+            <div>
+              <Label className="text-slate-300">{t('settings.rentCurrency')}</Label>
+              <Select
+                value={preferences.rent_currency || 'EUR'}
+                onValueChange={(value) => setRentCurrency(value)}
+              >
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-700 border-slate-600">
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="RON">RON</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                {t('settings.rentCurrencyHelp')}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

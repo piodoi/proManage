@@ -358,6 +358,8 @@ export type PaymentCreate = {
 export type Preferences = {
   language: string;
   view_mode: string;
+  rent_warning_days: number;
+  rent_currency: string;
 };
 
 export type AuthResponse = {
