@@ -14,7 +14,7 @@
   {
     "name": "E-bloc",
     "bill_type": "ebloc",
-    "has_api": true,
+    "has_api": false,
     "extraction_pattern_supplier": "E-Bloc"
   },
   {
@@ -48,4 +48,3 @@
     "extraction_pattern_supplier": "Vodafone"
   }
 ]
-
