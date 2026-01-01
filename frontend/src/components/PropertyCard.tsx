@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { ExternalLink, Trash2, Pencil, Copy, Settings } from 'lucide-react';
+import { ExternalLink, Trash2, Pencil, Copy, Settings, MessageCircle } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
 import { useI18n } from '../lib/i18n';
+import { usePreferences } from '../hooks/usePreferences';
 
 type PropertyCardProps = {
   token: string | null;
@@ -32,18 +33,57 @@ export default function PropertyCard({
   onError,
 }: PropertyCardProps) {
   const { t } = useI18n();
+  const { preferences } = usePreferences();
   const [showRenterDialog, setShowRenterDialog] = useState(false);
   const [showSupplierSettings, setShowSupplierSettings] = useState(false);
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
-  const [renterLink, setRenterLink] = useState<{ token: string; link: string } | null>(null);
+  const [renterLink, setRenterLink] = useState<{ token: string; link: string; renter: Renter | null } | null>(null);
 
   const handleGetRenterLink = async (renterId: string) => {
     if (!token) return;
     try {
       const link = await api.renters.getLink(token, renterId);
-      setRenterLink({ token: link.access_token, link: link.link });
+      const renter = renters.find(r => r.id === renterId) || null;
+      setRenterLink({ token: link.access_token, link: link.link, renter });
     } catch (err) {
       onError(err instanceof Error ? err.message : t('errors.generic'));
+    }
+  };
+
+  // WhatsApp message template - customize this message in locales/en.json and locales/ro.json under renter.whatsAppMessage
+  const getWhatsAppMessage = (link: string): string => {
+    return t('renter.whatsAppMessage').replace('{link}', link);
+  };
+
+  const getWhatsAppUrl = (): string | null => {
+    if (!renterLink || !renterLink.renter) return null;
+    
+    const userPhone = preferences.phone_number;
+    const renterPhone = renterLink.renter.phone;
+    
+    if (!userPhone || !renterPhone) return null;
+    
+    // Clean phone number: remove all non-digit characters
+    const cleanPhone = renterPhone.replace(/\D/g, '');
+    
+    const link = `${window.location.origin}/renter/${renterLink.token}`;
+    const message = getWhatsAppMessage(link);
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    
+    return whatsappUrl;
+  };
+
+  const handleSendToWhatsApp = () => {
+    const whatsappUrl = getWhatsAppUrl();
+    if (whatsappUrl) {
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
+  const handleCopyWhatsAppLink = async () => {
+    const whatsappUrl = getWhatsAppUrl();
+    if (whatsappUrl) {
+      await navigator.clipboard.writeText(whatsappUrl);
     }
   };
 
@@ -220,6 +260,31 @@ export default function PropertyCard({
                 <Copy className="w-4 h-4" />
               </Button>
             </div>
+            {renterLink && renterLink.renter && (
+              <div className="pt-2 space-y-2">
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSendToWhatsApp}
+                    disabled={!preferences.phone_number || !renterLink.renter?.phone}
+                    variant="outline"
+                    className="flex-1 border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={(!preferences.phone_number || !renterLink.renter?.phone) ? t('renter.whatsAppUnavailable') : t('renter.sendToWhatsApp')}
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    {t('renter.sendToWhatsApp')}
+                  </Button>
+                  <Button
+                    onClick={handleCopyWhatsAppLink}
+                    disabled={!preferences.phone_number || !renterLink.renter?.phone}
+                    variant="outline"
+                    className="border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={(!preferences.phone_number || !renterLink.renter?.phone) ? t('renter.whatsAppUnavailable') : 'Copy WhatsApp link'}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

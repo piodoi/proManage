@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, Settings, AlertCircle } from 'lucide-react';
+import { Mail, Settings, AlertCircle, Phone } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import SupplierCredentialsSettings from './SupplierCredentialsSettings';
@@ -18,11 +18,12 @@ type SettingsViewProps = {
 
 export default function SettingsView({ token, onError }: SettingsViewProps) {
   const { t } = useI18n();
-  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency } = usePreferences();
+  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setPhoneNumber } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
   const [rentWarningDaysInput, setRentWarningDaysInput] = useState<string>('');
+  const [phoneNumberInput, setPhoneNumberInput] = useState<string>('');
 
   useEffect(() => {
     if (token) {
@@ -35,6 +36,14 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
       setRentWarningDaysInput(preferences.rent_warning_days.toString());
     }
   }, [preferences.rent_warning_days]);
+
+  useEffect(() => {
+    setPhoneNumberInput(preferences.phone_number || '');
+  }, [preferences.phone_number]);
+
+  const handleSavePhoneNumber = () => {
+    setPhoneNumber(phoneNumberInput || null);
+  };
 
   const loadSubscription = async () => {
     if (!token) return;
@@ -230,6 +239,41 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
                 </p>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-slate-100 flex items-center gap-2">
+            <Phone className="w-5 h-5" />
+            {t('settings.phoneNumber')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-slate-400 text-sm">
+            {t('settings.phoneNumberDesc')}
+          </p>
+          <div>
+            <Label className="text-slate-300">{t('settings.phoneNumberLabel')}</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                type="tel"
+                value={phoneNumberInput}
+                onChange={(e) => setPhoneNumberInput(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-slate-100"
+                placeholder={t('settings.phoneNumberPlaceholder')}
+              />
+              <Button
+                onClick={handleSavePhoneNumber}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {t('common.save')}
+              </Button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {t('settings.phoneNumberHelp')}
+            </p>
           </div>
         </CardContent>
       </Card>

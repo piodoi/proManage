@@ -393,4 +393,5 @@ class UserPreferences(BaseModel):
     rent_warning_days: Optional[int] = 5  # Number of days before rent due date to show warning
     rent_currency: Optional[str] = "EUR"  # Preferred currency for rent: "EUR", "RON", or "USD"
     bill_currency: Optional[str] = "RON"  # Preferred currency for bills: "EUR", "RON", or "USD"
+    phone_number: Optional[str] = None  # User's phone number with country code for WhatsApp
     updated_at: datetime = Field(default_factory=datetime.utcnow)

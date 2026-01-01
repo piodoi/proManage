@@ -125,6 +125,9 @@
     "updateRenter": "Actualizează Chiriaș",
     "accessLinkTitle": "Link Acces Chiriaș",
     "accessLinkDescription": "Distribuie acest link chiriașului tău. Poate folosi link-ul pentru a-și vizualiza și plăti facturile fără să se autentifice.",
+    "sendToWhatsApp": "Trimite pe WhatsApp",
+    "whatsAppUnavailable": "Partajarea WhatsApp necesită ca atât numărul dvs. de telefon cât și numărul de telefon al chiriașului să fie setate.",
+    "whatsAppMessage": "Salut! Link-ul cu situatia facturilo la zi: {link}",
     "dueDay": "Zi scadență",
     "start": "Început",
     "amountToPay": "Sumă de Plătit",
@@ -381,7 +384,12 @@
     "rentCurrency": "Monedă Preferată pentru Chirie",
     "rentCurrencyHelp": "Selectați moneda preferată pentru afișarea sumelor de chirie. Valorile în RON vor fi convertite și afișate alături.",
     "billCurrency": "Monedă Preferată pentru Facturi",
-    "billCurrencyHelp": "Selectați moneda preferată pentru afișarea sumelor de facturi. Valorile în RON vor fi convertite și afișate alături."
+    "billCurrencyHelp": "Selectați moneda preferată pentru afișarea sumelor de facturi. Valorile în RON vor fi convertite și afișate alături.",
+    "phoneNumber": "Număr de Telefon",
+    "phoneNumberDesc": "Adăugați numărul dvs. de telefon cu codul de țară pentru a activa funcțiile de partajare WhatsApp.",
+    "phoneNumberLabel": "Număr de Telefon (cu cod de țară)",
+    "phoneNumberPlaceholder": "+40712345678",
+    "phoneNumberHelp": "Introduceți numărul dvs. complet de telefon inclusiv codul de țară (ex: +40712345678). Este necesar pentru partajarea WhatsApp."
   },
   "errors": {
     "generic": "A apărut o eroare",

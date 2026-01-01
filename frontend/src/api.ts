@@ -366,6 +366,7 @@ export type Preferences = {
   rent_warning_days: number;
   rent_currency: string;
   bill_currency: string;
+  phone_number?: string | null;
 };
 
 export type AuthResponse = {

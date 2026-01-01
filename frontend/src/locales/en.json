@@ -125,6 +125,9 @@
     "updateRenter": "Update Renter",
     "accessLinkTitle": "Renter Access Link",
     "accessLinkDescription": "Share this link with your renter. They can use it to view and pay their bills without logging in.",
+    "sendToWhatsApp": "Send to WhatsApp",
+    "whatsAppUnavailable": "WhatsApp sharing requires both your phone number and the renter's phone number to be set.",
+    "whatsAppMessage": "Hello! Here's your renter access link: {link}",
     "dueDay": "Due day",
     "start": "Start"
   },
@@ -388,7 +391,12 @@
     "rentCurrency": "Preferred Rent Currency",
     "rentCurrencyHelp": "Select the preferred currency for displaying rent amounts. RON values will be converted and shown alongside.",
     "billCurrency": "Preferred Bill Currency",
-    "billCurrencyHelp": "Select the preferred currency for displaying bill amounts. RON values will be converted and shown alongside."
+    "billCurrencyHelp": "Select the preferred currency for displaying bill amounts. RON values will be converted and shown alongside.",
+    "phoneNumber": "Phone Number",
+    "phoneNumberDesc": "Add your phone number with country code to enable WhatsApp sharing features.",
+    "phoneNumberLabel": "Phone Number (with country code)",
+    "phoneNumberPlaceholder": "+1234567890",
+    "phoneNumberHelp": "Enter your full phone number including country code (e.g., +40712345678). This is required for WhatsApp sharing."
   },
   "errors": {
     "generic": "An error occurred",
