@@ -36,7 +36,7 @@ export default function SupplierSyncDialog({
   const [progress, setProgress] = useState<SupplierProgress[]>([]);
   const [totalBillsCreated, setTotalBillsCreated] = useState(0);
   const [syncId, setSyncId] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const progressMapRef = useRef<Map<string, SupplierProgress>>(new Map());
 
   useEffect(() => {
@@ -53,17 +53,7 @@ export default function SupplierSyncDialog({
       const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const url = `${apiBaseUrl}/suppliers/sync/${property.id}?sync_id=${newSyncId}`;
 
-      // Create EventSource for SSE
-      const eventSource = new EventSource(url, {
-        withCredentials: false,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      } as any); // TypeScript workaround for headers in EventSource
-
-      // Override EventSource to send auth header via fetch
-      // Since EventSource doesn't support custom headers, we use a workaround
-      // For now, we'll use a POST request with fetch and read the stream manually
+      // Use fetch to read SSE stream manually (EventSource doesn't support POST or custom headers)
       const abortController = new AbortController();
 
       fetch(url, {
@@ -148,20 +138,21 @@ export default function SupplierSyncDialog({
           }
         });
 
-      eventSourceRef.current = eventSource;
+      abortControllerRef.current = abortController;
 
       // Cleanup function
       return () => {
-        abortController.abort();
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
         }
       };
-    } else if (!open && eventSourceRef.current) {
-      // Close EventSource when dialog closes
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    } else if (!open && abortControllerRef.current) {
+      // Abort any ongoing requests when dialog closes
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
       setSyncing(false);
     }
   }, [open, token, property.id]);
@@ -224,9 +215,9 @@ export default function SupplierSyncDialog({
         console.error('Failed to cancel sync:', err);
       }
     }
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
     setSyncing(false);
   };
