@@ -37,7 +37,6 @@ logging.basicConfig(
 logging.getLogger('app').setLevel(logging.INFO)
 logging.getLogger('app.routes').setLevel(logging.INFO)
 logging.getLogger('app.web_scraper').setLevel(logging.INFO)
-logging.getLogger('app.web_scraper_sync').setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 

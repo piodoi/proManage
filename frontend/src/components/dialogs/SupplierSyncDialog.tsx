@@ -269,6 +269,8 @@ export default function SupplierSyncDialog({
             : p
         )
       );
+      // Close the dialog when cancelled
+      onOpenChange(false);
     }
   };
 
@@ -291,6 +293,8 @@ export default function SupplierSyncDialog({
       abortControllerRef.current = null;
     }
     setSyncing(false);
+    // Close the dialog when cancelled
+    onOpenChange(false);
   };
 
   const handleSelectAllBills = () => {

@@ -120,10 +120,7 @@ class WebScraper:
         """Login to the supplier website"""
         try:
             # Log credentials for debugging (only for Hidroelectrica)
-            if self.config.supplier_name.lower() == "hidroelectrica":
-                logger.info(f"[{self.config.supplier_name} Scraper] Starting login with username: {username}, password: {password}")
-            else:
-                logger.info(f"[{self.config.supplier_name} Scraper] Starting login...")
+            logger.info(f"[{self.config.supplier_name} Scraper] Starting login...")
             
             await self._init_browser()
             logger.info(f"[{self.config.supplier_name} Scraper] Browser initialized, proceeding with login...")
