@@ -173,10 +173,7 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-slate-400 text-sm">
-            {t('settings.rentWarningDesc')}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label className="text-slate-300">{t('settings.warningBeforeRentDue')}</Label>
               <Input
@@ -199,45 +196,43 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
                 {t('settings.rentWarningHelp')}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-slate-300">{t('settings.rentCurrency')}</Label>
-                <Select
-                  value={preferences.rent_currency || 'EUR'}
-                  onValueChange={(value) => setRentCurrency(value)}
-                >
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-700 border-slate-600">
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="RON">RON</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-500 mt-1">
-                  {t('settings.rentCurrencyHelp')}
-                </p>
-              </div>
-              <div>
-                <Label className="text-slate-300">{t('settings.billCurrency')}</Label>
-                <Select
-                  value={preferences.bill_currency || 'RON'}
-                  onValueChange={(value) => setBillCurrency(value)}
-                >
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-700 border-slate-600">
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="RON">RON</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-500 mt-1">
-                  {t('settings.billCurrencyHelp')}
-                </p>
-              </div>
+            <div>
+              <Label className="text-slate-300">{t('settings.rentCurrency')}</Label>
+              <Select
+                value={preferences.rent_currency || 'EUR'}
+                onValueChange={(value) => setRentCurrency(value)}
+              >
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-700 border-slate-600">
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="RON">RON</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                {t('settings.rentCurrencyHelp')}
+              </p>
+            </div>
+            <div>
+              <Label className="text-slate-300">{t('settings.billCurrency')}</Label>
+              <Select
+                value={preferences.bill_currency || 'RON'}
+                onValueChange={(value) => setBillCurrency(value)}
+              >
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-700 border-slate-600">
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="RON">RON</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                {t('settings.billCurrencyHelp')}
+              </p>
             </div>
           </div>
         </CardContent>
