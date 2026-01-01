@@ -43,6 +43,7 @@ export default function PropertyBillsView({
     amount: '',
     currency: preferences.bill_currency || 'RON',
     due_date: new Date().toISOString().split('T')[0], // Default to today
+    status: 'pending' as 'pending' | 'paid' | 'overdue',
   });
 
   // Update currency when preferences change
@@ -51,6 +52,27 @@ export default function PropertyBillsView({
       setBillForm(prev => ({ ...prev, currency: preferences.bill_currency || 'RON' }));
     }
   }, [preferences.bill_currency, editingBill]);
+
+  // Calculate status based on due_date for add variant
+  const calculateStatus = (dueDate: string): 'pending' | 'paid' | 'overdue' => {
+    if (!dueDate) return 'pending';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    if (due < today) {
+      return 'overdue';
+    }
+    return 'pending';
+  };
+
+  // Update status when due_date changes (only for add variant)
+  useEffect(() => {
+    if (!editingBill && billForm.due_date) {
+      const calculatedStatus = calculateStatus(billForm.due_date);
+      setBillForm(prev => ({ ...prev, status: calculatedStatus }));
+    }
+  }, [billForm.due_date, editingBill]);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [showAddressWarning, setShowAddressWarning] = useState(false);
@@ -144,6 +166,7 @@ export default function PropertyBillsView({
         amount: parseFloat(billForm.amount),
         currency: billForm.currency || preferences.bill_currency || 'RON',
         due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
+        status: billForm.status,
       };
 
       // For create, include property_id and renter_id
@@ -190,6 +213,7 @@ export default function PropertyBillsView({
       amount: bill.amount.toString(),
       currency: bill.currency || preferences.bill_currency || 'RON',
       due_date: formattedDueDate || new Date().toISOString().split('T')[0],
+      status: bill.status || 'pending',
     });
     setShowBillForm(true);
   };
@@ -312,7 +336,7 @@ export default function PropertyBillsView({
               setShowBillForm(open);
               if (!open) {
                 setEditingBill(null);
-                setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', due_date: new Date().toISOString().split('T')[0] });
+                setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending' });
               }
             }}>
               <DialogTrigger asChild>
@@ -384,14 +408,33 @@ export default function PropertyBillsView({
                       </Select>
                     </div>
                   </div>
-                  <div>
-                    <Label className="text-slate-300">{t('bill.dueDate')}</Label>
-                    <Input
-                      type="date"
-                      value={billForm.due_date}
-                      onChange={(e) => setBillForm({ ...billForm, due_date: e.target.value })}
-                      className="bg-slate-700 border-slate-600 text-slate-100"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-slate-300">{t('bill.dueDate')}</Label>
+                      <Input
+                        type="date"
+                        value={billForm.due_date}
+                        onChange={(e) => setBillForm({ ...billForm, due_date: e.target.value })}
+                        className="bg-slate-700 border-slate-600 text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-slate-300">{t('common.status')}</Label>
+                      <Select
+                        value={billForm.status}
+                        onValueChange={(value) => setBillForm({ ...billForm, status: value as 'pending' | 'paid' | 'overdue' })}
+                        disabled={!editingBill} // Disable for add variant (calculated automatically)
+                      >
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          <SelectItem value="pending">{t('bill.status.pending')}</SelectItem>
+                          <SelectItem value="paid">{t('bill.status.paid')}</SelectItem>
+                          <SelectItem value="overdue">{t('bill.status.overdue')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <Button onClick={handleSaveBill} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!billForm.amount}>
                     {editingBill ? t('bill.editBill') : t('bill.addBill')}
