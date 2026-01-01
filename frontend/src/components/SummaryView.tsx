@@ -147,6 +147,7 @@ export default function SummaryView() {
       
       // Calculate bills due (pending bills with due_date >= today) - EXCLUDE RENT BILLS
       const billsDue = propertyBills.filter(b => {
+        if (b.status === 'paid') return false; // Exclude paid bills
         if (b.status !== 'pending') return false;
         if (b.bill_type === 'rent') return false; // Exclude rent bills
         const billDate = new Date(b.due_date);
@@ -156,6 +157,7 @@ export default function SummaryView() {
       
       // Calculate overdue bills (pending or overdue status with due_date < today) - EXCLUDE RENT BILLS
       const overdueBills = propertyBills.filter(b => {
+        if (b.status === 'paid') return false; // Exclude paid bills
         if (b.bill_type === 'rent') return false; // Exclude rent bills
         if (b.status !== 'pending' && b.status !== 'overdue') return false;
         const billDate = new Date(b.due_date);
@@ -167,6 +169,7 @@ export default function SummaryView() {
       // Include overdue bills as well (they're already past due)
       const rentBillsDueSoon = propertyBills.filter(b => {
         if (b.bill_type !== 'rent') return false;
+        if (b.status === 'paid') return false; // Exclude paid bills
         if (b.status !== 'pending' && b.status !== 'overdue') return false;
         const billDate = new Date(b.due_date);
         billDate.setHours(0, 0, 0, 0);
