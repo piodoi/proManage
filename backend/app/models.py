@@ -111,6 +111,7 @@ class Bill(BaseModel):
     bill_type: BillType
     description: str
     amount: float
+    currency: Optional[str] = "RON"  # Currency for the bill: "EUR", "RON", or "USD"
     due_date: datetime
     iban: Optional[str] = None
     bill_number: Optional[str] = None
@@ -270,6 +271,7 @@ class BillCreate(BaseModel):
     bill_type: BillType
     description: str
     amount: float
+    currency: Optional[str] = "RON"  # Currency for the bill: "EUR", "RON", or "USD"
     due_date: datetime
     iban: Optional[str] = None
     bill_number: Optional[str] = None
@@ -278,8 +280,11 @@ class BillCreate(BaseModel):
 
 
 class BillUpdate(BaseModel):
+    renter_id: Optional[str] = None  # None means bill applies to all renters in the property
+    bill_type: Optional[BillType] = None
     description: Optional[str] = None
     amount: Optional[float] = None
+    currency: Optional[str] = None
     due_date: Optional[datetime] = None
     iban: Optional[str] = None
     bill_number: Optional[str] = None

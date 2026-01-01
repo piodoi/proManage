@@ -17,12 +17,44 @@ router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
 
 
+def calculate_bill_status(bill: Bill) -> Bill:
+    """Calculate and update bill status based on due date. Returns bill with updated status."""
+    # Only update status if bill is not paid
+    if bill.status != BillStatus.PAID:
+        now = datetime.utcnow()
+        # Compare dates (ignore time component for due date comparison)
+        # Convert both to date objects for comparison
+        if isinstance(bill.due_date, datetime):
+            due_date_only = bill.due_date.date()
+        else:
+            # If it's already a date string or date object, handle accordingly
+            due_date_only = bill.due_date
+        
+        now_date_only = now.date()
+        
+        if due_date_only < now_date_only:
+            # Due date has passed, mark as overdue
+            if bill.status != BillStatus.OVERDUE:
+                bill.status = BillStatus.OVERDUE
+                # Save the updated status to database
+                db.save_bill(bill)
+        elif due_date_only >= now_date_only and bill.status == BillStatus.OVERDUE:
+            # Due date is in the future, but status is overdue (shouldn't happen, but fix it)
+            bill.status = BillStatus.PENDING
+            db.save_bill(bill)
+    return bill
+
+
 @router.get("")
 async def list_bills(current_user: TokenData = Depends(require_landlord)):
     if current_user.role == UserRole.ADMIN:
-        return db.list_bills()
-    landlord_properties = {prop.id for prop in db.list_properties(landlord_id=current_user.user_id)}
-    return [b for b in db.list_bills() if b.property_id in landlord_properties]
+        bills = db.list_bills()
+    else:
+        landlord_properties = {prop.id for prop in db.list_properties(landlord_id=current_user.user_id)}
+        bills = [b for b in db.list_bills() if b.property_id in landlord_properties]
+    
+    # Calculate and update status for all bills
+    return [calculate_bill_status(bill) for bill in bills]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -43,6 +75,7 @@ async def create_bill(data: BillCreate, current_user: TokenData = Depends(requir
         bill_type=data.bill_type,
         description=data.description,
         amount=data.amount,
+        currency=data.currency or "RON",
         due_date=data.due_date,
         iban=data.iban,
         bill_number=data.bill_number,
@@ -61,7 +94,8 @@ async def get_bill(bill_id: str, current_user: TokenData = Depends(require_landl
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    return bill
+    # Calculate and update status based on due date
+    return calculate_bill_status(bill)
 
 
 @router.put("/{bill_id}")
@@ -76,10 +110,25 @@ async def update_bill(
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    # Handle renter_id update - check if it was provided in the request
+    # We need to check the raw request data since Pydantic doesn't distinguish between
+    # "field not provided" and "field is None" by default
+    update_data = data.model_dump(exclude_unset=True)
+    if "renter_id" in update_data:
+        renter_id_value = update_data["renter_id"]
+        if renter_id_value:  # Not None and not empty string
+            renter = db.get_renter(renter_id_value)
+            if not renter or renter.property_id != bill.property_id:
+                raise HTTPException(status_code=404, detail="Renter not found in this property")
+        bill.renter_id = renter_id_value  # Can be None for all/property
+    if data.bill_type is not None:
+        bill.bill_type = data.bill_type
     if data.description is not None:
         bill.description = data.description
     if data.amount is not None:
         bill.amount = data.amount
+    if data.currency is not None:
+        bill.currency = data.currency
     if data.due_date is not None:
         bill.due_date = data.due_date
     if data.iban is not None:
@@ -352,6 +401,7 @@ async def create_bill_from_pdf(
         bill_type=BillType(data.get("bill_type", "utilities")),
         description=data.get("description", "Bill from PDF"),
         amount=float(data.get("amount", 0)),
+        currency=data.get("currency", "RON"),
         due_date=due_date,
         iban=data.get("iban"),
         bill_number=data.get("bill_number"),

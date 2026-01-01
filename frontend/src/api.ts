@@ -325,14 +325,18 @@ export type BillCreate = {
   bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
   description: string;
   amount: number;
+  currency?: string;  // Currency for the bill: "EUR", "RON", or "USD"
   due_date: string;
   iban?: string;
   bill_number?: string;
 };
 
 export type BillUpdate = {
+  renter_id?: string;  // undefined/null means bill applies to all renters in the property
+  bill_type?: 'rent' | 'utilities' | 'ebloc' | 'other';
   description?: string;
   amount?: number;
+  currency?: string;
   due_date?: string;
   iban?: string;
   bill_number?: string;

@@ -1,12 +1,41 @@
 """Public renter routes (token-based access)."""
 import os
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from app.models import Payment, PaymentCreate, PaymentMethod, PaymentStatus, BillStatus, TokenData
+from app.models import Payment, PaymentCreate, PaymentMethod, PaymentStatus, BillStatus, TokenData, Bill
 from app.database import db
 
 router = APIRouter(prefix="/renter", tags=["renter-public"])
 
 PAYMENT_SERVICE_COMMISSION = float(os.getenv("PAYMENT_SERVICE_COMMISSION", "0.02"))
+
+
+def calculate_bill_status(bill: Bill) -> Bill:
+    """Calculate and update bill status based on due date. Returns bill with updated status."""
+    # Only update status if bill is not paid
+    if bill.status != BillStatus.PAID:
+        now = datetime.utcnow()
+        # Compare dates (ignore time component for due date comparison)
+        # Convert both to date objects for comparison
+        if isinstance(bill.due_date, datetime):
+            due_date_only = bill.due_date.date()
+        else:
+            # If it's already a date string or date object, handle accordingly
+            due_date_only = bill.due_date
+        
+        now_date_only = now.date()
+        
+        if due_date_only < now_date_only:
+            # Due date has passed, mark as overdue
+            if bill.status != BillStatus.OVERDUE:
+                bill.status = BillStatus.OVERDUE
+                # Save the updated status to database
+                db.save_bill(bill)
+        elif due_date_only >= now_date_only and bill.status == BillStatus.OVERDUE:
+            # Due date is in the future, but status is overdue (shouldn't happen, but fix it)
+            bill.status = BillStatus.PENDING
+            db.save_bill(bill)
+    return bill
 
 
 @router.get("/{token}")
@@ -31,6 +60,8 @@ async def renter_bills(token: str):
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
     result = []
     for bill in bills:
+        # Calculate and update status based on due date
+        bill = calculate_bill_status(bill)
         payments = db.list_payments(bill_id=bill.id)
         paid_amount = sum(p.amount for p in payments if p.status == PaymentStatus.COMPLETED)
         result.append({

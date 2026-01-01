@@ -18,6 +18,14 @@ from app.auth import require_landlord
 from app.database import db
 from app.utils.encryption import decrypt_password
 
+
+def get_default_bill_currency(user_id: str) -> str:
+    """Get default bill currency from user preferences, or return 'RON' as fallback."""
+    preferences = db.get_user_preferences(user_id)
+    if preferences and preferences.bill_currency:
+        return preferences.bill_currency
+    return "RON"
+
 router = APIRouter(tags=["sync"])
 logger = logging.getLogger(__name__)
 
@@ -76,6 +84,14 @@ async def _sync_supplier_scraper(
     scraper = WebScraper(config, save_html_dumps=save_html_dumps)
     bills_created = 0
     bills_found = 0
+    
+    # Get property to access landlord_id for currency preferences
+    prop = db.get_property(property_id)
+    if not prop:
+        logger.error(f"[{supplier.name} Scraper] Property {property_id} not found")
+        if progress_callback:
+            progress_callback(supplier.name, "error", 0, 0, "Property not found")
+        return 0, 0
     
     # Get property supplier to check/update contract_id
     property_supplier = db.get_property_supplier(property_supplier_id)
@@ -189,6 +205,9 @@ async def _sync_supplier_scraper(
             if due_date < datetime.utcnow():
                 bill_status = BillStatus.OVERDUE
             
+            # Get default currency from user preferences
+            default_currency = get_default_bill_currency(landlord_id) if landlord_id else "RON"
+            
             # Prepare bill data
             bill_data = {
                 "property_id": property_id,
@@ -196,6 +215,7 @@ async def _sync_supplier_scraper(
                 "bill_type": supplier.bill_type.value if hasattr(supplier.bill_type, 'value') else str(supplier.bill_type),
                 "description": supplier.name,
                 "amount": amount or 0.0,
+                "currency": default_currency,
                 "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
                 "iban": iban,
                 "bill_number": bill_number,
@@ -510,6 +530,9 @@ async def sync_supplier_bills(
                             bill_status = BillStatus.OVERDUE if scraped_bill.amount > 0 else BillStatus.PAID
                             due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
                             
+                            # Get default currency from user preferences
+                            default_currency = get_default_bill_currency(prop.landlord_id)
+                            
                             if discover_only:
                                 # Collect bill data without saving
                                 bill_data = {
@@ -518,6 +541,7 @@ async def sync_supplier_bills(
                                     "bill_type": BillType.EBLOC,
                                     "description": "E-Bloc",
                                     "amount": scraped_bill.amount,
+                                    "currency": default_currency,
                                     "due_date": due_date.isoformat(),
                                     "status": bill_status.value,
                                     "bill_number": scraped_bill.bill_number,
@@ -531,6 +555,7 @@ async def sync_supplier_bills(
                                     bill_type=BillType.EBLOC,
                                     description="E-Bloc",
                                     amount=scraped_bill.amount,
+                                    currency=default_currency,
                                     due_date=due_date,
                                     status=bill_status,
                                     bill_number=scraped_bill.bill_number,
@@ -869,12 +894,16 @@ async def sync_ebloc(
             bill_status = BillStatus.OVERDUE if scraped_bill.amount > 0 else BillStatus.PAID
             due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
             
+            # Get default currency from user preferences
+            default_currency = get_default_bill_currency(prop.landlord_id)
+            
             bill = Bill(
                 property_id=property_id,
                 renter_id=None,
                 bill_type=BillType.EBLOC,
                 description="E-Bloc",
                 amount=scraped_bill.amount,
+                currency=default_currency,
                 due_date=due_date,
                 status=bill_status,
                 bill_number=scraped_bill.bill_number,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api, Bill, Renter, ExtractionResult, Property } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import AddressWarningDialog from './dialogs/AddressWarningDialog';
 import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
 import SupplierSyncDialog from './dialogs/SupplierSyncDialog';
 import { useI18n } from '../lib/i18n';
+import { usePreferences } from '../hooks/usePreferences';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -33,14 +34,23 @@ export default function PropertyBillsView({
   onBillsChange 
 }: PropertyBillsViewProps) {
   const { t } = useI18n();
+  const { preferences } = usePreferences();
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [billForm, setBillForm] = useState({
     renter_id: 'all',  // 'all' means "all/property", specific renter ID otherwise
     bill_type: 'other' as 'rent' | 'utilities' | 'ebloc' | 'other',
     amount: '',
+    currency: preferences.bill_currency || 'RON',
     due_date: new Date().toISOString().split('T')[0], // Default to today
   });
+
+  // Update currency when preferences change
+  useEffect(() => {
+    if (!editingBill && preferences.bill_currency) {
+      setBillForm(prev => ({ ...prev, currency: preferences.bill_currency || 'RON' }));
+    }
+  }, [preferences.bill_currency, editingBill]);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [showAddressWarning, setShowAddressWarning] = useState(false);
@@ -101,6 +111,7 @@ export default function PropertyBillsView({
         bill_type: extractionPatternId ? 'utilities' : 'other',
         description: billSupplier,
         amount: result.amount || 0,
+        currency: preferences.bill_currency || 'RON',
         due_date: dueDate,
         iban: result.iban,
         bill_number: result.bill_number,
@@ -127,24 +138,30 @@ export default function PropertyBillsView({
       return;
     }
     try {
-      const billData = {
-        property_id: propertyId,
-        renter_id: billForm.renter_id === 'all' ? undefined : billForm.renter_id,  // 'all' becomes undefined (all renters)
+      const billData: any = {
         bill_type: billForm.bill_type,
         description: t(`bill.${billForm.bill_type}`),
         amount: parseFloat(billForm.amount),
+        currency: billForm.currency || preferences.bill_currency || 'RON',
         due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
       };
 
+      // For create, include property_id and renter_id
+      // For update, include renter_id (null for all/property, or specific renter_id)
       if (editingBill) {
+        // When updating, explicitly set renter_id to null if 'all', or to the renter_id if specific
+        billData.renter_id = billForm.renter_id === 'all' ? null : billForm.renter_id;
         await api.bills.update(token, editingBill.id, billData);
       } else {
+        // When creating, property_id is required, and renter_id can be undefined (which becomes null)
+        billData.property_id = propertyId;
+        billData.renter_id = billForm.renter_id === 'all' ? undefined : billForm.renter_id;
         await api.bills.create(token, billData);
       }
       
       setShowBillForm(false);
       setEditingBill(null);
-      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', due_date: new Date().toISOString().split('T')[0] });
+      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0] });
       if (onBillsChange) {
         onBillsChange();
       }
@@ -171,6 +188,7 @@ export default function PropertyBillsView({
       renter_id: bill.renter_id || 'all',
       bill_type: bill.bill_type,
       amount: bill.amount.toString(),
+      currency: bill.currency || preferences.bill_currency || 'RON',
       due_date: formattedDueDate || new Date().toISOString().split('T')[0],
     });
     setShowBillForm(true);
@@ -340,16 +358,31 @@ export default function PropertyBillsView({
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-slate-300">{t('common.amount')} (RON) *</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={billForm.amount}
-                      onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
-                      className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder="0.00"
-                      required
-                    />
+                    <Label className="text-slate-300">{t('common.amount')} *</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={billForm.amount}
+                        onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
+                        className="bg-slate-700 border-slate-600 text-slate-100 flex-1"
+                        placeholder="0.00"
+                        required
+                      />
+                      <Select
+                        value={billForm.currency || 'RON'}
+                        onValueChange={(value) => setBillForm({ ...billForm, currency: value })}
+                      >
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="RON">RON</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div>
                     <Label className="text-slate-300">{t('bill.dueDate')}</Label>
@@ -399,7 +432,7 @@ export default function PropertyBillsView({
                     <TableCell className="text-slate-200">{bill.description}</TableCell>
                     <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
                     <TableCell className="text-slate-300">{bill.bill_number || '-'}</TableCell>
-                    <TableCell className="text-slate-200">{bill.amount.toFixed(2)} RON</TableCell>
+                    <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || 'RON'}</TableCell>
                     <TableCell className="text-slate-300">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded text-xs ${
