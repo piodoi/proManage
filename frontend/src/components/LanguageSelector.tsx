@@ -1,4 +1,5 @@
 import { useI18n } from '../lib/i18n';
+import { usePreferences } from '../hooks/usePreferences';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,6 +21,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 
 export function LanguageSelector() {
   const { language, setLanguage } = useI18n();
+  const { setLanguage: setPrefLanguage } = usePreferences();
 
   return (
     <DropdownMenu>
@@ -39,7 +41,10 @@ export function LanguageSelector() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
         <DropdownMenuItem
-          onClick={() => setLanguage('en')}
+          onClick={() => {
+            setLanguage('en');
+            setPrefLanguage('en');
+          }}
           className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
         >
           <img 
@@ -51,7 +56,10 @@ export function LanguageSelector() {
           {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => setLanguage('ro')}
+          onClick={() => {
+            setLanguage('ro');
+            setPrefLanguage('ro');
+          }}
           className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
         >
           <img 

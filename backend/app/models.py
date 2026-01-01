@@ -378,3 +378,11 @@ class TokenData(BaseModel):
     user_id: str
     email: str
     role: UserRole
+
+
+class UserPreferences(BaseModel):
+    id: str = Field(default_factory=gen_id)
+    user_id: str  # Reference to User.id
+    language: Optional[str] = "en"  # Language code: "en" or "ro"
+    view_mode: Optional[str] = "list"  # View mode: "list" or "grid"
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -10,6 +10,7 @@ import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
 import EblocImportDialog from './dialogs/EblocImportDialog';
 import { useI18n } from '../lib/i18n';
+import { usePreferences } from '../hooks/usePreferences';
 
 type LandlordViewProps = {
   token: string | null;
@@ -20,6 +21,7 @@ type LandlordViewProps = {
 export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
   const { user } = useAuth();
   const { t } = useI18n();
+  const { preferences, setViewMode } = usePreferences();
   const [properties, setProperties] = useState<Property[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
@@ -28,7 +30,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const viewMode = (preferences.view_mode as 'list' | 'grid') || 'list';
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
 
   useEffect(() => {

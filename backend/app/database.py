@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 from app.models import (
     User, Property, Renter, Bill, Payment, EmailConfig,
-    ExtractionPattern, UserRole, Supplier, PropertySupplier, UserSupplierCredential
+    ExtractionPattern, UserRole, Supplier, PropertySupplier, UserSupplierCredential,
+    UserPreferences
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -105,6 +106,13 @@ property_suppliers_table = Table(
     Column("id", String(36), primary_key=True),
     Column("property_id", String(36), index=True),
     Column("supplier_id", String(36), index=True),
+    Column("data", Text, nullable=False),
+)
+
+user_preferences_table = Table(
+    "user_preferences", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), index=True, unique=True),
     Column("data", Text, nullable=False),
 )
 
@@ -647,6 +655,44 @@ class Database:
             )
             conn.commit()
             return result.rowcount > 0
+
+    def get_user_preferences(self, user_id: str) -> Optional[UserPreferences]:
+        """Get user preferences by user_id"""
+        with engine.connect() as conn:
+            result = conn.execute(
+                user_preferences_table.select().where(user_preferences_table.c.user_id == user_id)
+            ).fetchone()
+            return _deserialize(UserPreferences, result.data) if result else None
+
+    def save_user_preferences(self, preferences: UserPreferences) -> UserPreferences:
+        """Save or update user preferences"""
+        from datetime import datetime
+        preferences.updated_at = datetime.utcnow()
+        
+        with engine.connect() as conn:
+            # Check if preferences already exist
+            existing = conn.execute(
+                user_preferences_table.select().where(user_preferences_table.c.user_id == preferences.user_id)
+            ).fetchone()
+            
+            if existing:
+                # Update existing preferences
+                conn.execute(
+                    user_preferences_table.update()
+                    .where(user_preferences_table.c.user_id == preferences.user_id)
+                    .values(data=_serialize(preferences))
+                )
+            else:
+                # Insert new preferences
+                conn.execute(
+                    user_preferences_table.insert().values(
+                        id=preferences.id,
+                        user_id=preferences.user_id,
+                        data=_serialize(preferences)
+                    )
+                )
+            conn.commit()
+            return preferences
 
 
 db = Database()

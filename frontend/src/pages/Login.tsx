@@ -61,7 +61,7 @@ export default function Login() {
       });
       if (response.ok) {
         const data = await response.json();
-        login(data.access_token, data.user);
+        login(data.access_token, data.user, data.preferences);
       } else {
         const err = await response.json();
         setError(err.detail || 'Google login failed');
@@ -126,7 +126,7 @@ export default function Login() {
       );
       if (response.ok) {
         const data = await response.json();
-        login(data.access_token, data.user);
+        login(data.access_token, data.user, data.preferences);
       } else {
         setError('Demo login failed. Is the backend running?');
       }
@@ -221,7 +221,7 @@ export default function Login() {
       });
       if (response.ok) {
         const data = await response.json();
-        login(data.access_token, data.user);
+        login(data.access_token, data.user, data.preferences);
       } else {
         const err = await response.json();
         setError(err.detail || 'Confirmation failed');
@@ -248,7 +248,7 @@ export default function Login() {
       });
       if (response.ok) {
         const data = await response.json();
-        login(data.access_token, data.user);
+        login(data.access_token, data.user, data.preferences);
       } else {
         const err = await response.json();
         setError(err.detail || 'Login failed');

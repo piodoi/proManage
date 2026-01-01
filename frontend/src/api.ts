@@ -142,6 +142,11 @@ export const api = {
     status: (token: string) => request<SubscriptionStatus>('/subscription/status', { token }),
   },
 
+  preferences: {
+    get: (token: string) => request<Preferences>('/preferences', { token }),
+    save: (token: string, data: Partial<Preferences>) => request<Preferences>('/preferences', { method: 'POST', body: data, token }),
+  },
+
   payments: {
     list: (token: string) => request<Payment[]>('/payments', { token }),
   },
@@ -348,6 +353,11 @@ export type PaymentCreate = {
   bill_id: string;
   amount: number;
   method: 'bank_transfer' | 'payment_service';
+};
+
+export type Preferences = {
+  language: string;
+  view_mode: string;
 };
 
 export type AuthResponse = {

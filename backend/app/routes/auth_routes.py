@@ -195,7 +195,20 @@ async def auth_login(data: LoginRequest, request: Request):
     
     logger.info(f"[Auth] Login successful: {data.email}")
     access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
+    
+    # Get user preferences
+    preferences = db.get_user_preferences(user.id)
+    preferences_data = {
+        "language": preferences.language if preferences else "en",
+        "view_mode": preferences.view_mode if preferences else "list"
+    }
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+        "preferences": preferences_data
+    }
 
 
 @router.post("/google")
@@ -245,7 +258,20 @@ async def auth_google(id_token: str, request: Request):
         logger.info(f"[Auth] New Google user created: {email}, role: {role.value}")
     
     access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
+    
+    # Get user preferences
+    preferences = db.get_user_preferences(user.id)
+    preferences_data = {
+        "language": preferences.language if preferences else "en",
+        "view_mode": preferences.view_mode if preferences else "list"
+    }
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+        "preferences": preferences_data
+    }
 
 
 @router.post("/facebook")
@@ -284,7 +310,20 @@ async def auth_facebook(token: str, request: Request):
         db.save_user(user)
     
     access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
+    
+    # Get user preferences
+    preferences = db.get_user_preferences(user.id)
+    preferences_data = {
+        "language": preferences.language if preferences else "en",
+        "view_mode": preferences.view_mode if preferences else "list"
+    }
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+        "preferences": preferences_data
+    }
 
 
 @router.get("/me")
@@ -310,4 +349,17 @@ async def auth_demo(email: str, name: str, request: Request):
         db.save_user(user)
     
     access_token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
+    
+    # Get user preferences
+    preferences = db.get_user_preferences(user.id)
+    preferences_data = {
+        "language": preferences.language if preferences else "en",
+        "view_mode": preferences.view_mode if preferences else "list"
+    }
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+        "preferences": preferences_data
+    }

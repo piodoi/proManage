@@ -50,7 +50,7 @@ export default function ConfirmEmail() {
         if (response.ok) {
           const data = await response.json();
           setStatus('success');
-          login(data.access_token, data.user);
+          login(data.access_token, data.user, data.preferences);
           // Don't auto-redirect, let user click button
         } else {
           const err = await response.json();

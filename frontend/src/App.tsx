@@ -12,7 +12,7 @@ import './App.css';
 type AuthContextType = {
   user: User | null;
   token: string | null;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: User, preferences?: { language?: string; view_mode?: string }) => void;
   logout: () => void;
 };
 
@@ -44,10 +44,18 @@ function App() {
     }
   }, [token]);
 
-  const login = (newToken: string, newUser: User) => {
+  const login = (newToken: string, newUser: User, preferences?: { language?: string; view_mode?: string }) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
     setUser(newUser);
+    
+    // Apply preferences if provided
+    if (preferences?.language) {
+      localStorage.setItem('language', preferences.language);
+    }
+    if (preferences?.view_mode) {
+      localStorage.setItem('view_mode', preferences.view_mode);
+    }
   };
 
   const logout = () => {

@@ -16,6 +16,7 @@ from app.routes import (
     email_router,
     ebloc_router,
     sync_router,
+    preferences_router,
 )
 from app.routes.subscription_routes import router as subscription_router
 from app.routes import load_extraction_patterns_from_json
@@ -63,6 +64,7 @@ app.include_router(email_router)
 app.include_router(ebloc_router)
 app.include_router(sync_router)
 app.include_router(subscription_router)
+app.include_router(preferences_router)
 
 
 @app.on_event("startup")

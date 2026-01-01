@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import enTranslations from '../locales/en.json';
 import roTranslations from '../locales/ro.json';
 
@@ -25,6 +25,25 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('language') as Language;
     return saved && (saved === 'en' || saved === 'ro') ? saved : 'en';
   });
+
+  // Listen for language changes from preferences
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('language') as Language;
+      if (saved && (saved === 'en' || saved === 'ro')) {
+        setLanguageState(saved);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    // Also check on mount/update
+    const saved = localStorage.getItem('language') as Language;
+    if (saved && (saved === 'en' || saved === 'ro') && saved !== language) {
+      setLanguageState(saved);
+    }
+    
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
