@@ -727,6 +727,9 @@ async def save_discovered_bills(
         return {"status": "success", "bills_created": 0}
     
     bills_created = []
+    bills_updated = []
+    existing_bills = db.list_bills(property_id=property_id)
+    
     for bill_data in bills:
         try:
             # Convert ISO string dates back to datetime
@@ -739,24 +742,74 @@ async def save_discovered_bills(
             bill_type = BillType(bill_data["bill_type"])
             bill_status = BillStatus(bill_data["status"])
             
-            bill = Bill(
-                property_id=bill_data["property_id"],
-                renter_id=bill_data.get("renter_id"),
-                bill_type=bill_type,
-                description=bill_data["description"],
-                amount=bill_data["amount"],
-                due_date=due_date,
-                iban=bill_data.get("iban"),
-                bill_number=bill_data.get("bill_number"),
-                extraction_pattern_id=bill_data.get("extraction_pattern_id"),
-                contract_id=bill_data.get("contract_id"),
-                status=bill_status
-            )
-            db.save_bill(bill)
-            bills_created.append(bill.id)
+            # Check if bill already exists (by bill_number and bill_type, or by amount/description/due_date)
+            existing = None
+            bill_number = bill_data.get("bill_number")
+            
+            if bill_number:
+                existing = next(
+                    (b for b in existing_bills 
+                     if b.bill_number == bill_number 
+                     and b.bill_type == bill_type),
+                    None
+                )
+            
+            # Fallback: check by amount, description, and due_date if no bill_number
+            if not existing and bill_data.get("amount"):
+                for b in existing_bills:
+                    if (b.bill_type == bill_type and 
+                        b.description == bill_data["description"] and
+                        abs(b.amount - bill_data["amount"]) < 0.01):
+                        if b.due_date:
+                            days_diff = abs((b.due_date - due_date).days)
+                            if days_diff <= 5:
+                                existing = b
+                                break
+            
+            if existing:
+                # Update existing bill with new information
+                existing.amount = bill_data["amount"]
+                existing.due_date = due_date
+                if bill_data.get("iban"):
+                    existing.iban = bill_data["iban"]
+                if bill_number:
+                    existing.bill_number = bill_number
+                if bill_data.get("contract_id"):
+                    existing.contract_id = bill_data["contract_id"]
+                if bill_data.get("extraction_pattern_id"):
+                    existing.extraction_pattern_id = bill_data["extraction_pattern_id"]
+                # Update status if bill is now overdue
+                if due_date < datetime.utcnow() and existing.status == BillStatus.PENDING:
+                    existing.status = BillStatus.OVERDUE
+                elif due_date >= datetime.utcnow() and existing.status == BillStatus.OVERDUE:
+                    existing.status = BillStatus.PENDING
+                
+                db.save_bill(existing)
+                bills_updated.append(existing.id)
+                logger.info(f"Updated existing bill {existing.id} (bill_number: {bill_number}, new amount: {bill_data['amount']})")
+            else:
+                # Create new bill
+                bill = Bill(
+                    property_id=bill_data["property_id"],
+                    renter_id=bill_data.get("renter_id"),
+                    bill_type=bill_type,
+                    description=bill_data["description"],
+                    amount=bill_data["amount"],
+                    due_date=due_date,
+                    iban=bill_data.get("iban"),
+                    bill_number=bill_number,
+                    extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                    contract_id=bill_data.get("contract_id"),
+                    status=bill_status
+                )
+                db.save_bill(bill)
+                bills_created.append(bill.id)
+                logger.info(f"Created new bill {bill.id} (bill_number: {bill_number})")
         except Exception as e:
             logger.error(f"Error saving bill: {e}", exc_info=True)
             continue
+    
+    return {"status": "success", "bills_created": len(bills_created), "bills_updated": len(bills_updated)}
     
     return {"status": "success", "bills_created": len(bills_created)}
 

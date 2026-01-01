@@ -376,6 +376,7 @@ export default function PropertyBillsView({
               <TableHead className="text-slate-400">{t('renter.renters')}</TableHead>
               <TableHead className="text-slate-400">{t('common.description')}</TableHead>
               <TableHead className="text-slate-400">{t('bill.billType')}</TableHead>
+              <TableHead className="text-slate-400">{t('bill.billNumber')}</TableHead>
               <TableHead className="text-slate-400">{t('common.amount')}</TableHead>
               <TableHead className="text-slate-400">{t('bill.dueDate')}</TableHead>
               <TableHead className="text-slate-400">{t('common.status')}</TableHead>
@@ -385,7 +386,7 @@ export default function PropertyBillsView({
           <TableBody>
             {propertyBills.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-slate-500 text-center py-4">
+                <TableCell colSpan={8} className="text-slate-500 text-center py-4">
                   {t('bill.noBills')}
                 </TableCell>
               </TableRow>
@@ -397,6 +398,7 @@ export default function PropertyBillsView({
                     <TableCell className="text-slate-300">{renter ? renter.name : t('bill.allProperty')}</TableCell>
                     <TableCell className="text-slate-200">{bill.description}</TableCell>
                     <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
+                    <TableCell className="text-slate-300">{bill.bill_number || '-'}</TableCell>
                     <TableCell className="text-slate-200">{bill.amount.toFixed(2)} RON</TableCell>
                     <TableCell className="text-slate-300">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
                     <TableCell>
