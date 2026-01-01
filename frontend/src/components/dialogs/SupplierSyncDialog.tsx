@@ -83,6 +83,12 @@ export default function SupplierSyncDialog({
     try {
       const suppliers = await api.suppliers.listForProperty(token, property.id);
       setPropertySuppliers(suppliers);
+      
+      // Auto-select all eligible suppliers by default
+      const eligibleIds = suppliers
+        .filter(ps => ps.has_credentials)
+        .map(ps => ps.id);
+      setSelectedSupplierIds(new Set(eligibleIds));
     } catch (err) {
       console.error('Failed to load property suppliers:', err);
       onError(err instanceof Error ? err.message : 'Failed to load suppliers');
