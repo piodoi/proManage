@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { api, Property, Renter, Bill } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '../lib/i18n';
@@ -11,6 +11,7 @@ export default function SummaryView() {
   const { preferences } = usePreferences();
   const rentWarningDays = preferences.rent_warning_days || 5;
   const rentCurrency = preferences.rent_currency || 'EUR';
+  const billCurrency = preferences.bill_currency || 'RON';
   const [properties, setProperties] = useState<Property[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
@@ -66,6 +67,42 @@ export default function SummaryView() {
     }
   };
 
+  // Convert bill amount from its currency to target currency using exchange rates
+  const convertBillAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string): number => {
+    if (fromCurrency === toCurrency) return amount;
+    
+    const fromUpper = fromCurrency.toUpperCase();
+    const toUpper = toCurrency.toUpperCase();
+    
+    // Exchange rates are relative to EUR: rates.EUR = 1, rates.USD = USD per EUR, rates.RON = RON per EUR
+    // Convert: fromCurrency -> EUR -> toCurrency
+    
+    // Step 1: Convert from source currency to EUR
+    let amountInEUR = 0;
+    if (fromUpper === 'EUR') {
+      amountInEUR = amount;
+    } else if (fromUpper === 'USD') {
+      amountInEUR = amount / exchangeRates.USD;
+    } else if (fromUpper === 'RON') {
+      amountInEUR = amount / exchangeRates.RON;
+    } else {
+      // Unknown currency, assume RON
+      amountInEUR = amount / exchangeRates.RON;
+    }
+    
+    // Step 2: Convert from EUR to target currency
+    if (toUpper === 'EUR') {
+      return amountInEUR;
+    } else if (toUpper === 'USD') {
+      return amountInEUR * exchangeRates.USD;
+    } else if (toUpper === 'RON') {
+      return amountInEUR * exchangeRates.RON;
+    } else {
+      // Unknown currency, assume RON
+      return amountInEUR * exchangeRates.RON;
+    }
+  }, [exchangeRates]);
+
   const summaryData = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -79,6 +116,7 @@ export default function SummaryView() {
       rentBillsDueSoon: Bill[];
       totalBillsDue: number;
       totalRentDue: number;
+      totalRentOverdue: number;
       totalOtherBillsDue: number;
       totalOverdue: number;
       totalRentDueSoon: number;
@@ -94,6 +132,7 @@ export default function SummaryView() {
       rentBillsDueSoon: Bill[];
       totalBillsDue: number;
       totalRentDue: number;
+      totalRentOverdue: number;
       totalOtherBillsDue: number;
       totalOverdue: number;
       totalRentDueSoon: number;
@@ -125,13 +164,15 @@ export default function SummaryView() {
       });
       
       // Calculate rent bills due within configured warning days (0-N days from today)
+      // Include overdue bills as well (they're already past due)
       const rentBillsDueSoon = propertyBills.filter(b => {
         if (b.bill_type !== 'rent') return false;
         if (b.status !== 'pending' && b.status !== 'overdue') return false;
         const billDate = new Date(b.due_date);
         billDate.setHours(0, 0, 0, 0);
         const daysUntilDue = Math.ceil((billDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        return daysUntilDue >= 0 && daysUntilDue <= rentWarningDays;
+        // Include bills that are overdue (negative days) or due within warning days (0 to N days)
+        return daysUntilDue <= rentWarningDays;
       });
       
       // Get first 4 bills for description
@@ -165,18 +206,44 @@ export default function SummaryView() {
       });
       
       // Calculate totals - separate rent bills from other bills
+      // Convert all amounts to preferred bill currency for accurate totals
+      // Rent bills due: all pending or overdue rent bills (not paid)
       const rentBillsDue = propertyBills.filter(b => {
         if (b.bill_type !== 'rent') return false;
-        if (b.status !== 'pending') return false;
+        if (b.status === 'paid') return false; // Exclude paid bills
+        // Include all pending and overdue rent bills
+        return b.status === 'pending' || b.status === 'overdue';
+      });
+      // Rent bills overdue: rent bills with due_date < today (past due)
+      const rentBillsOverdue = propertyBills.filter(b => {
+        if (b.bill_type !== 'rent') return false;
+        if (b.status === 'paid') return false; // Exclude paid bills
+        if (b.status !== 'overdue') return false;
         const billDate = new Date(b.due_date);
         billDate.setHours(0, 0, 0, 0);
-        return billDate >= today;
+        return billDate < today;
       });
-      const totalRentDue = rentBillsDue.reduce((sum, b) => sum + b.amount, 0);
-      const totalOtherBillsDue = billsDue.reduce((sum, b) => sum + b.amount, 0);
+      const totalRentDue = rentBillsDue.reduce((sum, b) => {
+        const billCurrencyValue = b.currency || 'RON';
+        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+      }, 0);
+      const totalRentOverdue = rentBillsOverdue.reduce((sum, b) => {
+        const billCurrencyValue = b.currency || 'RON';
+        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+      }, 0);
+      const totalOtherBillsDue = billsDue.reduce((sum, b) => {
+        const billCurrencyValue = b.currency || 'RON';
+        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+      }, 0);
       const totalBillsDue = totalRentDue + totalOtherBillsDue; // For property display
-      const totalOverdue = overdueBills.reduce((sum, b) => sum + b.amount, 0);
-      const totalRentDueSoon = rentBillsDueSoon.reduce((sum, b) => sum + b.amount, 0);
+      const totalOverdue = overdueBills.reduce((sum, b) => {
+        const billCurrencyValue = b.currency || 'RON';
+        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+      }, 0);
+      const totalRentDueSoon = rentBillsDueSoon.reduce((sum, b) => {
+        const billCurrencyValue = b.currency || 'RON';
+        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+      }, 0);
       
       const propertyData = {
         property,
@@ -187,6 +254,7 @@ export default function SummaryView() {
         hasMoreBills,
         totalBillsDue,
         totalRentDue,
+        totalRentOverdue,
         totalOtherBillsDue,
         totalOverdue,
         totalRentDueSoon,
@@ -207,6 +275,7 @@ export default function SummaryView() {
     const totalsWithRenters = {
       totalBillsDue: propertiesWithRenters.reduce((sum, p) => sum + p.totalBillsDue, 0),
       totalRentDue: propertiesWithRenters.reduce((sum, p) => sum + p.totalRentDue, 0),
+      totalRentOverdue: propertiesWithRenters.reduce((sum, p) => sum + p.totalRentOverdue, 0),
       totalOtherBillsDue: propertiesWithRenters.reduce((sum, p) => sum + p.totalOtherBillsDue, 0),
       totalOverdue: propertiesWithRenters.reduce((sum, p) => sum + p.totalOverdue, 0),
       totalRentDueSoon: propertiesWithRenters.reduce((sum, p) => sum + p.totalRentDueSoon, 0),
@@ -219,6 +288,7 @@ export default function SummaryView() {
     const totalsWithoutRenters = {
       totalBillsDue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalBillsDue, 0),
       totalRentDue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalRentDue, 0),
+      totalRentOverdue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalRentOverdue, 0),
       totalOtherBillsDue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalOtherBillsDue, 0),
       totalOverdue: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalOverdue, 0),
       totalRentDueSoon: propertiesWithoutRenters.reduce((sum, p) => sum + p.totalRentDueSoon, 0),
@@ -244,23 +314,59 @@ export default function SummaryView() {
       overallBillsDue: totalsWithRenters.totalOtherBillsDue + totalsWithoutRenters.totalOtherBillsDue, // Only non-rent bills
       overallOverdue: totalsWithRenters.totalOverdue + totalsWithoutRenters.totalOverdue,
       overallRentDue: totalsWithRenters.totalRentDue + totalsWithoutRenters.totalRentDue,
+      overallRentOverdue: totalsWithRenters.totalRentOverdue + totalsWithoutRenters.totalRentOverdue,
       overallRentDueSoon: totalsWithRenters.totalRentDueSoon + totalsWithoutRenters.totalRentDueSoon,
     };
-  }, [properties, renters, bills, rentWarningDays]);
+  }, [properties, renters, bills, rentWarningDays, billCurrency, exchangeRates, convertBillAmount]);
 
-  const formatAmount = (amount: number, currency: string = 'RON') => {
+  const formatAmount = (amount: number, currency: string = billCurrency) => {
     return new Intl.NumberFormat('ro-RO', {
       style: 'currency',
       currency: currency,
     }).format(amount);
   };
 
-  const formatRentAmount = (amountRON: number) => {
+  // Format bill amount in preferred bill currency
+  const formatBillAmount = (bill: Bill) => {
+    const billCurrencyValue = bill.currency || 'RON';
+    const convertedAmount = convertBillAmount(bill.amount, billCurrencyValue, billCurrency);
+    
+    // If bill is already in preferred currency, just show it
+    if (billCurrencyValue.toUpperCase() === billCurrency.toUpperCase()) {
+      return formatAmount(convertedAmount, billCurrency);
+    }
+    
+    // Otherwise show converted amount in preferred currency, with original in parentheses
+    return (
+      <span>
+        {formatAmount(convertedAmount, billCurrency)} ({formatAmount(bill.amount, billCurrencyValue)})
+      </span>
+    );
+  };
+
+  const formatRentAmount = (bill: Bill | number, sourceCurrency?: string) => {
+    // Handle both Bill object and number (for backwards compatibility)
+    let amount: number;
+    let billCurrencyValue: string;
+    
+    if (typeof bill === 'number') {
+      // If number is passed, use provided sourceCurrency or default to RON
+      amount = bill;
+      billCurrencyValue = sourceCurrency || 'RON';
+    } else {
+      // New: use bill's currency
+      amount = bill.amount;
+      billCurrencyValue = bill.currency || 'RON';
+    }
+    
+    // Convert bill amount to RON first (if needed)
+    const amountInRON = convertBillAmount(amount, billCurrencyValue, 'RON');
+    
     const rentCurrencyUpper = rentCurrency.toUpperCase();
     
     // If preferred currency is RON, show only RON
     if (rentCurrencyUpper === 'RON') {
-      return formatAmount(amountRON, 'RON');
+      return formatAmount(amountInRON, 'RON');
     }
     
     // Convert RON to preferred currency
@@ -270,19 +376,19 @@ export default function SummaryView() {
     let convertedAmount = 0;
     
     if (rentCurrencyUpper === 'EUR') {
-      convertedAmount = amountRON / ronRate;
+      convertedAmount = amountInRON / ronRate;
     } else if (rentCurrencyUpper === 'USD') {
       const usdRate = exchangeRates.USD; // USD per EUR
-      convertedAmount = (amountRON / ronRate) * usdRate;
+      convertedAmount = (amountInRON / ronRate) * usdRate;
     } else {
       // Fallback to RON only
-      return formatAmount(amountRON, 'RON');
+      return formatAmount(amountInRON, 'RON');
     }
     
     // Show preferred currency first, then RON
     return (
       <span>
-        {formatAmount(convertedAmount, rentCurrencyUpper)} / {formatAmount(amountRON, 'RON')}
+        {formatAmount(convertedAmount, rentCurrencyUpper)} / {formatAmount(amountInRON, 'RON')}
       </span>
     );
   };
@@ -300,7 +406,7 @@ export default function SummaryView() {
     );
   }
 
-  const { allProperties, propertiesWithRenters, propertiesWithoutRenters, totalsWithRenters, totalsWithoutRenters, overallBillsDue, overallOverdue, overallRentDue } = summaryData;
+  const { allProperties, propertiesWithRenters, propertiesWithoutRenters, totalsWithRenters, totalsWithoutRenters, overallBillsDue, overallOverdue, overallRentDue, overallRentOverdue } = summaryData;
 
   return (
     <div className="space-y-6">
@@ -310,18 +416,18 @@ export default function SummaryView() {
           <CardTitle className="text-slate-100 text-xl">Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
               <p className="text-xs text-slate-400 mb-1">{t('summary.billsDue')}</p>
               <p className="text-2xl font-semibold text-slate-100">
-                {formatAmount(overallBillsDue)}
+                {formatAmount(overallBillsDue, billCurrency)}
               </p>
             </div>
             {overallOverdue > 0 && (
               <div className="bg-red-900/20 rounded-lg p-4 border border-red-700/50">
                 <p className="text-xs text-red-400 mb-1">{t('summary.overdue')}</p>
                 <p className="text-2xl font-semibold text-red-300">
-                  {formatAmount(overallOverdue)}
+                  {formatAmount(overallOverdue, billCurrency)}
                 </p>
               </div>
             )}
@@ -329,7 +435,15 @@ export default function SummaryView() {
               <div className="bg-yellow-900/20 rounded-lg p-4 border border-yellow-700/50">
                 <p className="text-xs text-yellow-400 mb-1">{t('summary.rentsDue')}</p>
                 <p className="text-2xl font-semibold text-yellow-300">
-                  {formatRentAmount(overallRentDue)}
+                  {formatRentAmount(overallRentDue, billCurrency)}
+                </p>
+              </div>
+            )}
+            {overallRentOverdue > 0 && (
+              <div className="bg-red-900/20 rounded-lg p-4 border border-red-700/50">
+                <p className="text-xs text-red-400 mb-1">{t('summary.rentOverdue')}</p>
+                <p className="text-2xl font-semibold text-red-300">
+                  {formatRentAmount(overallRentOverdue, billCurrency)}
                 </p>
               </div>
             )}
@@ -381,21 +495,21 @@ export default function SummaryView() {
                       return (
                         <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
                           <span className="truncate mr-2">{supplierName} - {propertyName}</span>
-                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatBillAmount(bill)}</span>
                         </div>
                       );
                     })}
                     {allBillsDue.length > 0 && (
-                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-600">
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-600">
                         <p className="text-xs text-slate-400 font-medium">{t('summary.total')}</p>
                         <p className="text-xl font-semibold text-slate-100 text-right">
-                          {formatAmount(totalsWithRenters.totalOtherBillsDue)}
+                          {formatAmount(totalsWithRenters.totalOtherBillsDue, billCurrency)}
                         </p>
                       </div>
                     )}
                     {allBillsDue.length === 0 && (
                       <p className="text-xl font-semibold text-slate-100 text-right">
-                        {formatAmount(totalsWithRenters.totalOtherBillsDue)}
+                        {formatAmount(totalsWithRenters.totalOtherBillsDue, billCurrency)}
                       </p>
                     )}
                   </>
@@ -437,7 +551,7 @@ export default function SummaryView() {
                         return (
                           <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
                             <span className="truncate mr-2">{supplierName} - {propertyName}</span>
-                            <span className="text-red-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                            <span className="text-red-300 font-medium text-right flex-shrink-0">{formatBillAmount(bill)}</span>
                           </div>
                         );
                       })}
@@ -445,13 +559,13 @@ export default function SummaryView() {
                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-700/50">
                           <p className="text-xs text-red-400 font-medium">{t('summary.total')}</p>
                           <p className="text-xl font-semibold text-red-300 text-right">
-                            {formatAmount(totalsWithRenters.totalOverdue)}
+                            {formatAmount(totalsWithRenters.totalOverdue, billCurrency)}
                           </p>
                         </div>
                       )}
                       {allOverdueBills.length === 0 && (
                         <p className="text-xl font-semibold text-red-300 text-right">
-                          {formatAmount(totalsWithRenters.totalOverdue)}
+                          {formatAmount(totalsWithRenters.totalOverdue, billCurrency)}
                         </p>
                       )}
                     </>
@@ -492,20 +606,20 @@ export default function SummaryView() {
                             {renterName && `${renterName} - `}
                             {new Date(bill.due_date).toLocaleDateString()}
                           </span>
-                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatRentAmount(bill.amount)}</span>
+                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatRentAmount(bill)}</span>
                         </div>
                       ))}
                       {allRentBillsDueSoon.length > 0 && (
                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-yellow-700/50">
                           <p className="text-xs text-yellow-400 font-medium">{t('summary.total')}</p>
                           <p className="text-xl font-semibold text-yellow-300 text-right">
-                            {formatRentAmount(totalsWithRenters.totalRentDueSoon)}
+                            {formatRentAmount(totalsWithRenters.totalRentDueSoon, billCurrency)}
                           </p>
                         </div>
                       )}
                       {allRentBillsDueSoon.length === 0 && (
                         <p className="text-xl font-semibold text-yellow-300 text-right">
-                          {formatRentAmount(totalsWithRenters.totalRentDueSoon)}
+                          {formatRentAmount(totalsWithRenters.totalRentDueSoon, billCurrency)}
                         </p>
                       )}
                     </>
@@ -558,7 +672,7 @@ export default function SummaryView() {
                       return (
                         <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
                           <span className="truncate mr-2">{supplierName} - {propertyName}</span>
-                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatBillAmount(bill)}</span>
                         </div>
                       );
                     })}
@@ -566,13 +680,13 @@ export default function SummaryView() {
                       <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-600">
                         <p className="text-xs text-slate-400 font-medium">{t('summary.total')}</p>
                         <p className="text-xl font-semibold text-slate-100 text-right">
-                          {formatAmount(totalsWithoutRenters.totalOtherBillsDue)}
+                          {formatAmount(totalsWithoutRenters.totalOtherBillsDue, billCurrency)}
                         </p>
                       </div>
                     )}
                     {allBillsDue.length === 0 && (
                       <p className="text-xl font-semibold text-slate-100 text-right">
-                        {formatAmount(totalsWithoutRenters.totalOtherBillsDue)}
+                        {formatAmount(totalsWithoutRenters.totalOtherBillsDue, billCurrency)}
                       </p>
                     )}
                   </>
@@ -614,7 +728,7 @@ export default function SummaryView() {
                         return (
                           <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
                             <span className="truncate mr-2">{supplierName} - {propertyName}</span>
-                            <span className="text-red-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                            <span className="text-red-300 font-medium text-right flex-shrink-0">{formatBillAmount(bill)}</span>
                           </div>
                         );
                       })}
@@ -622,13 +736,13 @@ export default function SummaryView() {
                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-700/50">
                           <p className="text-xs text-red-400 font-medium">{t('summary.total')}</p>
                           <p className="text-xl font-semibold text-red-300 text-right">
-                            {formatAmount(totalsWithoutRenters.totalOverdue)}
+                            {formatAmount(totalsWithoutRenters.totalOverdue, billCurrency)}
                           </p>
                         </div>
                       )}
                       {allOverdueBills.length === 0 && (
                         <p className="text-xl font-semibold text-red-300 text-right">
-                          {formatAmount(totalsWithoutRenters.totalOverdue)}
+                          {formatAmount(totalsWithoutRenters.totalOverdue, billCurrency)}
                         </p>
                       )}
                     </>
@@ -675,18 +789,18 @@ export default function SummaryView() {
                   <div className="flex gap-2 ml-3 flex-shrink-0">
                     <div className="text-right">
                       <p className="text-xs text-slate-400">{t('summary.billsDue')}</p>
-                      <p className="text-sm font-semibold text-slate-100">{formatAmount(totalBillsDue)}</p>
+                      <p className="text-sm font-semibold text-slate-100">{formatAmount(totalBillsDue, billCurrency)}</p>
                     </div>
                     {totalOverdue > 0 && (
                       <div className="text-right">
                         <p className="text-xs text-red-400">{t('summary.overdue')}</p>
-                        <p className="text-sm font-semibold text-red-300">{formatAmount(totalOverdue)}</p>
+                        <p className="text-sm font-semibold text-red-300">{formatAmount(totalOverdue, billCurrency)}</p>
                       </div>
                     )}
                     {totalRentDueSoon > 0 && (
                       <div className="text-right">
                         <p className="text-xs text-yellow-400">{t('summary.rentDueSoon')}</p>
-                        <p className="text-sm font-semibold text-yellow-300">{formatRentAmount(totalRentDueSoon)}</p>
+                        <p className="text-sm font-semibold text-yellow-300">{formatRentAmount(totalRentDueSoon, billCurrency)}</p>
                       </div>
                     )}
                   </div>

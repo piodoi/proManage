@@ -312,6 +312,7 @@ export type Bill = {
   bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
   description: string;
   amount: number;
+  currency?: string;  // Currency for the bill: "EUR", "RON", or "USD"
   due_date: string;
   iban?: string;
   bill_number?: string;
