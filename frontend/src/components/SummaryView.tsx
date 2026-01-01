@@ -229,17 +229,21 @@ export default function SummaryView() {
     });
 
     // Combine all properties for display (no separation)
+    // Use totalOtherBillsDue instead of totalBillsDue to exclude rent
     const allProperties = [
-      ...propertiesWithRenters.map(p => ({ ...p, hasRenters: true })),
-      ...propertiesWithoutRenters.map(p => ({ ...p, hasRenters: false }))
+      ...propertiesWithRenters.map(p => ({ ...p, hasRenters: true, totalBillsDue: p.totalOtherBillsDue })),
+      ...propertiesWithoutRenters.map(p => ({ ...p, hasRenters: false, totalBillsDue: p.totalOtherBillsDue }))
     ];
 
     return {
       allProperties,
+      propertiesWithRenters,
+      propertiesWithoutRenters,
       totalsWithRenters,
       totalsWithoutRenters,
       overallBillsDue: totalsWithRenters.totalOtherBillsDue + totalsWithoutRenters.totalOtherBillsDue, // Only non-rent bills
       overallOverdue: totalsWithRenters.totalOverdue + totalsWithoutRenters.totalOverdue,
+      overallRentDue: totalsWithRenters.totalRentDue + totalsWithoutRenters.totalRentDue,
       overallRentDueSoon: totalsWithRenters.totalRentDueSoon + totalsWithoutRenters.totalRentDueSoon,
     };
   }, [properties, renters, bills, rentWarningDays]);
@@ -275,21 +279,14 @@ export default function SummaryView() {
       return formatAmount(amountRON, 'RON');
     }
     
-    // Show both RON and preferred currency
+    // Show preferred currency first, then RON
     return (
       <span>
-        {formatAmount(amountRON, 'RON')} / {formatAmount(convertedAmount, rentCurrencyUpper)}
+        {formatAmount(convertedAmount, rentCurrencyUpper)} / {formatAmount(amountRON, 'RON')}
       </span>
     );
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch {
-      return dateString;
-    }
-  };
 
   if (loading) {
     return (
@@ -303,7 +300,7 @@ export default function SummaryView() {
     );
   }
 
-  const { allProperties, totalsWithRenters, totalsWithoutRenters, overallBillsDue, overallOverdue, overallRentDueSoon } = summaryData;
+  const { allProperties, propertiesWithRenters, propertiesWithoutRenters, totalsWithRenters, totalsWithoutRenters, overallBillsDue, overallOverdue, overallRentDue } = summaryData;
 
   return (
     <div className="space-y-6">
@@ -328,11 +325,11 @@ export default function SummaryView() {
                 </p>
               </div>
             )}
-            {overallRentDueSoon > 0 && (
+            {overallRentDue > 0 && (
               <div className="bg-yellow-900/20 rounded-lg p-4 border border-yellow-700/50">
-                <p className="text-xs text-yellow-400 mb-1">{t('summary.rentDueSoon')}</p>
+                <p className="text-xs text-yellow-400 mb-1">{t('summary.rentsDue')}</p>
                 <p className="text-2xl font-semibold text-yellow-300">
-                  {formatRentAmount(overallRentDueSoon)}
+                  {formatRentAmount(overallRentDue)}
                 </p>
               </div>
             )}
@@ -351,36 +348,169 @@ export default function SummaryView() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
-              <p className="text-xs text-slate-400 mb-1">{t('summary.rentsDue')}</p>
-              <p className="text-xl font-semibold text-slate-100">
-                {formatRentAmount(totalsWithRenters.totalRentDue)}
-              </p>
-            </div>
-            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
               <p className="text-xs text-slate-400 mb-1">{t('summary.billsDue')}</p>
-              <p className="text-xl font-semibold text-slate-100">
-                {formatAmount(totalsWithRenters.totalOtherBillsDue)}
-              </p>
-              {totalsWithRenters.suppliers.size > 0 && (
-                <p className="text-xs text-slate-500 mt-2">
-                  {Array.from(totalsWithRenters.suppliers).join(', ')}
-                </p>
-              )}
+              {(() => {
+                // Get all bills due for properties with renters, with property info
+                const allBillsDue = propertiesWithRenters.flatMap(p => 
+                  p.billsDue.map(bill => ({
+                    bill,
+                    propertyName: p.property.name
+                  }))
+                );
+                return (
+                  <>
+                    {allBillsDue.map(({ bill, propertyName }) => {
+                      let supplierName = 'Other';
+                      if (bill.bill_type === 'ebloc') {
+                        supplierName = 'E-bloc';
+                      } else if (bill.bill_type === 'utilities') {
+                        const desc = bill.description || '';
+                        const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                        if (supplierMatch) {
+                          supplierName = supplierMatch[1].trim();
+                        } else {
+                          supplierName = 'Utilities';
+                        }
+                      } else if (bill.bill_type === 'other') {
+                        const desc = bill.description || '';
+                        const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                        if (supplierMatch) {
+                          supplierName = supplierMatch[1].trim();
+                        }
+                      }
+                      return (
+                        <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
+                          <span className="truncate mr-2">{supplierName} - {propertyName}</span>
+                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                        </div>
+                      );
+                    })}
+                    {allBillsDue.length > 0 && (
+                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-600">
+                        <p className="text-xs text-slate-400 font-medium">{t('summary.total')}</p>
+                        <p className="text-xl font-semibold text-slate-100 text-right">
+                          {formatAmount(totalsWithRenters.totalOtherBillsDue)}
+                        </p>
+                      </div>
+                    )}
+                    {allBillsDue.length === 0 && (
+                      <p className="text-xl font-semibold text-slate-100 text-right">
+                        {formatAmount(totalsWithRenters.totalOtherBillsDue)}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             {totalsWithRenters.totalOverdue > 0 && (
               <div className="bg-red-900/20 rounded-lg p-3 border border-red-700/50">
                 <p className="text-xs text-red-400 mb-1">{t('summary.overdue')}</p>
-                <p className="text-xl font-semibold text-red-300">
-                  {formatAmount(totalsWithRenters.totalOverdue)}
-                </p>
+                {(() => {
+                  // Get all overdue bills for properties with renters, with property info
+                  const allOverdueBills = propertiesWithRenters.flatMap(p => 
+                    p.overdueBills.map(bill => ({
+                      bill,
+                      propertyName: p.property.name
+                    }))
+                  );
+                  return (
+                    <>
+                      {allOverdueBills.map(({ bill, propertyName }) => {
+                        let supplierName = 'Other';
+                        if (bill.bill_type === 'ebloc') {
+                          supplierName = 'E-bloc';
+                        } else if (bill.bill_type === 'utilities') {
+                          const desc = bill.description || '';
+                          const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                          if (supplierMatch) {
+                            supplierName = supplierMatch[1].trim();
+                          } else {
+                            supplierName = 'Utilities';
+                          }
+                        } else if (bill.bill_type === 'other') {
+                          const desc = bill.description || '';
+                          const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                          if (supplierMatch) {
+                            supplierName = supplierMatch[1].trim();
+                          }
+                        }
+                        return (
+                          <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
+                            <span className="truncate mr-2">{supplierName} - {propertyName}</span>
+                            <span className="text-red-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                          </div>
+                        );
+                      })}
+                      {allOverdueBills.length > 0 && (
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-700/50">
+                          <p className="text-xs text-red-400 font-medium">{t('summary.total')}</p>
+                          <p className="text-xl font-semibold text-red-300 text-right">
+                            {formatAmount(totalsWithRenters.totalOverdue)}
+                          </p>
+                        </div>
+                      )}
+                      {allOverdueBills.length === 0 && (
+                        <p className="text-xl font-semibold text-red-300 text-right">
+                          {formatAmount(totalsWithRenters.totalOverdue)}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
             {totalsWithRenters.totalRentDueSoon > 0 && (
               <div className="bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/50">
                 <p className="text-xs text-yellow-400 mb-1">{t('summary.rentDueSoon')}</p>
-                <p className="text-xl font-semibold text-yellow-300">
-                  {formatRentAmount(totalsWithRenters.totalRentDueSoon)}
-                </p>
+                {(() => {
+                  // Get all rent bills due soon for properties with renters, with property and renter info
+                  const allRentBillsDueSoon = propertiesWithRenters.flatMap(p => 
+                    p.rentBillsDueSoon.map(bill => ({
+                      bill,
+                      propertyName: p.property.name,
+                      renterName: (() => {
+                        // Find renter for this bill - match by property_id and renter name from bill description if available
+                        const propertyRenters = renters[p.property.id] || [];
+                        if (bill.description) {
+                          // Try to extract renter name from description
+                          const descLower = bill.description.toLowerCase();
+                          const matchingRenter = propertyRenters.find(r => 
+                            descLower.includes(r.name.toLowerCase())
+                          );
+                          if (matchingRenter) return matchingRenter.name;
+                        }
+                        // If multiple renters, show first one, otherwise empty
+                        return propertyRenters.length === 1 ? propertyRenters[0].name : '';
+                      })()
+                    }))
+                  );
+                  return (
+                    <>
+                      {allRentBillsDueSoon.map(({ bill, renterName }) => (
+                        <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
+                          <span className="truncate mr-2">
+                            {renterName && `${renterName} - `}
+                            {new Date(bill.due_date).toLocaleDateString()}
+                          </span>
+                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatRentAmount(bill.amount)}</span>
+                        </div>
+                      ))}
+                      {allRentBillsDueSoon.length > 0 && (
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-yellow-700/50">
+                          <p className="text-xs text-yellow-400 font-medium">{t('summary.total')}</p>
+                          <p className="text-xl font-semibold text-yellow-300 text-right">
+                            {formatRentAmount(totalsWithRenters.totalRentDueSoon)}
+                          </p>
+                        </div>
+                      )}
+                      {allRentBillsDueSoon.length === 0 && (
+                        <p className="text-xl font-semibold text-yellow-300 text-right">
+                          {formatRentAmount(totalsWithRenters.totalRentDueSoon)}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </CardContent>
@@ -395,36 +525,115 @@ export default function SummaryView() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
-              <p className="text-xs text-slate-400 mb-1">{t('summary.rentsDue')}</p>
-              <p className="text-xl font-semibold text-slate-100">
-                {formatRentAmount(totalsWithoutRenters.totalRentDue)}
-              </p>
-            </div>
-            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
               <p className="text-xs text-slate-400 mb-1">{t('summary.billsDue')}</p>
-              <p className="text-xl font-semibold text-slate-100">
-                {formatAmount(totalsWithoutRenters.totalOtherBillsDue)}
-              </p>
-              {totalsWithoutRenters.suppliers.size > 0 && (
-                <p className="text-xs text-slate-500 mt-2">
-                  {Array.from(totalsWithoutRenters.suppliers).join(', ')}
-                </p>
-              )}
+              {(() => {
+                // Get all bills due for properties without renters, with property info
+                const allBillsDue = propertiesWithoutRenters.flatMap(p => 
+                  p.billsDue.map(bill => ({
+                    bill,
+                    propertyName: p.property.name
+                  }))
+                );
+                return (
+                  <>
+                    {allBillsDue.map(({ bill, propertyName }) => {
+                      let supplierName = 'Other';
+                      if (bill.bill_type === 'ebloc') {
+                        supplierName = 'E-bloc';
+                      } else if (bill.bill_type === 'utilities') {
+                        const desc = bill.description || '';
+                        const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                        if (supplierMatch) {
+                          supplierName = supplierMatch[1].trim();
+                        } else {
+                          supplierName = 'Utilities';
+                        }
+                      } else if (bill.bill_type === 'other') {
+                        const desc = bill.description || '';
+                        const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                        if (supplierMatch) {
+                          supplierName = supplierMatch[1].trim();
+                        }
+                      }
+                      return (
+                        <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
+                          <span className="truncate mr-2">{supplierName} - {propertyName}</span>
+                          <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                        </div>
+                      );
+                    })}
+                    {allBillsDue.length > 0 && (
+                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-600">
+                        <p className="text-xs text-slate-400 font-medium">{t('summary.total')}</p>
+                        <p className="text-xl font-semibold text-slate-100 text-right">
+                          {formatAmount(totalsWithoutRenters.totalOtherBillsDue)}
+                        </p>
+                      </div>
+                    )}
+                    {allBillsDue.length === 0 && (
+                      <p className="text-xl font-semibold text-slate-100 text-right">
+                        {formatAmount(totalsWithoutRenters.totalOtherBillsDue)}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             {totalsWithoutRenters.totalOverdue > 0 && (
               <div className="bg-red-900/20 rounded-lg p-3 border border-red-700/50">
                 <p className="text-xs text-red-400 mb-1">{t('summary.overdue')}</p>
-                <p className="text-xl font-semibold text-red-300">
-                  {formatAmount(totalsWithoutRenters.totalOverdue)}
-                </p>
-              </div>
-            )}
-            {totalsWithoutRenters.totalRentDueSoon > 0 && (
-              <div className="bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/50">
-                <p className="text-xs text-yellow-400 mb-1">{t('summary.rentDueSoon')}</p>
-                <p className="text-xl font-semibold text-yellow-300">
-                  {formatRentAmount(totalsWithoutRenters.totalRentDueSoon)}
-                </p>
+                {(() => {
+                  // Get all overdue bills for properties without renters, with property info
+                  const allOverdueBills = propertiesWithoutRenters.flatMap(p => 
+                    p.overdueBills.map(bill => ({
+                      bill,
+                      propertyName: p.property.name
+                    }))
+                  );
+                  return (
+                    <>
+                      {allOverdueBills.map(({ bill, propertyName }) => {
+                        let supplierName = 'Other';
+                        if (bill.bill_type === 'ebloc') {
+                          supplierName = 'E-bloc';
+                        } else if (bill.bill_type === 'utilities') {
+                          const desc = bill.description || '';
+                          const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                          if (supplierMatch) {
+                            supplierName = supplierMatch[1].trim();
+                          } else {
+                            supplierName = 'Utilities';
+                          }
+                        } else if (bill.bill_type === 'other') {
+                          const desc = bill.description || '';
+                          const supplierMatch = desc.match(/^([A-Za-z\s]+?)(?:\s|$)/);
+                          if (supplierMatch) {
+                            supplierName = supplierMatch[1].trim();
+                          }
+                        }
+                        return (
+                          <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
+                            <span className="truncate mr-2">{supplierName} - {propertyName}</span>
+                            <span className="text-red-300 font-medium text-right flex-shrink-0">{formatAmount(bill.amount)}</span>
+                          </div>
+                        );
+                      })}
+                      {allOverdueBills.length > 0 && (
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-700/50">
+                          <p className="text-xs text-red-400 font-medium">{t('summary.total')}</p>
+                          <p className="text-xl font-semibold text-red-300 text-right">
+                            {formatAmount(totalsWithoutRenters.totalOverdue)}
+                          </p>
+                        </div>
+                      )}
+                      {allOverdueBills.length === 0 && (
+                        <p className="text-xl font-semibold text-red-300 text-right">
+                          {formatAmount(totalsWithoutRenters.totalOverdue)}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </CardContent>
@@ -439,13 +648,15 @@ export default function SummaryView() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {allProperties.map(({ property, renters: propertyRenters, totalBillsDue, totalOverdue, totalRentDueSoon, hasRenters }) => (
+              {allProperties.map(({ property, totalBillsDue, totalOverdue, totalRentDueSoon, hasRenters }) => {
+                const propertyRenters = renters[property.id] || [];
+                return (
                 <div key={property.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg border border-slate-600">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-slate-100 truncate">{property.name}</h3>
                     {hasRenters && propertyRenters && propertyRenters.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {propertyRenters.slice(0, 2).map(renter => (
+                        {propertyRenters.slice(0, 2).map((renter: Renter) => (
                           <span
                             key={renter.id}
                             className="px-1.5 py-0.5 bg-slate-600 text-slate-200 rounded text-xs"
@@ -480,7 +691,8 @@ export default function SummaryView() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

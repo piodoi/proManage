@@ -170,7 +170,8 @@
     "overdue": "Restante",
     "rentDueSoon": "Chirie Scadenta Curand",
     "recentBills": "Facturi Recente",
-    "rentsDue": "Chirii Scadente"
+    "rentsDue": "Chirii Scadente",
+    "total": "Total"
   },
   "supplier": {
     "suppliers": "Furnizori",
