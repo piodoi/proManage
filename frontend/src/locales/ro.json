@@ -73,7 +73,11 @@
     "address": "Adresă",
     "addressPlaceholder": "Stradă, Număr, Oraș",
     "confirmDelete": "Ești sigur că vrei să ștergi această proprietate? Aceasta va șterge și toate facturile și chiriașii asociați.",
-    "noProperties": "Nicio proprietate încă. Adaugă prima ta proprietate pentru a începe."
+    "noProperties": "Nicio proprietate încă. Adaugă prima ta proprietate pentru a începe.",
+    "listView": "Vizualizare Listă",
+    "gridView": "Vizualizare Grilă",
+    "switchToList": "Treci la Vizualizare Listă",
+    "switchToGrid": "Treci la Vizualizare Grilă"
   },
   "renter": {
     "renters": "Chiriași",

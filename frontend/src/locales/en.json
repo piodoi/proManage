@@ -73,7 +73,11 @@
     "address": "Address",
     "addressPlaceholder": "Street, Number, City",
     "confirmDelete": "Are you sure you want to delete this property? This will also delete all associated bills and renters.",
-    "noProperties": "No properties yet. Add your first property to get started."
+    "noProperties": "No properties yet. Add your first property to get started.",
+    "listView": "List View",
+    "gridView": "Grid View",
+    "switchToList": "Switch to List View",
+    "switchToGrid": "Switch to Grid View"
   },
   "renter": {
     "renters": "Renters",

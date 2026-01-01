@@ -3,7 +3,8 @@ import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { useAuth } from '../App';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Building2, Settings, List, Grid } from 'lucide-react';
 import SettingsView from './SettingsView';
 import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
@@ -27,6 +28,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
 
   useEffect(() => {
@@ -111,6 +113,14 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
             <div className="flex gap-2">
+              <Button
+                onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
+                title={viewMode === 'list' ? t('property.switchToGrid') : t('property.switchToList')}
+              >
+                {viewMode === 'list' ? <Grid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
+                {viewMode === 'list' ? t('property.gridView') : t('property.listView')}
+              </Button>
               <EblocImportDialog
                 token={token}
                 open={showEblocDiscover}
@@ -137,6 +147,22 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 {t('property.noProperties')}
               </CardContent>
             </Card>
+          ) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 gap-4">
+              {properties.map((property) => (
+                <PropertyCard
+                  key={property.id}
+                  token={token}
+                  property={property}
+                  renters={renters[property.id] || []}
+                  bills={bills}
+                  exchangeRates={exchangeRates}
+                  onDelete={handleDeleteProperty}
+                  onDataChange={loadData}
+                  onError={setError}
+                />
+              ))}
+            </div>
           ) : (
             properties.map((property) => (
               <PropertyCard
@@ -170,6 +196,14 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
             <div className="flex justify-between items-center">
               <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
               <div className="flex gap-2">
+                <Button
+                  onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                  className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
+                  title={viewMode === 'list' ? t('property.switchToGrid') : t('property.switchToList')}
+                >
+                  {viewMode === 'list' ? <Grid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
+                  {viewMode === 'list' ? t('property.gridView') : t('property.listView')}
+                </Button>
                 <EblocImportDialog
                   token={token}
                   open={showEblocDiscover}
@@ -196,6 +230,22 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   {t('property.noProperties')}
                 </CardContent>
               </Card>
+            ) : viewMode === 'grid' ? (
+              <div className="grid grid-cols-2 gap-4">
+                {properties.map((property) => (
+                  <PropertyCard
+                    key={property.id}
+                    token={token}
+                    property={property}
+                    renters={renters[property.id] || []}
+                    bills={bills}
+                    exchangeRates={exchangeRates}
+                    onDelete={handleDeleteProperty}
+                    onDataChange={loadData}
+                    onError={setError}
+                  />
+                ))}
+              </div>
             ) : (
               properties.map((property) => (
                 <PropertyCard
