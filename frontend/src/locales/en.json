@@ -203,7 +203,18 @@
     "saveCredentialsError": "Failed to save credentials",
     "removeConfirm": "Are you sure you want to remove this supplier from the property?",
     "removeError": "Failed to remove supplier",
-    "noAssignedSuppliers": "No suppliers assigned to properties. Add suppliers in the Properties dashboard to set up credentials."
+    "noAssignedSuppliers": "No suppliers assigned to properties. Add suppliers in the Properties dashboard to set up credentials.",
+    "selectSuppliers": "Select Suppliers",
+    "selectSuppliersToSync": "Select Suppliers to Sync",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "syncBills": "Sync Bills",
+    "notEligible": "Not Eligible",
+    "credentialsMissing": "Credentials missing",
+    "selectBills": "Select Bills to Save",
+    "selectBillsToSave": "Select Bills to Save",
+    "saveBills": "Save Bills",
+    "noBillsDiscovered": "No bills discovered"
   },
   "ebloc": {
     "syncEbloc": "Sync E-Bloc",

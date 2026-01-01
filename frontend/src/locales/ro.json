@@ -196,7 +196,18 @@
     "selectContract": "Selectează Contract",
     "selectContracts": "Selectează Contracte",
     "multipleContractsFound": "Au fost găsite mai multe contracte. Te rog selectează ce contract să folosești pentru fiecare furnizor.",
-    "contractSelectionsSaved": "Selecțiile contractelor au fost salvate. Poți sincroniza din nou facturile pentru a filtra după contractele selectate."
+    "contractSelectionsSaved": "Selecțiile contractelor au fost salvate. Poți sincroniza din nou facturile pentru a filtra după contractele selectate.",
+    "selectSuppliers": "Selectează Furnizori",
+    "selectSuppliersToSync": "Selectează Furnizori pentru Sincronizare",
+    "selectAll": "Selectează Tot",
+    "deselectAll": "Deselectează Tot",
+    "syncBills": "Sincronizează Facturi",
+    "notEligible": "Neeligibil",
+    "credentialsMissing": "Credențiale lipsă",
+    "selectBills": "Selectează Facturi de Salvat",
+    "selectBillsToSave": "Selectează Facturi de Salvat",
+    "saveBills": "Salvează Facturi",
+    "noBillsDiscovered": "Nu au fost găsite facturi"
   },
   "ebloc": {
     "syncEbloc": "Sincronizează E-Bloc",

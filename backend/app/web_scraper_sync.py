@@ -20,6 +20,15 @@ import httpx
 from app.web_scraper import ScraperConfig, ScrapedBill
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# Ensure handler exists if not already configured
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+logger.propagate = True
 
 
 class WebScraperSync:

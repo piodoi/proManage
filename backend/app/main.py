@@ -23,6 +23,22 @@ from app.utils.suppliers import initialize_suppliers
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s:%(name)s:%(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ],
+    force=True  # Override any existing configuration
+)
+
+# Ensure all our loggers are set to INFO level
+logging.getLogger('app').setLevel(logging.INFO)
+logging.getLogger('app.routes').setLevel(logging.INFO)
+logging.getLogger('app.web_scraper').setLevel(logging.INFO)
+logging.getLogger('app.web_scraper_sync').setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ProManage API", version="1.0.0")

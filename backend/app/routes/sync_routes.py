@@ -44,7 +44,9 @@ def _run_sync_supplier_scraper_in_thread(
     patterns: List[ExtractionPattern],
     property_supplier_id: str,
     save_html_dumps: bool = False,
-    progress_callback: Optional[Callable] = None
+    progress_callback: Optional[Callable] = None,
+    discover_only: bool = False,
+    bills_callback: Optional[Callable] = None
 ) -> tuple[int, int]:  # Returns (bills_found, bills_created)
     """Run scraper sync using Playwright sync API in a thread (for Windows compatibility)"""
     from app.web_scraper_sync import WebScraperSync
@@ -52,6 +54,15 @@ def _run_sync_supplier_scraper_in_thread(
     from app.pdf_parser import parse_pdf_with_patterns
     
     log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
+    # Ensure handler exists
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
+        handler.setFormatter(formatter)
+        log.addHandler(handler)
+    log.propagate = True
     log.info(f"[{supplier.name} Scraper] Starting sync (sync API) for property {property_id}")
     
     if progress_callback:
@@ -80,6 +91,7 @@ def _run_sync_supplier_scraper_in_thread(
     property_supplier = db.get_property_supplier(property_supplier_id)
     contract_id_filter = property_supplier.contract_id if property_supplier else None
     contract_id_to_save = None
+    log.info(f"[{supplier.name} Scraper] Property supplier contract_id filter: {contract_id_filter}")
     
     try:
         # Login (sync version)
@@ -94,6 +106,9 @@ def _run_sync_supplier_scraper_in_thread(
         scraped_bills = scraper.get_bills()
         bills_found = len(scraped_bills)
         log.info(f"[{supplier.name} Scraper] Found {bills_found} bill(s)")
+        # Log contract_ids from scraped bills for debugging
+        for idx, bill in enumerate(scraped_bills):
+            log.info(f"[{supplier.name} Scraper] Scraped bill #{idx+1}: bill_number={bill.bill_number}, contract_id={bill.contract_id}, amount={bill.amount}")
         
         if progress_callback:
             progress_callback(supplier.name, "processing", bills_found, 0)
@@ -132,6 +147,7 @@ def _run_sync_supplier_scraper_in_thread(
             amount = scraped_bill.amount
             due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
             extracted_contract_id = scraped_bill.contract_id
+            log.info(f"[{supplier.name} Scraper] Processing bill - bill_number: {bill_number}, amount: {amount}, extracted_contract_id: {extracted_contract_id}")
             
             # Parse PDF if available
             if scraped_bill.pdf_content and supplier_pattern:
@@ -166,10 +182,21 @@ def _run_sync_supplier_scraper_in_thread(
                     log.warning(f"[{supplier.name} Scraper] Error parsing PDF: {e}")
             
             # Filter by contract_id if specified
-            if contract_id_filter and extracted_contract_id:
-                if extracted_contract_id != contract_id_filter:
-                    log.debug(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch")
+            # If supplier has contract_id configured, only include bills with matching contract_id
+            # If supplier has no contract_id configured, include all bills
+            if contract_id_filter:
+                # Normalize both to strings for comparison (handle int/string differences)
+                filter_str = str(contract_id_filter).strip()
+                extracted_str = str(extracted_contract_id).strip() if extracted_contract_id else None
+                
+                # Supplier has contract_id configured - only show bills with matching contract_id
+                if not extracted_str or extracted_str != filter_str:
+                    log.info(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch (expected: '{filter_str}', got: '{extracted_str}')")
                     continue
+                log.info(f"[{supplier.name} Scraper] Bill matches contract_id filter: '{filter_str}' (bill_number: {bill_number}, amount: {amount})")
+            else:
+                # Supplier has no contract_id configured - show all bills
+                log.info(f"[{supplier.name} Scraper] No contract_id filter, including bill (contract_id: {extracted_contract_id}, bill_number: {bill_number}, amount: {amount})")
             
             # Save contract_id if we extracted it and it's not set yet
             if extracted_contract_id and not contract_id_to_save:
@@ -180,23 +207,33 @@ def _run_sync_supplier_scraper_in_thread(
             if due_date < datetime.utcnow():
                 bill_status = BillStatus.OVERDUE
             
-            # Create bill
-            bill = Bill(
-                property_id=property_id,
-                renter_id=None,
-                bill_type=supplier.bill_type,
-                description=supplier.name,
-                amount=amount or 0.0,
-                due_date=due_date,
-                iban=iban,
-                bill_number=bill_number,
-                extraction_pattern_id=supplier_pattern.id if supplier_pattern else None,
-                contract_id=extracted_contract_id,
-                status=bill_status
-            )
-            db.save_bill(bill)
-            bills_created += 1
-            log.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
+            # Prepare bill data
+            bill_data = {
+                "property_id": property_id,
+                "renter_id": None,
+                "bill_type": supplier.bill_type.value if hasattr(supplier.bill_type, 'value') else str(supplier.bill_type),
+                "description": supplier.name,
+                "amount": amount or 0.0,
+                "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
+                "iban": iban,
+                "bill_number": bill_number,
+                "extraction_pattern_id": supplier_pattern.id if supplier_pattern else None,
+                "contract_id": extracted_contract_id,
+                "status": bill_status.value if hasattr(bill_status, 'value') else str(bill_status)
+            }
+            
+            if discover_only:
+                # Just collect the bill data, don't save
+                if bills_callback:
+                    bills_callback(bill_data)
+                bills_created += 1
+                log.info(f"[{supplier.name} Scraper] Discovered bill: {supplier.name} - {amount} RON")
+            else:
+                # Create and save bill
+                bill = Bill(**bill_data)
+                db.save_bill(bill)
+                bills_created += 1
+                log.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
         
         # Save contract_id if we extracted it and property_supplier doesn't have it yet
         if contract_id_to_save and property_supplier and not property_supplier.contract_id:
@@ -228,7 +265,9 @@ async def _sync_supplier_scraper(
     logger: logging.Logger,
     property_supplier_id: str,
     save_html_dumps: bool = False,
-    progress_callback: Optional[Callable] = None
+    progress_callback: Optional[Callable] = None,
+    discover_only: bool = False,
+    bills_callback: Optional[Callable] = None
 ) -> tuple[int, int]:  # Returns (bills_found, bills_created)
     """Sync bills from supplier using web scraper"""
     from app.web_scraper import WebScraper, load_scraper_config
@@ -275,6 +314,9 @@ async def _sync_supplier_scraper(
         scraped_bills = await scraper.get_bills()
         bills_found = len(scraped_bills)
         logger.info(f"[{supplier.name} Scraper] Found {bills_found} bill(s)")
+        # Log contract_ids from scraped bills for debugging
+        for idx, bill in enumerate(scraped_bills):
+            logger.info(f"[{supplier.name} Scraper] Scraped bill #{idx+1}: bill_number={bill.bill_number}, contract_id={bill.contract_id}, amount={bill.amount}")
         
         if progress_callback:
             progress_callback(supplier.name, "processing", bills_found, 0)
@@ -312,6 +354,7 @@ async def _sync_supplier_scraper(
             amount = scraped_bill.amount
             due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
             extracted_contract_id = scraped_bill.contract_id
+            logger.info(f"[{supplier.name} Scraper] Processing bill - bill_number: {bill_number}, amount: {amount}, extracted_contract_id: {extracted_contract_id}")
             
             if scraped_bill.pdf_content and supplier_pattern:
                 try:
@@ -344,10 +387,22 @@ async def _sync_supplier_scraper(
                 except Exception as e:
                     logger.warning(f"[{supplier.name} Scraper] Error parsing PDF: {e}")
             
-            if contract_id_filter and extracted_contract_id:
-                if extracted_contract_id != contract_id_filter:
-                    logger.debug(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch")
+            # Filter by contract_id if specified
+            # If supplier has contract_id configured, only include bills with matching contract_id
+            # If supplier has no contract_id configured, include all bills
+            if contract_id_filter:
+                # Normalize both to strings for comparison (handle int/string differences)
+                filter_str = str(contract_id_filter).strip()
+                extracted_str = str(extracted_contract_id).strip() if extracted_contract_id else None
+                
+                # Supplier has contract_id configured - only show bills with matching contract_id
+                if not extracted_str or extracted_str != filter_str:
+                    logger.info(f"[{supplier.name} Scraper] Skipping bill - contract_id mismatch (expected: '{filter_str}', got: '{extracted_str}')")
                     continue
+                logger.info(f"[{supplier.name} Scraper] Bill matches contract_id filter: '{filter_str}' (bill_number: {bill_number}, amount: {amount})")
+            else:
+                # Supplier has no contract_id configured - show all bills
+                logger.info(f"[{supplier.name} Scraper] No contract_id filter, including bill (contract_id: {extracted_contract_id}, bill_number: {bill_number}, amount: {amount})")
             
             if extracted_contract_id and not contract_id_to_save:
                 contract_id_to_save = extracted_contract_id
@@ -356,22 +411,33 @@ async def _sync_supplier_scraper(
             if due_date < datetime.utcnow():
                 bill_status = BillStatus.OVERDUE
             
-            bill = Bill(
-                property_id=property_id,
-                renter_id=None,
-                bill_type=supplier.bill_type,
-                description=supplier.name,
-                amount=amount or 0.0,
-                due_date=due_date,
-                iban=iban,
-                bill_number=bill_number,
-                extraction_pattern_id=supplier_pattern.id if supplier_pattern else None,
-                contract_id=extracted_contract_id,
-                status=bill_status
-            )
-            db.save_bill(bill)
-            bills_created += 1
-            logger.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
+            # Prepare bill data
+            bill_data = {
+                "property_id": property_id,
+                "renter_id": None,
+                "bill_type": supplier.bill_type.value if hasattr(supplier.bill_type, 'value') else str(supplier.bill_type),
+                "description": supplier.name,
+                "amount": amount or 0.0,
+                "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
+                "iban": iban,
+                "bill_number": bill_number,
+                "extraction_pattern_id": supplier_pattern.id if supplier_pattern else None,
+                "contract_id": extracted_contract_id,
+                "status": bill_status.value if hasattr(bill_status, 'value') else str(bill_status)
+            }
+            
+            if discover_only:
+                # Just collect the bill data, don't save
+                if bills_callback:
+                    bills_callback(bill_data)
+                bills_created += 1
+                logger.info(f"[{supplier.name} Scraper] Discovered bill: {supplier.name} - {amount} RON")
+            else:
+                # Create and save bill
+                bill = Bill(**bill_data)
+                db.save_bill(bill)
+                bills_created += 1
+                logger.info(f"[{supplier.name} Scraper] Created bill {bill.id}: {supplier.name} - {amount} RON")
         
         if contract_id_to_save and property_supplier and not property_supplier.contract_id:
             property_supplier.contract_id = contract_id_to_save
@@ -405,11 +471,18 @@ async def cancel_sync(property_id: str, sync_id: str = Query(...), current_user:
 
 
 @router.post("/suppliers/sync/{property_id}")
-async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(None), current_user: TokenData = Depends(require_landlord)):
+async def sync_supplier_bills(
+    property_id: str,
+    sync_id: Optional[str] = Query(None),
+    supplier_ids: Optional[str] = Query(None, description="Comma-separated list of property supplier IDs to sync"),
+    discover_only: bool = Query(False, description="If true, discover bills without saving them"),
+    current_user: TokenData = Depends(require_landlord)
+):
     """
-    Sync bills from all suppliers with credentials configured for this property.
+    Sync bills from suppliers with credentials configured for this property.
     Returns progress information including supplier status and bill counts.
     If sync_id is provided, streams progress via Server-Sent Events.
+    If discover_only is true, bills are discovered but not saved to the database.
     """
     # Generate sync_id if not provided
     if not sync_id:
@@ -444,7 +517,16 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
             suppliers_to_sync = []
             suppliers_without_credentials = []
             
+            # Filter by supplier_ids if provided
+            selected_supplier_ids = set()
+            if supplier_ids:
+                selected_supplier_ids = set(supplier_ids.split(','))
+            
             for ps in property_suppliers:
+                # Filter by selected supplier IDs if provided
+                if selected_supplier_ids and ps.id not in selected_supplier_ids:
+                    continue
+                    
                 supplier = db.get_supplier(ps.supplier_id)
                 if not supplier:
                     continue
@@ -659,17 +741,39 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                         outstanding_debt = balance.outstanding_debt if balance else 0.0
                         if outstanding_debt > 0 or balance:
                             bill_status = BillStatus.OVERDUE if outstanding_debt > 0 else BillStatus.PAID
-                            bill = Bill(
-                                property_id=property_id,
-                                renter_id=None,
-                                bill_type=BillType.EBLOC,
-                                description="E-Bloc",
-                                amount=outstanding_debt,
-                                due_date=balance.last_payment_date if balance and balance.last_payment_date else datetime.utcnow(),
-                                status=bill_status
-                            )
-                            db.save_bill(bill)
-                            bills_count = 1
+                            due_date = balance.last_payment_date if balance and balance.last_payment_date else datetime.utcnow()
+                            
+                            if discover_only:
+                                # Collect bill data without saving
+                                bill_data = {
+                                    "property_id": property_id,
+                                    "renter_id": None,
+                                    "bill_type": BillType.EBLOC,
+                                    "description": "E-Bloc",
+                                    "amount": outstanding_debt,
+                                    "due_date": due_date.isoformat(),
+                                    "status": bill_status.value
+                                }
+                                yield send_event("progress", {
+                                    "supplier_name": supplier.name,
+                                    "status": "processing",
+                                    "bills_found": 1,
+                                    "bills_created": 0,
+                                    "bills": [bill_data]
+                                })
+                                bills_count = 1
+                            else:
+                                bill = Bill(
+                                    property_id=property_id,
+                                    renter_id=None,
+                                    bill_type=BillType.EBLOC,
+                                    description="E-Bloc",
+                                    amount=outstanding_debt,
+                                    due_date=due_date,
+                                    status=bill_status
+                                )
+                                db.save_bill(bill)
+                                bills_count = 1
                         
                         # Create payment records
                         if payments:
@@ -721,6 +825,7 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                         
                         # Use a list to collect progress updates (simpler than queue for now)
                         supplier_progress_updates = []
+                        discovered_bills_list = []
                         
                         def sync_progress_callback(name: str, status: str, found: int = 0, created: int = 0, err: Optional[str] = None):
                             """Progress callback - stores updates to be sent via SSE"""
@@ -731,6 +836,10 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                                 "bills_created": created,
                                 "error": err
                             })
+                        
+                        def bills_collection_callback(bill_data: dict):
+                            """Collect discovered bills"""
+                            discovered_bills_list.append(bill_data)
                         
                         try:
                             if config and config.requires_js and platform.system() == 'Windows':
@@ -743,7 +852,9 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                                     patterns=all_patterns,
                                     property_supplier_id=property_supplier.id,
                                     save_html_dumps=False,
-                                    progress_callback=sync_progress_callback
+                                    progress_callback=sync_progress_callback,
+                                    discover_only=discover_only,
+                                    bills_callback=bills_collection_callback if discover_only else None
                                 )
                             else:
                                 bills_found, bills_count = await _sync_supplier_scraper(
@@ -755,10 +866,12 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                                     logger=logger,
                                     property_supplier_id=property_supplier.id,
                                     save_html_dumps=False,
-                                    progress_callback=sync_progress_callback
+                                    progress_callback=sync_progress_callback,
+                                    discover_only=discover_only,
+                                    bills_callback=bills_collection_callback if discover_only else None
                                 )
                             
-                            # Send all progress updates collected during sync
+                            # Send all progress updates collected during sync (without bills to avoid duplication)
                             for update in supplier_progress_updates:
                                 yield send_event("progress", update)
                                 await asyncio.sleep(0)  # Yield control to allow cancellation check
@@ -767,13 +880,18 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                                 yield send_event("cancelled", {"message": "Sync cancelled"})
                                 return
                             
-                            # Send final completion event
-                            yield send_event("progress", {
+                            # Send final completion event with discovered bills if discover_only
+                            # Only include bills in the final completion event to avoid duplication
+                            completion_data = {
                                 "supplier_name": supplier.name,
                                 "status": "completed",
                                 "bills_found": bills_found,
                                 "bills_created": bills_count
-                            })
+                            }
+                            if discover_only and discovered_bills_list:
+                                completion_data["bills"] = discovered_bills_list
+                                logger.info(f"[{supplier.name} Scraper] Sending {len(discovered_bills_list)} discovered bills in completion event")
+                            yield send_event("progress", completion_data)
                             bills_created_total += bills_count
                         except Exception as e:
                             error_msg = str(e)
@@ -812,6 +930,58 @@ async def sync_supplier_bills(property_id: str, sync_id: Optional[str] = Query(N
                 del _cancellation_flags[cancel_key]
     
     return StreamingResponse(stream_sync_progress(), media_type="text/event-stream")
+
+
+@router.post("/suppliers/sync/{property_id}/save-bills")
+async def save_discovered_bills(
+    property_id: str,
+    bills_data: Dict[str, Any],
+    current_user: TokenData = Depends(require_landlord)
+):
+    """Save discovered bills to the database"""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    bills = bills_data.get("bills", [])
+    if not bills:
+        return {"status": "success", "bills_created": 0}
+    
+    bills_created = []
+    for bill_data in bills:
+        try:
+            # Convert ISO string dates back to datetime
+            due_date_str = bill_data["due_date"].replace('Z', '+00:00')
+            due_date = datetime.fromisoformat(due_date_str)
+            if due_date.tzinfo:
+                due_date = due_date.replace(tzinfo=None)
+            
+            # Convert string enums back to enum types
+            bill_type = BillType(bill_data["bill_type"])
+            bill_status = BillStatus(bill_data["status"])
+            
+            bill = Bill(
+                property_id=bill_data["property_id"],
+                renter_id=bill_data.get("renter_id"),
+                bill_type=bill_type,
+                description=bill_data["description"],
+                amount=bill_data["amount"],
+                due_date=due_date,
+                iban=bill_data.get("iban"),
+                bill_number=bill_data.get("bill_number"),
+                extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                contract_id=bill_data.get("contract_id"),
+                status=bill_status
+            )
+            db.save_bill(bill)
+            bills_created.append(bill.id)
+        except Exception as e:
+            logger.error(f"Error saving bill: {e}", exc_info=True)
+            continue
+    
+    return {"status": "success", "bills_created": len(bills_created)}
 
 
 @router.post("/ebloc/sync/{property_id}")
