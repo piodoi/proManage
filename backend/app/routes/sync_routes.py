@@ -125,9 +125,13 @@ async def _sync_supplier_scraper(
                                 existing = b
                                 break
             
-            if existing:
+            # In discover_only mode, show all bills even if they exist (user can decide)
+            # In normal mode, skip duplicates to avoid creating duplicates
+            if existing and not discover_only:
                 logger.debug(f"[{supplier.name} Scraper] Bill {scraped_bill.bill_number} already exists, skipping")
                 continue
+            elif existing and discover_only:
+                logger.info(f"[{supplier.name} Scraper] Bill {scraped_bill.bill_number} already exists in DB, but showing in discover mode")
             
             iban = scraped_bill.raw_data.get("iban") if scraped_bill.raw_data else None
             bill_number = scraped_bill.bill_number
@@ -136,23 +140,31 @@ async def _sync_supplier_scraper(
             extracted_contract_id = scraped_bill.contract_id
             logger.info(f"[{supplier.name} Scraper] Processing bill - bill_number: {bill_number}, amount: {amount}, extracted_contract_id: {extracted_contract_id}")
             
-            if scraped_bill.pdf_content and supplier_pattern:
+            # Only parse PDF if we're missing critical information that might be in the PDF
+            # If we already have bill_number, amount, due_date, and contract_id from the page, skip PDF parsing
+            needs_pdf_parsing = (
+                scraped_bill.pdf_content and 
+                supplier_pattern and 
+                (not scraped_bill.bill_number or not scraped_bill.amount or not scraped_bill.contract_id)
+            )
+            
+            if needs_pdf_parsing:
                 try:
-                    pdf_result = parse_pdf_with_patterns(
+                    pdf_result, _ = parse_pdf_with_patterns(
                         scraped_bill.pdf_content,
-                        patterns=[supplier_pattern],
-                        property_id=property_id
+                        patterns=[supplier_pattern]
                     )
                     
-                    if pdf_result.iban:
+                    # Only use PDF data if we're missing it from the page
+                    if pdf_result.iban and not iban:
                         iban = pdf_result.iban
-                    if pdf_result.bill_number:
+                    if pdf_result.bill_number and not bill_number:
                         bill_number = pdf_result.bill_number
-                    if pdf_result.amount:
+                    if pdf_result.amount and not amount:
                         amount = pdf_result.amount
                     if pdf_result.contract_id and not extracted_contract_id:
                         extracted_contract_id = pdf_result.contract_id
-                    if pdf_result.due_date:
+                    if pdf_result.due_date and not scraped_bill.due_date:
                         try:
                             if '/' in pdf_result.due_date:
                                 parts = pdf_result.due_date.split('/')
