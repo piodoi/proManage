@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test PDF extraction patterns for E-Bloc and Digi.
+"""Test PDF extraction patterns for all JSON files in extraction_patterns (except suppliers.json).
 Also includes PDF analyzer for future user-driven interface.
 Run with: python backend/test_patterns.py
 """
@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.pdf_parser import parse_pdf_with_patterns, extract_text_from_pdf
 from app.models import ExtractionPattern
-from app.pdf_analyzer import PDFAnalyzer
 from app.pdf_analyzer import PDFAnalyzer
 
 
@@ -42,7 +41,7 @@ def load_pattern_from_json(json_path: str) -> ExtractionPattern:
     )
 
 
-def test_pdf(pdf_path: str, pattern_path: str, supplier_name: str):
+def test_pdf(pdf_path: str, pattern_path: str, supplier_name: str, json_name: str):
     """Test PDF extraction with a pattern."""
     print(f"\n{'='*80}")
     print(f"Testing {supplier_name}")
@@ -68,63 +67,35 @@ def test_pdf(pdf_path: str, pattern_path: str, supplier_name: str):
         
         # Extract text first to show it
         text = extract_text_from_pdf(pdf_bytes)
-        print("EXTRACTED TEXT (full):")
-        print("-" * 80)
-        print(text)
-        print("-" * 80)
-        print()
         
+        # Save extracted text for debugging
+        txt_output_path = Path(__file__).parent / f"{json_name}_pdf2txt.txt"
+        with open(txt_output_path, 'w', encoding='utf-8') as f:
+            f.write(text)
+        print(f"Saved extracted text to: {txt_output_path}")
+        
+        print()
         # Parse with pattern
         result, pattern_to_update = parse_pdf_with_patterns(pdf_bytes, [pattern])
         
-        # Print results
+        # Print results (use ASCII-safe characters for Windows console)
         print("EXTRACTION RESULTS:")
         print("-" * 80)
-        print(f"✓ Supplier: {result.matched_pattern_supplier}")
-        print(f"✓ Pattern: {result.matched_pattern_name}")
-        print(f"✓ IBAN: {result.iban}")
-        print(f"✓ Amount: {result.amount}")
-        print(f"✓ Due Date: {result.due_date}")
-        print(f"✓ Bill Number: {result.bill_number}")
-        print(f"✓ Contract ID: {result.contract_id}")
-        print(f"✓ Business Name: {result.business_name}")
-        print(f"✓ Address: {result.address}")
-        print(f"✓ Bank Accounts: {len(result.bank_accounts)} found")
+        print(f"[OK] Supplier: {result.matched_pattern_supplier}")
+        print(f"[OK] Pattern: {result.matched_pattern_name}")
+        print(f"[OK] IBAN: {result.iban}")
+        print(f"[OK] Amount: {result.amount}")
+        print(f"[OK] Due Date: {result.due_date}")
+        print(f"[OK] Bill Number: {result.bill_number}")
+        print(f"[OK] Contract ID: {result.contract_id}")
+        if result.client_code:
+            print(f"[OK] Client Code: {result.client_code}")
+        print(f"[OK] Business Name: {result.business_name}")
+        print(f"[OK] Address: {result.address}")
+        print(f"[OK] Bank Accounts: {len(result.bank_accounts)} found")
         for acc in result.bank_accounts:
             print(f"    - {acc.get('bank', 'Unknown')}: {acc.get('iban', '')}")
         
-        # Also extract all IBANs from text for bank account setup
-        print("\nALL IBANs FOUND IN PDF (for bank_accounts JSON):")
-        import re
-        iban_pattern = r'\bRO\d{2}[A-Z0-9]{4,28}\b'
-        all_ibans = re.findall(iban_pattern, text, re.IGNORECASE)
-        bank_keywords = {
-            'CITI': 'Citibank',
-            'INGB': 'ING Bank',
-            'BRDE': 'BRD',
-            'BTRL': 'Banca Transilvania',
-            'RNCB': 'BCR',
-            'BUCU': 'Alpha Bank',
-            'BACX': 'UniCredit Bank',
-            'RZBR': 'Raiffeisen Bank',
-            'TREZ': 'Trezorerie',
-            'PIRB': 'First Bank',
-            'CECE': 'CEC Bank',
-            'UGBI': 'Garanti Bank',
-        }
-        unique_ibans = []
-        for iban in all_ibans:
-            normalized = re.sub(r'\s+', '', iban.upper())
-            if normalized not in unique_ibans:
-                unique_ibans.append(normalized)
-        for iban in unique_ibans:
-            bank_name = "Unknown"
-            for code, name in bank_keywords.items():
-                if code in iban:
-                    bank_name = name
-                    break
-            print(f'    {{"bank": "{bank_name}", "iban": "{iban}"}}')
-        print("-" * 80)
         print()
         
         return result
@@ -136,83 +107,72 @@ def test_pdf(pdf_path: str, pattern_path: str, supplier_name: str):
         return None
 
 
-def analyze_pdf_standalone(pdf_path: str, supplier_name: str):
-    """Analyze PDF using the PDF analyzer (useful for unknown PDFs)."""
-    print(f"\n{'='*80}")
-    print(f"PDF ANALYZER - {supplier_name}")
-    print(f"File: {pdf_path}")
-    print(f"{'='*80}\n")
-    
-    if not Path(pdf_path).exists():
-        print(f"ERROR: PDF file not found: {pdf_path}")
-        return None
-    
-    try:
-        analyzer = PDFAnalyzer()
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
-        
-        analysis = analyzer.analyze_pdf(pdf_bytes, supplier_name)
-        
-        # Print analysis report
-        print(analyzer.format_analysis_report(analysis))
-        
-        return analysis
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-
 if __name__ == "__main__":
-    # Test E-Bloc
-    ebloc_pdf = r"C:\Users\Pio Doi\Downloads\Nota de plată (50).pdf"
-    ebloc_pattern = str(Path(__file__).parent / "extraction_patterns" / "ebloc.json")
+    patterns_dir = Path(__file__).parent / "extraction_patterns"
+    downloads_dir = Path.home() / "Downloads"
+    
+    # Find all JSON files except suppliers.json
+    json_files = [f for f in patterns_dir.glob("*.json") if f.name != "suppliers.json"]
     
     print("\n" + "="*80)
     print("PATTERN-BASED EXTRACTION TEST")
     print("="*80)
-    ebloc_result = test_pdf(ebloc_pdf, ebloc_pattern, "E-Bloc")
     
-    # Test Digi
-    digi_pdf = r"C:\Users\Pio Doi\Downloads\DIGI_Factura #FDB25 88860925.pdf"
-    digi_pattern = str(Path(__file__).parent / "extraction_patterns" / "digi.json")
-    digi_result = test_pdf(digi_pdf, digi_pattern, "Digi")
+    results = {}
     
-    # Also run PDF analyzer for additional insights
-    print("\n" + "="*80)
-    print("PDF ANALYZER (for unknown PDFs)")
-    print("="*80)
-    ebloc_analysis = analyze_pdf_standalone(ebloc_pdf, "E-Bloc")
-    digi_analysis = analyze_pdf_standalone(digi_pdf, "Digi")
+    # Test each JSON pattern
+    for json_file in sorted(json_files):
+        json_name = json_file.stem  # e.g., "engie" from "engie.json"
+        supplier_name = json_name.capitalize()
+        
+        # Look for PDF with same name in Downloads
+        pdf_candidates = [
+            downloads_dir / f"{json_name}.pdf",
+            downloads_dir / f"{json_name.upper()}.pdf",
+            downloads_dir / f"{supplier_name}.pdf",
+        ]
+        
+        # Also try to find any PDF that contains the JSON name
+        pdf_found = None
+        for candidate in pdf_candidates:
+            if candidate.exists():
+                pdf_found = candidate
+                break
+        
+        if not pdf_found:
+            # Try to find any PDF with the name in it
+            for pdf_file in downloads_dir.glob(f"*{json_name}*.pdf"):
+                pdf_found = pdf_file
+                break
+        
+        if not pdf_found:
+            print(f"\nSkipping {supplier_name}: PDF not found (looked for {json_name}.pdf in Downloads)")
+            continue
+        
+        pattern_path = str(json_file)
+        pdf_path = str(pdf_found)
+        
+        result = test_pdf(pdf_path, pattern_path, supplier_name, json_name)
+        results[json_name] = result
     
     # Summary
     print("\n" + "="*80)
     print("FINAL SUMMARY - EXTRACTION RESULTS")
     print("="*80)
-    print("\nE-Bloc Results:")
-    if ebloc_result:
-        print(f"  ✓ Amount: {ebloc_result.amount}")
-        print(f"  ✓ Due Date: {ebloc_result.due_date}")
-        print(f"  ✓ Bill Number: {ebloc_result.bill_number}")
-        print(f"  ✓ Contract ID: {ebloc_result.contract_id}")
-        print(f"  ✓ IBAN: {ebloc_result.iban}")
-        print(f"  ✓ Business Name: {ebloc_result.business_name}")
-        print(f"  ✓ Address: {ebloc_result.address}")
-    else:
-        print("  ✗ Failed to extract")
     
-    print("\nDigi Results:")
-    if digi_result:
-        print(f"  ✓ Amount: {digi_result.amount}")
-        print(f"  ✓ Due Date: {digi_result.due_date}")
-        print(f"  ✓ Bill Number: {digi_result.bill_number}")
-        print(f"  ✓ Contract ID: {digi_result.contract_id}")
-        print(f"  ✓ IBAN: {digi_result.iban}")
-        print(f"  ✓ Business Name: {digi_result.business_name}")
-        print(f"  ✓ Address: {digi_result.address}")
-    else:
-        print("  ✗ Failed to extract")
+    for json_name, result in sorted(results.items()):
+        supplier_name = json_name.capitalize()
+        print(f"\n{supplier_name} Results:")
+        if result:
+            print(f"  [OK] Amount: {result.amount}")
+            print(f"  [OK] Due Date: {result.due_date}")
+            print(f"  [OK] Bill Number: {result.bill_number}")
+            print(f"  [OK] Contract ID: {result.contract_id}")
+            if result.client_code:
+                print(f"  [OK] Client Code: {result.client_code}")
+            print(f"  [OK] IBAN: {result.iban}")
+            print(f"  [OK] Business Name: {result.business_name}")
+            print(f"  [OK] Address: {result.address}")
+        else:
+            print("  [FAIL] Failed to extract")
 

@@ -46,5 +46,11 @@
     "bill_type": "utilities",
     "has_api": false,
     "extraction_pattern_supplier": "Vodafone"
+  },
+  {
+    "name": "ENGIE",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "ENGIE"
   }
 ]

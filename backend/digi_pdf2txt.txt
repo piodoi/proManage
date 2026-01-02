@@ -1,0 +1,121 @@
+Modalități de plată a facturii
+* Pentru plățile efectuate prin virament bancar vă rugăm să 
+menționați: codul client, numărul facturii, numele și prenumele 
+clientului înscris pe factură. Lipsa acestor elemente poate conduce 
+la întârzierea sau imposibilitatea procesării corecte a plății, precum 
+și la suspendarea furnizării serviciilor.
+• La casieriile RCS & RDS, în numerar sau cu cardul - precizând minim cod 
+client;
+• Online pe site-ul DIGI.ro - precizând cod client și număr factură sau 
+număr telefon;
+• La punctele de plată:
+ - PayPoint - cu factura sau precizând cod client;
+ - Payzone, QIWI România, “un-doi Centru de plăți” (Mobile Distribution)  
+și SelfPay - obligatoriu cu factura;
+ - Westaco Express (OMV & Petrom) - obligatoriu cu factura;
+• La ghișeele Alpha Bank, Băncii Transilvania (BT), BRD - Groupe Société 
+Générale, CEC Bank, CreditCoop și UniCredit Bank - obligatoriu cu factura;
+• Prin intermediul rețelei de APT-uri (Automatic Payment Terminal) a BRD - 
+Groupe Société Générale - obligatoriu cu factura;
+• Prin intermediul rețelei de Multifuncționale de numerar Non-Stop 
+Banking a Băncii Comerciale Române (BCR), Raiffeisen Bank și a 
+UniCredit Bank - obligatoriu cu factura;
+• La bancomatele Alpha Bank, Băncii Comerciale Române (BCR), Băncii 
+Transilvania (BT), BRD - Groupe Société Générale, CEC Bank, First Bank, 
+Raiffeisen Bank și UniCredit Bank - precizând minim cod client;
+• Prin serviciul de Direct Debit al Alpha Bank, Băncii Comerciale Române 
+(BCR), Băncii Transilvania (BT), BRD - Groupe Société Générale, CEC Bank, 
+First Bank, ING Bank, Raiffeisen Bank și UniCredit Bank - precizând minim 
+cod client;
+• Prin serviciile:
+ - Self Bank, Home Bank ale ING Bank - precizând minim cod client;
+ - MyBRD Mobile al BRD - Groupe Société Générale - obligatoriu cu 
+factura;
+- Internet Banking al Alpha Bank, Băncii Comerciale Române (BCR), Băncii 
+Transilvania (BT), BRD - Groupe Société Générale, CEC Bank, Citibank, First 
+Bank, Raiffeisen Bank și UniCredit Bank - precizând cod client și număr 
+factură;
+• Prin virament bancar în unul din conturile*:
+ - RO51 INGB 0001 0000 0001 8827, deschis la ING Bank;
+ - RO64 BRDE 450S V724 1995 4500, deschis la BRD - Groupe Société 
+Générale;
+ - RO16 RZBR 0000 0600 1848 3261, deschis la Raiffeisen Bank;
+ - RO94 BACX 0000 0001 8951 8001, deschis la UniCredit Bank.
+RCS & RDS S.A. 
+Str. Dr. Staicovici, nr. 75, Forum 2000 Building,
+Faza I, Et. 2, Sector 5, București 
+Telefon informații:
+Nr. ord. ORC: J40/12278/1994
+C.I.F.: RO5888716
+Capital social subscris și vărsat: 38.594.163 lei
+Cont trezorerie: RO12TREZ7005069XXX001016
+Cont IBAN:
+Cod client:
+C.I.F.:
+Data:
+Perioada facturată:
+Ultima zi de plată:
+Factură seria și nr.:
+Cod client:
+Număr factură:
+Informații pentru plata 
+facturii
+Ultima zi de plată:
+42910013
+FDB21 / 42910013
+06.07.2021
+01.07.2021 - 31.07.2021
+31.07.2021
+31.07.2021
+1333301
+1333301
+031 400 4400
+RO51 INGB 0001 0000 0001 8827
+01333301429100130006100242
+POCLITARU IONUT
+Drum Lunca Sateasca, Nr. 47-49, Sc. 1, Et. P,
+Ap. 2, Sector. 3, Bucuresti
+Judet: Bucuresti
+Produse si servicii Digi
+Cant.
+Valoare
+(lei)
+Cota
+TVA (%)
+TVA
+(lei)
+Total
+(lei)
+1
+ABONAMENTE SI TRAFIC SUPLIMENTAR
+51,26
+9,74
+61,00
+1.1
+Ab. Cablu TV, mentenanta, servicii accesorii si asociate cf. 8029167035 din 16.11.2020 af. 01.07.2021 - 31.07.2021
+1
+21,85
+19
+4,15
+26,00
+1.2
+Ab. Internet, mentenanta, servicii accesorii si asociate cf. 8029167035 din 16.11.2020 af. 01.07.2021 - 31.07.2021
+1
+29,41
+19
+5,59
+35,00
+Factura curenta:
+51,26
+9,74
+61,00
+Sold precedent
+Daca ati efectuat plati ale facturilor anterioare dupa emiterea acestei facturi, soldul
+precedent se va diminua cu valoarea platilor. Va multumim!
+Valoare sold precedent:
+0,00
+Total
+Total de achitat:
+61,00
+Factura transmisa prin email conform acord din data de 08.06.2012
+Pag. 1 din 1

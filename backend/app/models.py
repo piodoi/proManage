@@ -117,6 +117,7 @@ class Bill(BaseModel):
     bill_number: Optional[str] = None
     extraction_pattern_id: Optional[str] = None  # ID of the extraction pattern used to parse this bill
     contract_id: Optional[str] = None  # Contract/client ID extracted from PDF for payment
+    payment_details: Optional[dict] = None  # Additional payment details (e.g., client_code) stored as JSON
     status: BillStatus = BillStatus.PENDING
     source_email_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -156,6 +157,7 @@ class ExtractionPattern(BaseModel):
     address_pattern: Optional[str] = None
     bill_number_pattern: Optional[str] = None
     contract_id_pattern: Optional[str] = None  # Pattern to extract contract/client ID
+    client_code_pattern: Optional[str] = None  # Pattern to extract client code (for payment details)
     due_date_pattern: Optional[str] = None  # Pattern to extract due date
     business_name_pattern: Optional[str] = None  # Pattern for business name for bank transfer
     bank_accounts: Optional[list[dict[str, str]]] = None  # List of {bank: name, iban: number} for validation
@@ -175,6 +177,7 @@ class ExtractionPatternCreate(BaseModel):
     address_pattern: Optional[str] = None
     bill_number_pattern: Optional[str] = None
     contract_id_pattern: Optional[str] = None
+    client_code_pattern: Optional[str] = None
     due_date_pattern: Optional[str] = None
     business_name_pattern: Optional[str] = None
     bank_accounts: Optional[list[dict[str, str]]] = None
@@ -191,6 +194,7 @@ class ExtractionPatternUpdate(BaseModel):
     address_pattern: Optional[str] = None
     bill_number_pattern: Optional[str] = None
     contract_id_pattern: Optional[str] = None
+    client_code_pattern: Optional[str] = None
     due_date_pattern: Optional[str] = None
     business_name_pattern: Optional[str] = None
     bank_accounts: Optional[list[dict[str, str]]] = None
@@ -201,6 +205,7 @@ class ExtractionPatternUpdate(BaseModel):
 class ExtractionResult(BaseModel):
     iban: Optional[str] = None
     contract_id: Optional[str] = None  # Contract/client ID for bank transfer
+    client_code: Optional[str] = None  # Client code (for payment details)
     bill_number: Optional[str] = None
     amount: Optional[float] = None
     due_date: Optional[str] = None  # Due date in ISO format or original format
@@ -290,6 +295,7 @@ class BillUpdate(BaseModel):
     bill_number: Optional[str] = None
     extraction_pattern_id: Optional[str] = None
     contract_id: Optional[str] = None
+    payment_details: Optional[dict] = None
     status: Optional[BillStatus] = None
 
 
