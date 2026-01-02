@@ -200,6 +200,7 @@
     "configuredSuppliers": "Configured Suppliers for this Property",
     "contractId": "Contract ID",
     "contractIdPlaceholder": "Contract ID (optional)",
+    "directDebit": "Direct debit",
     "apiSupport": "API Support",
     "credentials": "Credentials",
     "available": "Available",

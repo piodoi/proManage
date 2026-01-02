@@ -238,6 +238,7 @@ export type PropertySupplier = {
   supplier_id: string;
   credential_id?: string | null;
   contract_id?: string | null;
+  direct_debit: boolean;
   has_credentials: boolean;
   created_at: string;
   updated_at: string;
@@ -247,11 +248,13 @@ export type PropertySupplierCreate = {
   supplier_id: string;
   credential_id?: string | null;
   contract_id?: string | null;
+  direct_debit?: boolean;
 };
 
 export type PropertySupplierUpdate = {
   credential_id?: string | null;
   contract_id?: string;
+  direct_debit?: boolean;
 };
 
 export type UserSupplierCredential = {

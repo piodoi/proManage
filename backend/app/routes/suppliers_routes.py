@@ -219,6 +219,7 @@ async def list_property_suppliers(
                 "supplier_id": ps.supplier_id,
                 "credential_id": ps.credential_id,
                 "contract_id": ps.contract_id,
+                "direct_debit": ps.direct_debit,
                 "has_credentials": has_credentials,
                 "created_at": ps.created_at,
                 "updated_at": ps.updated_at,
@@ -245,7 +246,49 @@ async def create_property_supplier(
     contract_id_value = data.contract_id if data.contract_id else None
     existing = db.get_property_supplier_by_supplier_and_contract(property_id, data.supplier_id, contract_id_value)
     if existing:
-        raise HTTPException(status_code=400, detail="Supplier with this contract ID already configured for this property")
+        # Check if direct_debit is the same
+        requested_direct_debit = data.direct_debit if data.direct_debit is not None else False
+        if existing.direct_debit == requested_direct_debit:
+            # Same configuration, nothing to do
+            supplier = db.get_supplier(existing.supplier_id)
+            credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, existing.supplier_id)
+            has_credentials = bool(credential and credential.username and credential.password_hash)
+            return {
+                "id": existing.id,
+                "supplier": supplier,
+                "property_id": existing.property_id,
+                "supplier_id": existing.supplier_id,
+                "credential_id": existing.credential_id,
+                "contract_id": existing.contract_id,
+                "direct_debit": existing.direct_debit,
+                "has_credentials": has_credentials,
+                "created_at": existing.created_at,
+                "updated_at": existing.updated_at,
+                "message": "Supplier with this contract ID already configured with the same settings. No changes made."
+            }
+        else:
+            # Different direct_debit value, update it
+            existing.direct_debit = requested_direct_debit
+            existing.updated_at = datetime.utcnow()
+            db.save_property_supplier(existing)
+            
+            supplier = db.get_supplier(existing.supplier_id)
+            credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, existing.supplier_id)
+            has_credentials = bool(credential and credential.username and credential.password_hash)
+            
+            return {
+                "id": existing.id,
+                "supplier": supplier,
+                "property_id": existing.property_id,
+                "supplier_id": existing.supplier_id,
+                "credential_id": existing.credential_id,
+                "contract_id": existing.contract_id,
+                "direct_debit": existing.direct_debit,
+                "has_credentials": has_credentials,
+                "created_at": existing.created_at,
+                "updated_at": existing.updated_at,
+                "message": "Direct debit setting updated for existing supplier."
+            }
     
     # If credential_id provided, verify it belongs to the user
     credential_id = data.credential_id
@@ -268,6 +311,7 @@ async def create_property_supplier(
         supplier_id=data.supplier_id,
         credential_id=credential_id,
         contract_id=data.contract_id if data.contract_id else None,
+        direct_debit=data.direct_debit if data.direct_debit is not None else False,
     )
     db.save_property_supplier(property_supplier)
     
@@ -283,6 +327,7 @@ async def create_property_supplier(
         "supplier_id": property_supplier.supplier_id,
         "credential_id": property_supplier.credential_id,
         "contract_id": property_supplier.contract_id,
+        "direct_debit": property_supplier.direct_debit,
         "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,
@@ -326,6 +371,10 @@ async def update_property_supplier(
     if data.contract_id is not None:
         property_supplier.contract_id = data.contract_id if data.contract_id else None
     
+    # Update direct_debit if provided
+    if data.direct_debit is not None:
+        property_supplier.direct_debit = data.direct_debit
+    
     property_supplier.updated_at = datetime.utcnow()
     db.save_property_supplier(property_supplier)
     
@@ -343,6 +392,7 @@ async def update_property_supplier(
         "supplier_id": property_supplier.supplier_id,
         "credential_id": property_supplier.credential_id,
         "contract_id": property_supplier.contract_id,
+        "direct_debit": property_supplier.direct_debit,
         "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,

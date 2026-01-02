@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
@@ -32,6 +33,7 @@ export default function PropertySupplierSettingsDialog({
   const [loading, setLoading] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [contractId, setContractId] = useState<string>('');
+  const [directDebit, setDirectDebit] = useState<boolean>(false);
   const prevOpenRef = useRef(open);
 
   // Load suppliers and property suppliers when dialog opens
@@ -42,6 +44,7 @@ export default function PropertySupplierSettingsDialog({
       // Reset state when dialog closes
       setSelectedSupplierId('');
       setContractId('');
+      setDirectDebit(false);
     }
   }, [open, token, property.id]);
 
@@ -87,15 +90,22 @@ export default function PropertySupplierSettingsDialog({
     }
 
     try {
-      await api.suppliers.addToProperty(token, property.id, {
+      const response = await api.suppliers.addToProperty(token, property.id, {
         supplier_id: selectedSupplierId,
         contract_id: contractId.trim() || undefined,
+        direct_debit: directDebit,
       });
       await loadData();
       // Reset selection but keep dialog open so user can add more
       // Don't call onSuccess() here - it will be called when dialog closes
       setSelectedSupplierId('');
       setContractId('');
+      setDirectDebit(false);
+      // Show message if provided (e.g., when duplicate exists with same settings)
+      if ((response as any).message) {
+        // Use onError to show the message, but it's informational, not an error
+        onError((response as any).message);
+      }
     } catch (err) {
       onError(err instanceof Error ? err.message : t('supplier.addError'));
     }
@@ -137,38 +147,56 @@ export default function PropertySupplierSettingsDialog({
           <div className="space-y-6">
             {/* Add Supplier Section */}
             <div className="space-y-2">
-              <Label className="text-slate-300">{t('supplier.addSupplierToProperty')}</Label>
               <p className="text-xs text-slate-500">
                 {t('supplier.credentialsManagedInSettings')}
               </p>
-              <div className="flex gap-2">
-                <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
-                  <SelectTrigger className="flex-1 bg-slate-700 border-slate-600 text-slate-100">
-                    <SelectValue placeholder={t('supplier.selectSupplier')} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-700 border-slate-600">
-                    {availableSuppliers.map(supplier => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.name} {supplier.has_api && '🔌'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="text"
-                  value={contractId}
-                  onChange={(e) => setContractId(e.target.value)}
-                  placeholder={t('supplier.contractIdPlaceholder') || 'Contract ID (optional)'}
-                  className="w-48 bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-500"
-                />
-                <Button
-                  onClick={handleAddSupplier}
-                  disabled={!selectedSupplierId}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  {t('common.add')}
-                </Button>
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-end">
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.addSupplierToProperty')}</Label>
+                    <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+                      <SelectTrigger className="w-full bg-slate-700 border-slate-600 text-slate-100">
+                        <SelectValue placeholder={t('supplier.selectSupplier')} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        {availableSuppliers.map(supplier => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.name} {supplier.has_api && '🔌'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.contractId') || 'Contract ID'}</Label>
+                    <Input
+                      type="text"
+                      value={contractId}
+                      onChange={(e) => setContractId(e.target.value)}
+                      placeholder={t('supplier.contractIdPlaceholder') || 'Contract ID (optional)'}
+                      className="w-full bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-slate-300 text-sm mb-1 block text-center">{t('supplier.directDebit') || 'Direct debit'}</Label>
+                    <div className="flex items-center justify-center h-10">
+                      <Checkbox
+                        id="direct-debit"
+                        checked={directDebit}
+                        onCheckedChange={(checked) => setDirectDebit(checked === true)}
+                        className="bg-slate-700 border-slate-600"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleAddSupplier}
+                    disabled={!selectedSupplierId}
+                    className="bg-emerald-600 hover:bg-emerald-700 sm:flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    {t('common.add')}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -183,6 +211,7 @@ export default function PropertySupplierSettingsDialog({
                         <TableHead className="text-slate-200">{t('supplier.supplierName')}</TableHead>
                         <TableHead className="text-slate-200">{t('bill.billType')}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.contractId') || 'Contract ID'}</TableHead>
+                        <TableHead className="text-slate-200">{t('supplier.directDebit') || 'Direct debit'}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.apiSupport')}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.credentials')}</TableHead>
                         <TableHead className="text-slate-200">{t('common.actions')}</TableHead>
@@ -194,6 +223,13 @@ export default function PropertySupplierSettingsDialog({
                           <TableCell className="text-slate-300">{ps.supplier.name}</TableCell>
                           <TableCell className="text-slate-400 capitalize">{t(`bill.${ps.supplier.bill_type}`)}</TableCell>
                           <TableCell className="text-slate-400">{ps.contract_id || <span className="text-slate-500">—</span>}</TableCell>
+                          <TableCell className="text-slate-400">
+                            {ps.direct_debit ? (
+                              <span className="text-emerald-400">✓ {t('common.yes') || 'Yes'}</span>
+                            ) : (
+                              <span className="text-slate-500">{t('common.no') || 'No'}</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-slate-400">
                             {ps.supplier.has_api ? (
                               <span className="text-emerald-400">🔌 {t('supplier.available')}</span>
