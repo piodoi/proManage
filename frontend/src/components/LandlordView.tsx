@@ -12,6 +12,7 @@ import EblocImportDialog from './dialogs/EblocImportDialog';
 import SummaryView from './SummaryView';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
+import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { FileText } from 'lucide-react';
 
 type LandlordViewProps = {
@@ -24,6 +25,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const { user } = useAuth();
   const { t } = useI18n();
   const { preferences, setViewMode } = usePreferences();
+  const { saveScroll, restoreScroll } = useScrollPreservation();
   const [properties, setProperties] = useState<Property[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
   const [bills, setBills] = useState<Bill[]>([]);
@@ -64,7 +66,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (shouldRestoreScroll = false) => {
     if (!token) return;
     setLoading(true);
     try {
@@ -86,6 +88,10 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       handleError(err);
     } finally {
       setLoading(false);
+      // Restore scroll position after data loads if requested
+      if (shouldRestoreScroll) {
+        restoreScroll();
+      }
     }
   };
 
@@ -128,15 +134,25 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
               <EblocImportDialog
                 token={token}
                 open={showEblocDiscover}
-                onOpenChange={setShowEblocDiscover}
-                onSuccess={loadData}
+                onOpenChange={(open) => {
+                  if (open) {
+                    saveScroll();
+                  }
+                  setShowEblocDiscover(open);
+                }}
+                onSuccess={() => loadData(true)}
                 onError={setError}
               />
               <PropertyDialog
                 token={token}
                 open={showPropertyForm}
-                onOpenChange={setShowPropertyForm}
-                onSuccess={loadData}
+                onOpenChange={(open) => {
+                  if (open) {
+                    saveScroll();
+                  }
+                  setShowPropertyForm(open);
+                }}
+                onSuccess={() => loadData(true)}
                 onError={setError}
                 canAddProperty={user?.role === 'admin' || (subscription ? subscription.can_add_property : false)}
               />
@@ -219,15 +235,25 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 <EblocImportDialog
                   token={token}
                   open={showEblocDiscover}
-                  onOpenChange={setShowEblocDiscover}
-                  onSuccess={loadData}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      saveScroll();
+                    }
+                    setShowEblocDiscover(open);
+                  }}
+                  onSuccess={() => loadData(true)}
                   onError={setError}
                 />
                 <PropertyDialog
                   token={token}
                   open={showPropertyForm}
-                  onOpenChange={setShowPropertyForm}
-                  onSuccess={loadData}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      saveScroll();
+                    }
+                    setShowPropertyForm(open);
+                  }}
+                  onSuccess={() => loadData(true)}
                   onError={setError}
                   canAddProperty={user?.role === 'admin' || (subscription ? subscription.can_add_property : false)}
                 />

@@ -10,6 +10,7 @@ import RenterDialog from './dialogs/RenterDialog';
 import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
+import { useScrollPreservation } from '../hooks/useScrollPreservation';
 
 type PropertyCardProps = {
   token: string | null;
@@ -34,6 +35,7 @@ export default function PropertyCard({
 }: PropertyCardProps) {
   const { t } = useI18n();
   const { preferences } = usePreferences();
+  const { saveScroll, restoreScroll } = useScrollPreservation();
   const [showRenterDialog, setShowRenterDialog] = useState(false);
   const [showSupplierSettings, setShowSupplierSettings] = useState(false);
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
@@ -116,7 +118,10 @@ export default function PropertyCard({
           <div className="flex gap-2">
             <Button
               size="sm"
-              onClick={() => setShowSupplierSettings(true)}
+              onClick={() => {
+                saveScroll();
+                setShowSupplierSettings(true);
+              }}
               className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600"
               title={t('supplier.manageSuppliers')}
             >
@@ -126,8 +131,23 @@ export default function PropertyCard({
               token={token}
               property={property}
               open={showSupplierSettings}
-              onOpenChange={setShowSupplierSettings}
-              onSuccess={onDataChange}
+              onOpenChange={(open) => {
+                if (open) {
+                  saveScroll();
+                }
+                setShowSupplierSettings(open);
+              }}
+              onSuccess={() => {
+                onDataChange();
+                // Restore scroll after data change completes (delay to allow async data loading)
+                setTimeout(() => {
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      restoreScroll();
+                    });
+                  });
+                }, 100);
+              }}
               onError={onError}
             />
             <RenterDialog
@@ -136,12 +156,25 @@ export default function PropertyCard({
               renter={editingRenter}
               open={showRenterDialog}
               onOpenChange={(open) => {
+                if (open) {
+                  saveScroll();
+                }
                 setShowRenterDialog(open);
                 if (!open) {
                   setEditingRenter(null);
                 }
               }}
-              onSuccess={onDataChange}
+              onSuccess={() => {
+                onDataChange();
+                // Restore scroll after data change completes (delay to allow async data loading)
+                setTimeout(() => {
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      restoreScroll();
+                    });
+                  });
+                }, 100);
+              }}
               onError={onError}
             />
             <Button
