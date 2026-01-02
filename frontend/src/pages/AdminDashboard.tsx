@@ -15,6 +15,7 @@ import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
 import SummaryView from '../components/SummaryView';
+import TextPatternView from '../components/TextPatternView';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
 
@@ -282,6 +283,10 @@ export default function AdminDashboard() {
               <Settings className="w-4 h-4 mr-2" />
               {t('settings.settings')}
             </TabsTrigger>
+            <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700">
+              <FileText className="w-4 h-4 mr-2" />
+              Tools
+            </TabsTrigger>
             <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700">
               <Users className="w-4 h-4 mr-2" />
               {t('admin.adminTab')}
@@ -298,6 +303,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="settings" className="space-y-4">
             <SettingsView token={token} onError={setError} />
+          </TabsContent>
+
+          <TabsContent value="tools" className="space-y-4">
+            <TextPatternView />
           </TabsContent>
 
           <TabsContent value="admin" className="space-y-4">

@@ -1,0 +1,632 @@
+import { useState, useRef } from 'react';
+import { useAuth } from '../App';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useI18n } from '../lib/i18n';
+import { Save, Upload } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+type FieldPattern = {
+  field_name: string;
+  label_text: string;
+  line_offset: number;
+};
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+export default function TextPatternView() {
+  const { token } = useAuth();
+  const { t } = useI18n();
+  const [pdfText, setPdfText] = useState<string>('');
+  const [selectedLabel, setSelectedLabel] = useState<string>('');
+  const [selectedLabelStart, setSelectedLabelStart] = useState<number | null>(null);
+  const [currentField, setCurrentField] = useState<string>('amount');
+  const [fieldPatterns, setFieldPatterns] = useState<Map<string, FieldPattern>>(new Map());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [patternName, setPatternName] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [billType, setBillType] = useState<'rent' | 'utilities' | 'ebloc' | 'other'>('utilities');
+  const [lineOffsets, setLineOffsets] = useState<Map<string, number>>(new Map());
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('create');
+  
+  // Pattern matching state
+  const [matchingPdf, setMatchingPdf] = useState<File | null>(null);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [extractionResult, setExtractionResult] = useState<any | null>(null);
+  const [showMatchDialog, setShowMatchDialog] = useState(false);
+  
+  const fieldOptions = [
+    { value: 'amount', label: t('common.amount') },
+    { value: 'currency', label: t('common.currency') || 'Currency' },
+    { value: 'due_date', label: t('bill.dueDate') },
+    { value: 'bill_date', label: t('bill.billDate') || 'Bill Date' },
+    { value: 'iban', label: 'IBAN' },
+    { value: 'bill_number', label: t('bill.billNumber') },
+    { value: 'contract_id', label: t('supplier.contractId') },
+    { value: 'payment_details', label: t('common.paymentDetails') },
+    { value: 'address', label: t('property.address') },
+  ];
+
+  const scrollToLine = (lineNum: number) => {
+    if (textAreaRef.current && lineNum >= 0) {
+      const lines = pdfText.split('\n');
+      if (lineNum < lines.length) {
+        // Calculate character position for the line
+        let charPos = 0;
+        for (let i = 0; i < lineNum; i++) {
+          charPos += lines[i].length + 1; // +1 for newline
+        }
+        const lineEnd = charPos + lines[lineNum].length;
+        
+        // Select the line
+        textAreaRef.current.focus();
+        textAreaRef.current.setSelectionRange(charPos, lineEnd);
+        
+        // Check if line is already in view before scrolling
+        const lineHeight = 20; // Approximate line height
+        const targetScrollTop = lineNum * lineHeight;
+        const currentScrollTop = textAreaRef.current.scrollTop;
+        const visibleHeight = textAreaRef.current.clientHeight;
+        const visibleStart = currentScrollTop;
+        const visibleEnd = currentScrollTop + visibleHeight;
+        
+        // Only scroll if line is not already visible
+        if (targetScrollTop < visibleStart || targetScrollTop > visibleEnd - lineHeight) {
+          textAreaRef.current.scrollTop = targetScrollTop;
+          textAreaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/text-patterns/upload-pdf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload PDF');
+      }
+      
+      const data = await response.json();
+      setPdfText(data.text);
+      setSuccess('PDF uploaded successfully');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Error uploading PDF');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTextSelection = () => {
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = pdfText.substring(start, end).trim();
+    
+    if (!selectedText) return;
+    
+    // Save label and use current line offset
+    const currentOffset = lineOffsets.get(currentField) || 0;
+    
+    // Save label position for highlighting
+    setSelectedLabelStart(start);
+    
+    // Save pattern (only label_text and line_offset, no value_text)
+    const pattern: FieldPattern = {
+      field_name: currentField,
+      label_text: selectedText,
+      line_offset: currentOffset,
+    };
+    
+    setFieldPatterns(prev => {
+      const newMap = new Map(prev);
+      newMap.set(currentField, pattern);
+      return newMap;
+    });
+    
+    setSelectedLabel(selectedText);
+    setSuccess(`Label saved for ${fieldOptions.find(f => f.value === currentField)?.label} (offset: ${currentOffset})`);
+    setTimeout(() => setSuccess(''), 3000);
+    
+    // Highlight target line if offset > 0
+    if (currentOffset > 0 && start !== null) {
+      highlightTargetLine(start, currentOffset);
+    }
+  };
+  
+  const highlightTargetLine = (labelStart: number, offset: number) => {
+    const lines = pdfText.split('\n');
+    const labelLineNum = pdfText.substring(0, labelStart).split('\n').length - 1;
+    const targetLineNum = labelLineNum + offset;
+    
+    if (targetLineNum >= 0 && targetLineNum < lines.length) {
+      setHighlightedLine(targetLineNum);
+      scrollToLine(targetLineNum);
+    } else {
+      setHighlightedLine(null);
+    }
+  };
+  
+  const predictExtractedValue = (fieldName: string, labelText: string, lineOffset: number): string => {
+    if (!pdfText || !labelText) return '';
+    
+    const lines = pdfText.split('\n');
+    
+    // Find label in text (simple case-sensitive search)
+    const labelIndex = pdfText.indexOf(labelText);
+    if (labelIndex === -1) return '';
+    
+    // Calculate line number where label appears
+    const labelLineNum = pdfText.substring(0, labelIndex).split('\n').length - 1;
+    const targetLineNum = labelLineNum + lineOffset;
+    
+    if (targetLineNum < 0 || targetLineNum >= lines.length) return '';
+    
+    let targetLine = lines[targetLineNum].trim();
+    if (!targetLine) return '';
+    
+    // If offset is 0, remove label from extracted value
+    if (lineOffset === 0) {
+      const labelInLine = targetLine.indexOf(labelText);
+      if (labelInLine >= 0) {
+        const afterLabel = targetLine.substring(labelInLine + labelText.length).trim();
+        targetLine = afterLabel.replace(/^[:;\-\s]+/, '').trim();
+      }
+    }
+    
+    // Apply field-specific processing
+    if (fieldName === 'amount' && targetLine) {
+      const amountMatch = targetLine.match(/\d+[,\.]?\d*/);
+      if (amountMatch) {
+        const amountStr = amountMatch[0].trim();
+        const cleaned = amountStr.replace(/[,\.\s]/g, '');
+        try {
+          const amountBani = parseInt(cleaned);
+          return (amountBani / 100.0).toString();
+        } catch {
+          return amountStr;
+        }
+      }
+      return targetLine;
+    } else if (fieldName === 'currency') {
+      const currencyMatch = targetLine.match(/[A-Z]{3}/i);
+      if (currencyMatch) {
+        const currency = currencyMatch[0].toUpperCase();
+        return currency === 'LEI' ? 'RON' : currency;
+      }
+      return 'RON';
+    } else if (fieldName === 'bill_number' && targetLine) {
+      return targetLine.replace(/^(Seria\s+ENG\s+nr\.?\s*|nr\.?\s*|No\.?\s*|Seria\s+[A-Z]+\s+nr\.?\s*)/i, '').trim();
+    } else if ((fieldName === 'due_date' || fieldName === 'bill_date') && targetLine) {
+      const dateMatch = targetLine.match(/\d{1,2}[\.\/\-]\d{1,2}[\.\/\-]\d{2,4}/);
+      return dateMatch ? dateMatch[0].trim() : targetLine;
+    }
+    
+    return targetLine;
+  };
+  
+  const adjustLineOffset = (field: string, delta: number) => {
+    const currentOffset = lineOffsets.get(field) || 0;
+    const newOffset = Math.max(0, currentOffset + delta);
+    
+    setLineOffsets(prev => {
+      const newMap = new Map(prev);
+      newMap.set(field, newOffset);
+      return newMap;
+    });
+    
+    // Update pattern if it exists
+    const existingPattern = fieldPatterns.get(field);
+    if (existingPattern) {
+      setFieldPatterns(prev => {
+        const newMap = new Map(prev);
+        newMap.set(field, { ...existingPattern, line_offset: newOffset });
+        return newMap;
+      });
+    }
+    
+    // Highlight target line if label is selected and offset > 0
+    if (selectedLabelStart !== null && newOffset > 0) {
+      highlightTargetLine(selectedLabelStart, newOffset);
+    } else if (newOffset === 0) {
+      setHighlightedLine(null);
+    }
+  };
+
+  const handleSavePattern = async () => {
+    if (!token || !patternName || fieldPatterns.size === 0) {
+      setError('Pattern name and at least one field pattern required');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      const pattern = {
+        name: patternName,
+        bill_type: billType,
+        supplier: supplier || undefined,
+        field_patterns: Array.from(fieldPatterns.values()).map(fp => ({
+          field_name: fp.field_name,
+          label_text: fp.label_text,
+          line_offset: fp.line_offset,
+        })),
+      };
+      
+      const response = await fetch(`${API_URL}/text-patterns/save-pattern`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pattern),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to save pattern');
+      }
+      
+      setSuccess('Pattern saved successfully');
+      setTimeout(() => setSuccess(''), 3000);
+      // Reset form
+      setPatternName('');
+      setSupplier('');
+      setFieldPatterns(new Map());
+      setLineOffsets(new Map());
+      setSelectedLabel('');
+    } catch (err: any) {
+      setError(err.message || 'Error saving pattern');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMatchPdf = async (file: File) => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/text-patterns/match-pdf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to match PDF');
+      }
+      
+      const data = await response.json();
+      setMatches(data.matches || []);
+      setMatchingPdf(file);
+      setShowMatchDialog(true);
+    } catch (err: any) {
+      setError(err.message || 'Error matching PDF');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExtract = async (patternId: string) => {
+    if (!token || !matchingPdf) return;
+    setLoading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', matchingPdf);
+      formData.append('pattern_id', patternId);
+      
+      const response = await fetch(`${API_URL}/text-patterns/extract-with-pattern`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to extract data' }));
+        throw new Error(errorData.detail || errorData.message || 'Failed to extract data');
+      }
+      
+      const data = await response.json();
+      setExtractionResult(data.extracted_data);
+      setError(''); // Clear any previous errors
+    } catch (err: any) {
+      const errorMessage = err.message || 'Error extracting data';
+      setError(errorMessage);
+      console.error('Extraction error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="bg-slate-800 border-slate-700">
+      <CardHeader>
+        <CardTitle className="text-slate-100">Tools</CardTitle>
+        <CardDescription className="text-slate-400">
+          Create text-based extraction patterns by selecting labels and values from PDF text
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="create" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <TabsList className="bg-slate-700 border border-slate-600">
+              <TabsTrigger value="create" className="data-[state=active]:bg-slate-600">Create Pattern</TabsTrigger>
+              <TabsTrigger value="match" className="data-[state=active]:bg-slate-600">Match Pattern</TabsTrigger>
+            </TabsList>
+            
+            <label htmlFor="pdf-upload" className="cursor-pointer">
+              <input
+                id="pdf-upload"
+                type="file"
+                accept=".pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (activeTab === 'create') {
+                      handleFileUpload(file);
+                    } else {
+                      handleMatchPdf(file);
+                    }
+                  }
+                }}
+                disabled={loading}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                className="flex items-center gap-2 border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => document.getElementById('pdf-upload')?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                Upload PDF
+              </Button>
+            </label>
+          </div>
+          
+          <TabsContent value="create" className="space-y-4">
+            <div className="space-y-4">
+              
+              {pdfText && (
+                <div className="space-y-4">
+                  <div className="flex gap-4 items-center">
+                    <div className="flex gap-2 items-center">
+                      <Label className="text-slate-300">Field</Label>
+                      <Select value={currentField} onValueChange={(value) => {
+                        setCurrentField(value);
+                        setSelectedLabel('');
+                        setSelectedLabelStart(null);
+                        setHighlightedLine(null);
+                      }}>
+                        <SelectTrigger className="w-48 bg-slate-700 border-slate-600 text-slate-100">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          {fieldOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-slate-100">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="flex gap-2 items-center">
+                      <Label className="text-slate-300">Line Offset:</Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => adjustLineOffset(currentField, -1)}
+                        className="h-8 w-8 bg-slate-700 border-slate-600 text-slate-100"
+                      >
+                        -
+                      </Button>
+                      <span className="w-8 text-center text-slate-300">
+                        {lineOffsets.get(currentField) || 0}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => adjustLineOffset(currentField, 1)}
+                        className="h-8 w-8 bg-slate-700 border-slate-600 text-slate-100"
+                      >
+                        +
+                      </Button>
+                    </div>
+                    
+                    {fieldPatterns.get(currentField) && (
+                      <div className="flex gap-2 items-center text-sm text-slate-400">
+                        <span>
+                          Label: "{fieldPatterns.get(currentField)!.label_text}" 
+                          (offset: {fieldPatterns.get(currentField)!.line_offset})
+                        </span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-300">
+                          Value: "{predictExtractedValue(
+                            currentField,
+                            fieldPatterns.get(currentField)!.label_text,
+                            fieldPatterns.get(currentField)!.line_offset
+                          )}"
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <textarea
+                      ref={textAreaRef}
+                      value={pdfText}
+                      readOnly
+                      onMouseUp={handleTextSelection}
+                      onKeyUp={handleTextSelection}
+                      className="w-full h-96 p-4 bg-white text-black font-mono text-sm rounded border border-slate-600"
+                      style={{ 
+                        whiteSpace: 'pre-wrap', 
+                        wordWrap: 'break-word'
+                      }}
+                    />
+                    {highlightedLine !== null && (
+                      <div className="text-xs text-slate-400 mt-1">
+                        Highlighted line {highlightedLine + 1} (target line for extraction)
+                      </div>
+                    )}
+                    <div className="text-sm text-slate-400">
+                      Instructions: Select the label text in the PDF. Use +/- buttons to adjust line offset (default: 0). 
+                      If offset is 0, the value will be automatically extracted from the same line after the label.
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-slate-300">Pattern Name</Label>
+                      <Input
+                        value={patternName}
+                        onChange={(e) => setPatternName(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-slate-100"
+                        placeholder="e.g., Engie Gas Bill"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label className="text-slate-300">Supplier</Label>
+                      <Input
+                        value={supplier}
+                        onChange={(e) => setSupplier(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-slate-100"
+                        placeholder="Supplier name (used as legal_name if payment not selected)"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label className="text-slate-300">Bill Type</Label>
+                      <Select value={billType} onValueChange={(v: any) => setBillType(v)}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          <SelectItem value="utilities" className="text-slate-100">Utilities</SelectItem>
+                          <SelectItem value="rent" className="text-slate-100">Rent</SelectItem>
+                          <SelectItem value="ebloc" className="text-slate-100">E-Bloc</SelectItem>
+                          <SelectItem value="other" className="text-slate-100">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <Button
+                      onClick={handleSavePattern}
+                      disabled={loading || !patternName || fieldPatterns.size === 0}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Pattern
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="match" className="space-y-4">
+            <div className="space-y-4">
+              
+              {extractionResult && (
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Extracted Data</Label>
+                  <pre className="p-4 bg-slate-900 text-slate-100 rounded border border-slate-600 overflow-auto">
+                    {JSON.stringify(extractionResult, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+        
+        {error && (
+          <Alert className="mt-4 bg-red-900/50 border-red-700">
+            <AlertDescription className="text-red-200">{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {success && (
+          <Alert className="mt-4 bg-emerald-900/50 border-emerald-700">
+            <AlertDescription className="text-emerald-200">{success}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+      
+      <Dialog open={showMatchDialog} onOpenChange={setShowMatchDialog}>
+        <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-slate-100">Pattern Matches</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Select a pattern to extract data
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-96 overflow-auto">
+            {matches.map((match, idx) => (
+              <div key={idx} className="p-4 bg-slate-700 rounded border border-slate-600">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-slate-100 font-semibold">{match.pattern_name}</div>
+                    <div className="text-sm text-slate-400">
+                      Confidence: {(match.confidence * 100).toFixed(1)}% | 
+                      Matched: {match.matched_fields}/{match.total_fields} fields
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleExtract(match.pattern_id)}
+                    disabled={loading}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    Extract
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {matches.length === 0 && (
+              <div className="text-slate-400 text-center py-4">No matches found</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+

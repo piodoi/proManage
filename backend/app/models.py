@@ -113,6 +113,8 @@ class Bill(BaseModel):
     amount: float
     currency: Optional[str] = "RON"  # Currency for the bill: "EUR", "RON", or "USD"
     due_date: datetime
+    bill_date: Optional[datetime] = None  # Date of the bill (when it was issued)
+    legal_name: Optional[str] = None  # Legal name of the supplier/company
     iban: Optional[str] = None
     bill_number: Optional[str] = None
     extraction_pattern_id: Optional[str] = None  # ID of the extraction pattern used to parse this bill

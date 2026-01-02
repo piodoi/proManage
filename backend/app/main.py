@@ -19,6 +19,7 @@ from app.routes import (
     preferences_router,
 )
 from app.routes.subscription_routes import router as subscription_router
+from app.routes.text_pattern_routes import router as text_pattern_router
 from app.routes import load_extraction_patterns_from_json
 from app.utils.suppliers import initialize_suppliers
 
@@ -65,6 +66,7 @@ app.include_router(ebloc_router)
 app.include_router(sync_router)
 app.include_router(subscription_router)
 app.include_router(preferences_router)
+app.include_router(text_pattern_router)
 
 
 @app.on_event("startup")

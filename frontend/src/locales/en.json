@@ -23,6 +23,8 @@
     "status": "Status",
     "date": "Date",
     "amount": "Amount",
+    "currency": "Currency",
+    "paymentDetails": "Payment Details",
     "description": "Description"
   },
   "app": {
@@ -142,6 +144,7 @@
     "ebloc": "E-Bloc",
     "other": "Other",
     "dueDate": "Due Date",
+    "billDate": "Bill Date",
     "billNumber": "Bill Number",
     "allRenters": "All Renters",
     "specificRenter": "Specific Renter",

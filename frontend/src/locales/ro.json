@@ -23,6 +23,8 @@
     "status": "Status",
     "date": "Data",
     "amount": "Sumă",
+    "currency": "Monedă",
+    "paymentDetails": "Detalii Plată",
     "description": "Descriere"
   },
   "app": {
@@ -150,6 +152,7 @@
     "ebloc": "E-Bloc",
     "other": "Altele",
     "dueDate": "Data Scadență",
+    "billDate": "Data Factură",
     "billNumber": "Număr Factură",
     "allRenters": "Toți Chiriașii",
     "specificRenter": "Chiriaș Specific",
