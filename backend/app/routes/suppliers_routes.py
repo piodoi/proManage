@@ -287,7 +287,6 @@ async def create_property_supplier(
                 "has_credentials": has_credentials,
                 "created_at": existing.created_at,
                 "updated_at": existing.updated_at,
-                "message": "Direct debit setting updated for existing supplier."
             }
     
     # If credential_id provided, verify it belongs to the user
