@@ -4,15 +4,16 @@ import asyncio
 import platform
 from datetime import datetime
 from typing import Optional, List, Callable, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Body
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 import json
 import httpx
 import uuid
 
 from app.models import (
     Supplier, ExtractionPattern, Bill, BillType, BillStatus,
-    Payment, PaymentMethod, PaymentStatus, TokenData, UserRole
+    Payment, PaymentMethod, PaymentStatus, TokenData, UserRole, Property, Renter
 )
 from app.auth import require_landlord
 from app.database import db
@@ -206,6 +207,7 @@ async def _sync_supplier_scraper(
                 bill_status = BillStatus.OVERDUE
             
             # Get default currency from user preferences
+            landlord_id = prop.landlord_id if prop else None
             default_currency = get_default_bill_currency(landlord_id) if landlord_id else "RON"
             
             # Prepare bill data
@@ -940,3 +942,336 @@ async def sync_ebloc(
         raise HTTPException(status_code=500, detail=f"Error syncing e-bloc: {str(e)}")
     finally:
         await scraper.close()
+
+
+class SupplierGroup(BaseModel):
+    supplier_id: str
+    contract_id: Optional[str] = None
+    property_ids: List[str]
+
+
+class SyncAllRequest(BaseModel):
+    sync_id: str
+    supplier_groups: List[SupplierGroup]
+    discover_only: bool = True
+
+
+@router.post("/suppliers/sync-all")
+async def sync_all_properties_supplier_bills(
+    request: SyncAllRequest = Body(...),
+    current_user: TokenData = Depends(require_landlord)
+):
+    """
+    Sync bills from suppliers across all properties.
+    Suppliers are synced only once per contract_id, then bills are distributed to properties.
+    """
+    cancel_key = f"all:{request.sync_id}"
+    _cancellation_flags[cancel_key] = False
+    
+    async def stream_sync_progress():
+        """Generator function that streams progress updates via SSE."""
+        try:
+            def is_cancelled():
+                return _cancellation_flags.get(cancel_key, False)
+            
+            def send_event(event_type: str, data: dict):
+                """Send SSE event"""
+                return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+            
+            yield send_event("start", {"sync_id": request.sync_id, "status": "starting"})
+            
+            # Verify all properties belong to the user
+            for group in request.supplier_groups:
+                for property_id in group.property_ids:
+                    prop = db.get_property(property_id)
+                    if not prop:
+                        yield send_event("error", {"error": f"Property {property_id} not found"})
+                        return
+                    if prop.landlord_id != current_user.user_id:
+                        yield send_event("error", {"error": "Access denied"})
+                        return
+            
+            all_patterns = db.list_extraction_patterns()
+            bills_discovered = []
+            
+            # Sync each supplier group once
+            for group in request.supplier_groups:
+                if is_cancelled():
+                    yield send_event("cancelled", {"message": "Sync cancelled"})
+                    return
+                
+                supplier = db.get_supplier(group.supplier_id)
+                if not supplier:
+                    yield send_event("progress", {
+                        "supplier_name": "Unknown",
+                        "contract_id": group.contract_id,
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": f"Supplier {group.supplier_id} not found",
+                        "properties_affected": group.property_ids
+                    })
+                    continue
+                
+                # Get credentials
+                credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, supplier.id)
+                if not credential or not credential.username or not credential.password_hash:
+                    yield send_event("progress", {
+                        "supplier_name": supplier.name,
+                        "contract_id": group.contract_id,
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": "No credentials configured",
+                        "properties_affected": group.property_ids
+                    })
+                    continue
+                
+                username = decrypt_password(credential.username)
+                password = decrypt_password(credential.password_hash)
+                
+                yield send_event("progress", {
+                    "supplier_name": supplier.name,
+                    "contract_id": group.contract_id,
+                    "status": "starting",
+                    "bills_found": 0,
+                    "bills_created": 0,
+                    "properties_affected": group.property_ids
+                })
+                
+                # Sync supplier once
+                try:
+                    # Find property supplier for first property to get property_supplier_id
+                    first_property_suppliers = db.list_property_suppliers(group.property_ids[0])
+                    property_supplier = next((ps for ps in first_property_suppliers if ps.supplier_id == supplier.id), None)
+                    if not property_supplier:
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "contract_id": group.contract_id,
+                            "status": "error",
+                            "bills_found": 0,
+                            "bills_created": 0,
+                            "error": "Property supplier not found",
+                            "properties_affected": group.property_ids
+                        })
+                        continue
+                    
+                    def progress_callback(supplier_name: str, status: str, bills_found: int = 0, bills_created: int = 0, error: Optional[str] = None):
+                        """Progress callback for sync"""
+                        pass  # We'll handle progress manually
+                    
+                    group_bills = []  # Collect bills for this supplier group
+                    
+                    def bills_callback(bill_data: Dict[str, Any]):
+                        """Callback to collect discovered bills - receives single bill dict"""
+                        # Filter bills by contract_id if specified
+                        if group.contract_id and bill_data.get("contract_id") != group.contract_id:
+                            return
+                        
+                        group_bills.append(bill_data)
+                    
+                    yield send_event("progress", {
+                        "supplier_name": supplier.name,
+                        "contract_id": group.contract_id,
+                        "status": "processing",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "properties_affected": group.property_ids
+                    })
+                    
+                    bills_found, bills_created = await _sync_supplier_scraper(
+                        property_id=group.property_ids[0],  # Use first property for sync
+                        username=username,
+                        password=password,
+                        supplier=supplier,
+                        patterns=all_patterns,
+                        logger=logger,
+                        property_supplier_id=property_supplier.id,
+                        save_html_dumps=False,
+                        progress_callback=None,  # We handle progress manually
+                        discover_only=request.discover_only,
+                        bills_callback=bills_callback
+                    )
+                    
+                    # Distribute discovered bills to all properties in the group
+                    for bill_data in group_bills:
+                        for property_id in group.property_ids:
+                            bills_discovered.append({
+                                **bill_data,
+                                "property_id": property_id,
+                                "supplier_name": supplier.name,
+                                "contract_id": group.contract_id,
+                            })
+                    
+                    # Send progress with bills for each property
+                    for property_id in group.property_ids:
+                        property_bills = [b for b in bills_discovered if b.get("property_id") == property_id and b.get("supplier_name") == supplier.name]
+                        if property_bills:
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "contract_id": group.contract_id,
+                                "status": "processing",
+                                "bills_found": len(property_bills),
+                                "bills_created": 0,
+                                "properties_affected": [property_id],
+                                "bills": property_bills
+                            })
+                    
+                    yield send_event("progress", {
+                        "supplier_name": supplier.name,
+                        "contract_id": group.contract_id,
+                        "status": "completed",
+                        "bills_found": len(group_bills),
+                        "bills_created": bills_created if not request.discover_only else 0,
+                        "properties_affected": group.property_ids
+                    })
+                except Exception as e:
+                    logger.error(f"Error syncing supplier {supplier.name}: {e}", exc_info=True)
+                    yield send_event("progress", {
+                        "supplier_name": supplier.name,
+                        "contract_id": group.contract_id,
+                        "status": "error",
+                        "bills_found": 0,
+                        "bills_created": 0,
+                        "error": str(e),
+                        "properties_affected": group.property_ids
+                    })
+            
+            yield send_event("complete", {
+                "status": "completed",
+                "bills_discovered": len(bills_discovered)
+            })
+        except Exception as e:
+            logger.error(f"Error in sync_all_properties_supplier_bills: {e}", exc_info=True)
+            yield send_event("error", {"error": str(e)})
+        finally:
+            if cancel_key in _cancellation_flags:
+                del _cancellation_flags[cancel_key]
+    
+    return StreamingResponse(
+        stream_sync_progress(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@router.post("/suppliers/sync-all/cancel")
+async def cancel_all_sync(sync_id: str = Query(...), current_user: TokenData = Depends(require_landlord)):
+    """Cancel an ongoing all-properties sync operation."""
+    cancel_key = f"all:{sync_id}"
+    if cancel_key in _cancellation_flags:
+        _cancellation_flags[cancel_key] = True
+        logger.info(f"[Suppliers Sync All] Cancellation requested for {cancel_key}")
+        return {"status": "cancelled"}
+    return {"status": "not_found"}
+
+
+@router.post("/suppliers/sync-all/save-bills")
+async def save_all_discovered_bills(
+    bills_data: Dict[str, Any] = Body(...),
+    current_user: TokenData = Depends(require_landlord)
+):
+    """Save discovered bills from all properties sync to the database"""
+    bills = bills_data.get("bills", [])
+    if not bills:
+        return {"status": "success", "bills_created": 0}
+    
+    bills_created = []
+    bills_updated = []
+    
+    for bill_data in bills:
+        try:
+            property_id = bill_data.get("property_id")
+            if not property_id:
+                continue
+                
+            prop = db.get_property(property_id)
+            if not prop:
+                continue
+            # User isolation: all users (including admins) can only access their own properties
+            if prop.landlord_id != current_user.user_id:
+                continue
+            
+            # Convert ISO string dates back to datetime
+            due_date_str = bill_data["due_date"].replace('Z', '+00:00')
+            due_date = datetime.fromisoformat(due_date_str)
+            if due_date.tzinfo:
+                due_date = due_date.replace(tzinfo=None)
+            
+            # Convert string enums back to enum types
+            bill_type = BillType(bill_data["bill_type"])
+            bill_status = BillStatus(bill_data.get("status", "pending"))
+            
+            # Check if bill already exists
+            existing_bills = db.list_bills(property_id=property_id)
+            existing = None
+            bill_number = bill_data.get("bill_number")
+            
+            if bill_number:
+                existing = next(
+                    (b for b in existing_bills 
+                     if b.bill_number == bill_number 
+                     and b.bill_type == bill_type),
+                    None
+                )
+            
+            if not existing and bill_data.get("amount"):
+                for b in existing_bills:
+                    if (b.bill_type == bill_type and 
+                        b.description == bill_data.get("description", "") and
+                        abs(b.amount - bill_data["amount"]) < 0.01):
+                        if b.due_date:
+                            days_diff = abs((b.due_date - due_date).days)
+                            if days_diff <= 5:
+                                existing = b
+                                break
+            
+            if existing:
+                # Update existing bill
+                existing.amount = bill_data["amount"]
+                existing.due_date = due_date
+                if bill_data.get("iban"):
+                    existing.iban = bill_data["iban"]
+                if bill_number:
+                    existing.bill_number = bill_number
+                if bill_data.get("contract_id"):
+                    existing.contract_id = bill_data["contract_id"]
+                if bill_data.get("extraction_pattern_id"):
+                    existing.extraction_pattern_id = bill_data["extraction_pattern_id"]
+                if due_date < datetime.utcnow() and existing.status == BillStatus.PENDING:
+                    existing.status = BillStatus.OVERDUE
+                elif due_date >= datetime.utcnow() and existing.status == BillStatus.OVERDUE:
+                    existing.status = BillStatus.PENDING
+                
+                db.save_bill(existing)
+                bills_updated.append(existing.id)
+            else:
+                # Create new bill
+                bill = Bill(
+                    property_id=property_id,
+                    renter_id=bill_data.get("renter_id"),
+                    bill_type=bill_type,
+                    description=bill_data.get("description", ""),
+                    amount=bill_data["amount"],
+                    due_date=due_date,
+                    iban=bill_data.get("iban"),
+                    bill_number=bill_number,
+                    extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                    contract_id=bill_data.get("contract_id"),
+                    status=bill_status
+                )
+                db.save_bill(bill)
+                bills_created.append(bill.id)
+        except Exception as e:
+            logger.error(f"Error saving bill: {e}", exc_info=True)
+            continue
+    
+    return {
+        "status": "success",
+        "bills_created": len(bills_created),
+        "bills_updated": len(bills_updated)
+    }

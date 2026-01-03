@@ -4,11 +4,12 @@ import { useAuth } from '../App';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Building2, Settings, List, Grid } from 'lucide-react';
+import { Building2, Settings, List, Grid, RefreshCw } from 'lucide-react';
 import SettingsView from './SettingsView';
 import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
 import EblocImportDialog from './dialogs/EblocImportDialog';
+import AllPropertiesSyncDialog from './dialogs/AllPropertiesSyncDialog';
 import SummaryView from './SummaryView';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
@@ -34,6 +35,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [error, setError] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
+  const [showAllPropertiesSync, setShowAllPropertiesSync] = useState(false);
   const viewMode = (preferences.view_mode as 'list' | 'grid') || 'list';
   const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
 
@@ -121,8 +123,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
       {hideSettings ? (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
                 className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
@@ -131,6 +132,20 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 {viewMode === 'list' ? <Grid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
                 {viewMode === 'list' ? t('property.gridView') : t('property.listView')}
               </Button>
+              <Button
+                onClick={() => {
+                  saveScroll();
+                  setShowAllPropertiesSync(true);
+                }}
+                className="bg-emerald-600 text-white hover:bg-emerald-700 border border-emerald-700"
+                title={t('supplier.syncAllProperties')}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {t('supplier.syncBills')}
+              </Button>
+            </div>
+            <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
+            <div className="flex gap-2">
               <EblocImportDialog
                 token={token}
                 open={showEblocDiscover}
@@ -198,6 +213,19 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
               />
             ))
           )}
+          <AllPropertiesSyncDialog
+            token={token}
+            properties={properties}
+            open={showAllPropertiesSync}
+            onOpenChange={(open) => {
+              if (open) {
+                saveScroll();
+              }
+              setShowAllPropertiesSync(open);
+            }}
+            onSuccess={() => loadData(true)}
+            onError={setError}
+          />
         </div>
       ) : (
         <Tabs defaultValue="summary" className="space-y-4">
@@ -222,8 +250,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
 
           <TabsContent value="properties" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <Button
                   onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
                   className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
@@ -232,6 +259,20 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                   {viewMode === 'list' ? <Grid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
                   {viewMode === 'list' ? t('property.gridView') : t('property.listView')}
                 </Button>
+                <Button
+                  onClick={() => {
+                    saveScroll();
+                    setShowAllPropertiesSync(true);
+                  }}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700 border border-emerald-700"
+                  title={t('supplier.syncAllProperties')}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  {t('supplier.syncBills')}
+                </Button>
+              </div>
+              <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
+              <div className="flex gap-2">
                 <EblocImportDialog
                   token={token}
                   open={showEblocDiscover}
@@ -299,6 +340,19 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 />
               ))
             )}
+            <AllPropertiesSyncDialog
+              token={token}
+              properties={properties}
+              open={showAllPropertiesSync}
+              onOpenChange={(open) => {
+                if (open) {
+                  saveScroll();
+                }
+                setShowAllPropertiesSync(open);
+              }}
+              onSuccess={() => loadData(true)}
+              onError={setError}
+            />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
