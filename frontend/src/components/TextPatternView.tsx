@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useI18n } from '../lib/i18n';
-import { Save, Upload } from 'lucide-react';
+import { Save, Upload, Check } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type FieldPattern = {
@@ -49,6 +49,11 @@ export default function TextPatternView() {
   const [editingPattern, setEditingPattern] = useState<any | null>(null);
   const [editMatches, setEditMatches] = useState<any[]>([]);
   const [editPdfFile, setEditPdfFile] = useState<File | null>(null);
+  
+  // Filename tracking for each tab
+  const [createPdfFilename, setCreatePdfFilename] = useState<string>('');
+  const [matchPdfFilename, setMatchPdfFilename] = useState<string>('');
+  const [editPdfFilename, setEditPdfFilename] = useState<string>('');
   
   const fieldOptions = [
     { value: 'amount', label: t('common.amount') },
@@ -117,6 +122,7 @@ export default function TextPatternView() {
       
       const data = await response.json();
       setPdfText(data.text);
+      setCreatePdfFilename(file.name);
       setSuccess('PDF uploaded successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -485,6 +491,7 @@ export default function TextPatternView() {
       console.log(`[Match PDF] Found ${allMatches.length} patterns:`, allMatches.map((m: any) => `${m.pattern_name} (${(m.confidence * 100).toFixed(1)}%)`));
       setMatches(allMatches);
       setMatchingPdf(file);
+      setMatchPdfFilename(file.name);
       // Auto-select best confidence pattern (first in sorted list)
       if (allMatches.length > 0) {
         const bestMatch = allMatches[0]; // Already sorted by confidence descending
@@ -586,6 +593,7 @@ export default function TextPatternView() {
       const matchData = await matchResponse.json();
       const allEditMatches = matchData.matches || [];
       setEditMatches(allEditMatches);
+      setEditPdfFilename(file.name);
       console.log(`[Edit PDF] Found ${allEditMatches.length} patterns:`, allEditMatches.map((m: any) => `${m.pattern_name} (${(m.confidence * 100).toFixed(1)}%)`));
       // Auto-select best confidence pattern (first in sorted list)
       if (allEditMatches.length > 0) {
@@ -656,6 +664,11 @@ export default function TextPatternView() {
           <div className="flex justify-between items-center">
             <div className="text-sm text-slate-400">
               Editing: <span className="text-slate-300 font-semibold">{editingPattern.name}</span>
+              {editPdfFilename && (
+                <span className="text-slate-400 ml-2">
+                  | Filename: <span className="text-slate-300">{editPdfFilename}</span>
+                </span>
+              )}
               <br />
               Existing fields will be preserved. Add new fields below.
             </div>
@@ -686,11 +699,21 @@ export default function TextPatternView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-slate-700 border-slate-600">
-                {fieldOptions.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-slate-100">
-                    {opt.label}
-                  </SelectItem>
-                ))}
+                {fieldOptions.map(opt => {
+                  const hasPattern = fieldPatterns.has(opt.value);
+                  const pattern = fieldPatterns.get(opt.value);
+                  const preview = pattern && pattern.label_text ? 
+                    (pattern.label_text.length > 20 ? pattern.label_text.substring(0, 20) + '...' : pattern.label_text) : '';
+                  return (
+                    <SelectItem key={opt.value} value={opt.value} className="text-slate-100">
+                      <div className="flex items-center gap-2">
+                        {hasPattern && <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />}
+                        <span>{opt.label}</span>
+                        {preview && <span className="text-slate-400 text-xs ml-1">({preview})</span>}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -885,6 +908,7 @@ export default function TextPatternView() {
             setSelectedLabelStart(null);
             setHighlightedLine(null);
             setCurrentField('amount');
+            setCreatePdfFilename('');
           }
           // Clear extraction result when switching to match tab
           if (value === 'match') {
@@ -893,6 +917,7 @@ export default function TextPatternView() {
             setMatches([]);
             setMatchingPdf(null);
             setPdfText('');
+            setMatchPdfFilename('');
           }
           // Clear edit state when switching to edit tab
           if (value === 'edit') {
@@ -906,6 +931,7 @@ export default function TextPatternView() {
             setPatternName('');
             setSupplier('');
             setBillType('utilities');
+            setEditPdfFilename('');
           }
         }} className="space-y-4">
           <div className="flex items-center gap-4 flex-wrap">
@@ -952,6 +978,12 @@ export default function TextPatternView() {
                   Upload PDF
                 </Button>
               </label>
+              
+              {activeTab === 'create' && createPdfFilename && (
+                <span className="text-sm text-slate-400">
+                  Filename: <span className="text-slate-300">{createPdfFilename}</span>
+                </span>
+              )}
               
               {activeTab === 'match' && matchingPdf && (
                 matchingPatterns ? (
@@ -1039,7 +1071,14 @@ export default function TextPatternView() {
               
               {extractionResult && (
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Extracted Data</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-slate-300">Extracted Data</Label>
+                    {matchPdfFilename && (
+                      <span className="text-sm text-slate-400">
+                        | Filename: <span className="text-slate-300">{matchPdfFilename}</span>
+                      </span>
+                    )}
+                  </div>
                   <pre className="p-4 bg-slate-900 text-slate-100 rounded border border-slate-600 overflow-auto">
                     {JSON.stringify(extractionResult, null, 2)}
                   </pre>
