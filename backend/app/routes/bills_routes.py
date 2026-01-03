@@ -47,11 +47,9 @@ def calculate_bill_status(bill: Bill) -> Bill:
 
 @router.get("")
 async def list_bills(current_user: TokenData = Depends(require_landlord)):
-    if current_user.role == UserRole.ADMIN:
-        bills = db.list_bills()
-    else:
-        landlord_properties = {prop.id for prop in db.list_properties(landlord_id=current_user.user_id)}
-        bills = [b for b in db.list_bills() if b.property_id in landlord_properties]
+    # User isolation: all users (including admins) only see bills for their own properties
+    landlord_properties = {prop.id for prop in db.list_properties(landlord_id=current_user.user_id)}
+    bills = [b for b in db.list_bills() if b.property_id in landlord_properties]
     
     # Calculate and update status for all bills
     return [calculate_bill_status(bill) for bill in bills]
@@ -62,7 +60,8 @@ async def create_bill(data: BillCreate, current_user: TokenData = Depends(requir
     prop = db.get_property(data.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     # If renter_id is provided, verify it belongs to the property
     if data.renter_id:
@@ -92,7 +91,8 @@ async def get_bill(bill_id: str, current_user: TokenData = Depends(require_landl
     prop = db.get_property(bill.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     # Calculate and update status based on due date
     return calculate_bill_status(bill)
@@ -108,7 +108,8 @@ async def update_bill(
     prop = db.get_property(bill.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     # Handle renter_id update - check if it was provided in the request
     # We need to check the raw request data since Pydantic doesn't distinguish between
@@ -149,7 +150,8 @@ async def delete_bill(bill_id: str, current_user: TokenData = Depends(require_la
     prop = db.get_property(bill.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     db.delete_bill(bill_id)
     return {"status": "deleted"}
@@ -169,7 +171,8 @@ async def parse_bill_pdf(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     pdf_bytes = await file.read()
@@ -372,7 +375,8 @@ async def create_bill_from_pdf(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Parse due date
@@ -415,8 +419,7 @@ async def create_bill_from_pdf(
 
 @router.get("/payments")
 async def list_payments(current_user: TokenData = Depends(require_landlord)):
-    if current_user.role == UserRole.ADMIN:
-        return db.list_payments()
+    # User isolation: all users (including admins) only see payments for their own properties
     landlord_bills = set()
     for prop in db.list_properties(landlord_id=current_user.user_id):
         for bill in db.list_bills(property_id=prop.id):

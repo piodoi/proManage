@@ -198,7 +198,8 @@ async def list_property_suppliers(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     property_suppliers = db.list_property_suppliers(property_id)
@@ -235,7 +236,8 @@ async def create_property_supplier(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     supplier = db.get_supplier(data.supplier_id)
@@ -344,7 +346,8 @@ async def update_property_supplier(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     property_supplier = db.get_property_supplier(property_supplier_id)
@@ -406,7 +409,8 @@ async def delete_property_supplier(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     property_supplier = db.get_property_supplier(property_supplier_id)

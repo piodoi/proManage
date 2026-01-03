@@ -26,8 +26,7 @@ def check_subscription(user_id: str) -> bool:
 
 @router.get("")
 async def list_properties(current_user: TokenData = Depends(require_landlord)):
-    if current_user.role == UserRole.ADMIN:
-        return db.list_properties()
+    # User isolation: all users (including admins) only see their own properties
     return db.list_properties(landlord_id=current_user.user_id)
 
 
@@ -50,7 +49,8 @@ async def get_property(property_id: str, current_user: TokenData = Depends(requi
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     return prop
 
@@ -62,7 +62,8 @@ async def update_property(
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only update their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     if data.address is not None:
         prop.address = data.address
@@ -77,7 +78,8 @@ async def delete_property(property_id: str, current_user: TokenData = Depends(re
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+    # User isolation: all users (including admins) can only delete their own properties
+    if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     db.delete_property(property_id)
     return {"status": "deleted"}

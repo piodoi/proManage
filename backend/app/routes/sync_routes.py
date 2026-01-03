@@ -304,7 +304,8 @@ async def sync_supplier_bills(
             if not prop:
                 yield send_event("error", {"error": "Property not found"})
                 return
-            if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+            # User isolation: all users (including admins) can only access their own properties
+            if prop.landlord_id != current_user.user_id:
                 yield send_event("error", {"error": "Access denied"})
                 return
             
