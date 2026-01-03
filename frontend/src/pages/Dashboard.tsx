@@ -9,9 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, RefreshCw, Wrench, Package } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, RefreshCw, Wrench, Package, ShieldCheck } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
-import BillParserPage from './BillParserPage';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
 import SummaryView from '../components/SummaryView';
@@ -19,19 +18,21 @@ import TextPatternView from '../components/TextPatternView';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
 
-export default function AdminDashboard() {
+export default function Dashboard() {
   const { user, token, logout } = useAuth();
   const { t } = useI18n();
+  const [error, setError] = useState('');
+  const isAdmin = user?.role === 'admin';
+
+  // Admin state
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord', password: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
-  const [showBillParser, setShowBillParser] = useState(false);
   const [showRefreshDialog, setShowRefreshDialog] = useState(false);
   const [refreshingPatterns, setRefreshingPatterns] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
@@ -49,15 +50,27 @@ export default function AdminDashboard() {
     extraction_pattern_supplier: undefined,
   });
 
+  // Session-based tab memory
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = sessionStorage.getItem('dashboard-active-tab');
+    return saved || 'summary';
+  });
+
   useEffect(() => {
-    loadUsers();
-    if (token) {
+    if (activeTab) {
+      sessionStorage.setItem('dashboard-active-tab', activeTab);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (isAdmin && token) {
+      loadUsers();
       loadSuppliers();
     }
-  }, [token, currentPage]);
+  }, [token, currentPage, isAdmin]);
 
   const loadUsers = async () => {
-    if (!token) return;
+    if (!token || !isAdmin) return;
     try {
       const data = await api.admin.listUsers(token, currentPage, 50);
       setUsers(data.users);
@@ -89,7 +102,6 @@ export default function AdminDashboard() {
   const handleUpdate = async () => {
     if (!token || !editUser) return;
     try {
-      // Only send password if it was changed
       const updateData: { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string } = {
         email: formData.email,
         name: formData.name,
@@ -133,7 +145,7 @@ export default function AdminDashboard() {
   };
 
   const loadSuppliers = async () => {
-    if (!token) return;
+    if (!token || !isAdmin) return;
     setLoadingSuppliers(true);
     try {
       const data = await api.admin.suppliers.list(token);
@@ -184,9 +196,6 @@ export default function AdminDashboard() {
       loadSuppliers();
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Failed to delete supplier';
-      // Check if error contains properties list - in this case we need to parse it from the error response
-      // The backend returns a structured error, but FastAPI converts it to a string
-      // We'll need to handle this differently - the error should already be caught and properties loaded
       setError(errMsg);
     }
   };
@@ -209,49 +218,22 @@ export default function AdminDashboard() {
       const props = await api.admin.suppliers.getProperties(token, supplier.id);
       setSupplierProperties(props);
     } catch (err) {
-      // Ignore error, properties list might be empty
       setSupplierProperties([]);
     }
   };
-
-
-  if (showBillParser) {
-    return (
-      <div className="min-h-screen bg-slate-900">
-        <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FileText className="w-6 h-6 text-emerald-500" />
-              <h1 className="text-xl font-semibold text-slate-100">{t('admin.dashboard')}</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <LanguageSelector />
-              <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
-                <LogOut className="w-4 h-4 mr-2" />
-                {t('app.logout')}
-              </Button>
-            </div>
-          </div>
-        </header>
-        <main className="p-6">
-          <BillParserPage onBack={() => setShowBillParser(false)} />
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-900">
       <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Users className="w-6 h-6 text-emerald-500" />
-            <div>
-              <h1 className="text-xl font-semibold text-slate-100">{t('admin.dashboard')}</h1>
-              {user && <p className="text-sm text-slate-400">{user.name}</p>}
-            </div>
+            <Building2 className="w-6 h-6 text-emerald-500" />
+            <h1 className="text-xl font-semibold text-slate-100 flex items-center gap-2">
+              {t('app.title')} - {user?.name}
+              {isAdmin && <ShieldCheck className="w-5 h-5 text-emerald-500" />}
+            </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <LanguageSelector />
             <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
               <LogOut className="w-4 h-4 mr-2" />
@@ -269,49 +251,202 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <Tabs defaultValue="summary" className="space-y-4">
-          <TabsList className="bg-slate-800 border border-slate-700">
-            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
+            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <FileText className="w-4 h-4 mr-2" />
               {t('summary.summary')}
             </TabsTrigger>
-            <TabsTrigger value="property" className="data-[state=active]:bg-slate-700">
+            <TabsTrigger value="property" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <Building2 className="w-4 h-4 mr-2" />
               {t('property.properties')}
             </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
+            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <Settings className="w-4 h-4 mr-2" />
               {t('settings.settings')}
             </TabsTrigger>
-            <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700">
+            <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <FileText className="w-4 h-4 mr-2" />
               Tools
             </TabsTrigger>
-            <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700">
-              <Users className="w-4 h-4 mr-2" />
-              {t('admin.adminTab')}
-            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+                <Users className="w-4 h-4 mr-2" />
+                {t('admin.adminTab')}
+              </TabsTrigger>
+            )}
           </TabsList>
 
-          <TabsContent value="summary" className="space-y-4">
-            <SummaryView />
-          </TabsContent>
+          <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
+            <TabsContent value="summary" className="m-0 p-6 space-y-4">
+              <SummaryView />
+            </TabsContent>
 
-          <TabsContent value="property" className="space-y-4">
-            <LandlordView token={token} onError={setError} hideSettings />
-          </TabsContent>
+            <TabsContent value="property" className="m-0 p-6 space-y-4">
+              <LandlordView token={token} onError={setError} hideSettings />
+            </TabsContent>
 
-          <TabsContent value="settings" className="space-y-4">
-            <SettingsView token={token} onError={setError} />
-          </TabsContent>
+            <TabsContent value="settings" className="m-0 p-6 space-y-4">
+              <SettingsView token={token} onError={setError} />
+            </TabsContent>
 
-          <TabsContent value="tools" className="space-y-4">
-            <TextPatternView />
-          </TabsContent>
+            <TabsContent value="tools" className="m-0 p-6 space-y-4">
+              <TextPatternView />
+            </TabsContent>
 
-          <TabsContent value="admin" className="space-y-4">
-            {/* Housekeeping Section */}
-            <Card className="bg-slate-800 border-slate-700">
+            {isAdmin && (
+              <TabsContent value="admin" className="m-0 p-6 space-y-0">
+                <AdminTabsContent
+                  token={token}
+                  users={users}
+                  loading={loading}
+                  suppliers={suppliers}
+                  loadingSuppliers={loadingSuppliers}
+                  showCreate={showCreate}
+                  setShowCreate={setShowCreate}
+                  editUser={editUser}
+                  setEditUser={setEditUser}
+                  formData={formData}
+                  setFormData={setFormData}
+                  currentPage={currentPage}
+                  setCurrentPage={setCurrentPage}
+                  totalPages={totalPages}
+                  totalUsers={totalUsers}
+                  handleCreate={handleCreate}
+                  handleUpdate={handleUpdate}
+                  handleDelete={handleDelete}
+                  handleSubscription={handleSubscription}
+                  openEdit={openEdit}
+                  loadUsers={loadUsers}
+                  showSupplierCreate={showSupplierCreate}
+                  setShowSupplierCreate={setShowSupplierCreate}
+                  editSupplier={editSupplier}
+                  setEditSupplier={setEditSupplier}
+                  deleteSupplier={deleteSupplier}
+                  setDeleteSupplier={setDeleteSupplier}
+                  supplierProperties={supplierProperties}
+                  supplierForm={supplierForm}
+                  setSupplierForm={setSupplierForm}
+                  handleSupplierCreate={handleSupplierCreate}
+                  handleSupplierUpdate={handleSupplierUpdate}
+                  handleSupplierDelete={handleSupplierDelete}
+                  openSupplierEdit={openSupplierEdit}
+                  openSupplierDelete={openSupplierDelete}
+                  showRefreshDialog={showRefreshDialog}
+                  setShowRefreshDialog={setShowRefreshDialog}
+                  refreshingPatterns={refreshingPatterns}
+                  forceRefresh={forceRefresh}
+                  setForceRefresh={setForceRefresh}
+                  refreshResults={refreshResults}
+                  setRefreshingPatterns={setRefreshingPatterns}
+                  setRefreshResults={setRefreshResults}
+                  setError={setError}
+                />
+              </TabsContent>
+            )}
+          </div>
+        </Tabs>
+      </main>
+    </div>
+  );
+}
+
+// Admin tabs content component
+function AdminTabsContent({
+  token,
+  users,
+  loading,
+  suppliers,
+  loadingSuppliers,
+  showCreate,
+  setShowCreate,
+  editUser,
+  setEditUser,
+  formData,
+  setFormData,
+  currentPage,
+  setCurrentPage,
+  totalPages,
+  totalUsers,
+  handleCreate,
+  handleUpdate,
+  handleDelete,
+  handleSubscription,
+  openEdit,
+  loadUsers,
+  showSupplierCreate,
+  setShowSupplierCreate,
+  editSupplier,
+  setEditSupplier,
+  deleteSupplier,
+  setDeleteSupplier,
+  supplierProperties,
+  supplierForm,
+  setSupplierForm,
+  handleSupplierCreate,
+  handleSupplierUpdate,
+  handleSupplierDelete,
+  openSupplierEdit,
+  openSupplierDelete,
+  showRefreshDialog,
+  setShowRefreshDialog,
+  refreshingPatterns,
+  forceRefresh,
+  setForceRefresh,
+  refreshResults,
+  setRefreshingPatterns,
+  setRefreshResults,
+  setError,
+}: any) {
+  const { t } = useI18n();
+  const [adminActiveTab, setAdminActiveTab] = useState(() => {
+    const saved = sessionStorage.getItem('admin-active-tab');
+    return saved || 'housekeeping';
+  });
+
+  useEffect(() => {
+    if (adminActiveTab) {
+      sessionStorage.setItem('admin-active-tab', adminActiveTab);
+    }
+  }, [adminActiveTab]);
+
+  const handleRefreshPatterns = async () => {
+    if (!token) return;
+    setRefreshingPatterns(true);
+    setRefreshResults([]);
+    setShowRefreshDialog(true);
+    try {
+      const result = await api.admin.refreshPatterns(token, forceRefresh);
+      setRefreshResults(result.results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+      setShowRefreshDialog(false);
+    } finally {
+      setRefreshingPatterns(false);
+    }
+  };
+
+  return (
+    <div className="space-y-0">
+      <Tabs value={adminActiveTab} onValueChange={setAdminActiveTab} className="w-full">
+        <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
+          <TabsTrigger value="housekeeping" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+            <Wrench className="w-4 h-4 mr-2" />
+            {t('admin.housekeeping')}
+          </TabsTrigger>
+          <TabsTrigger value="suppliers" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+            <Package className="w-4 h-4 mr-2" />
+            {t('admin.suppliersManagement')}
+          </TabsTrigger>
+          <TabsTrigger value="users" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+            <Users className="w-4 h-4 mr-2" />
+            {t('admin.userManagement')}
+          </TabsTrigger>
+        </TabsList>
+
+        <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
+          <TabsContent value="housekeeping" className="m-0 p-6 space-y-4">
+            <Card className="bg-slate-800 border-0 shadow-none">
               <CardHeader>
                 <CardTitle className="text-slate-100 flex items-center gap-2">
                   <Wrench className="w-5 h-5" />
@@ -336,21 +471,7 @@ export default function AdminDashboard() {
                     </label>
                   </div>
                   <Button
-                    onClick={async () => {
-                      if (!token) return;
-                      setRefreshingPatterns(true);
-                      setRefreshResults([]);
-                      setShowRefreshDialog(true);
-                      try {
-                        const result = await api.admin.refreshPatterns(token, forceRefresh);
-                        setRefreshResults(result.results);
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : t('errors.generic'));
-                        setShowRefreshDialog(false);
-                      } finally {
-                        setRefreshingPatterns(false);
-                      }
-                    }}
+                    onClick={handleRefreshPatterns}
                     disabled={refreshingPatterns}
                     className="bg-emerald-600 text-white hover:bg-emerald-700"
                   >
@@ -360,9 +481,10 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            {/* Suppliers Management Section */}
-            <Card className="bg-slate-800 border-slate-700">
+          <TabsContent value="suppliers" className="m-0 p-6 space-y-4">
+            <Card className="bg-slate-800 border-0 shadow-none">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-slate-100 flex items-center gap-2">
                   <Package className="w-5 h-5" />
@@ -457,7 +579,7 @@ export default function AdminDashboard() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {suppliers.map((supplier) => (
+                        {suppliers.map((supplier: Supplier) => (
                           <TableRow key={supplier.id} className="border-slate-700">
                             <TableCell className="text-slate-100">{supplier.name}</TableCell>
                             <TableCell className="text-slate-300 capitalize">{supplier.bill_type}</TableCell>
@@ -581,7 +703,7 @@ export default function AdminDashboard() {
                         {t('admin.supplierConnectedTo', { count: supplierProperties.length })}
                       </p>
                       <div className="max-h-48 overflow-y-auto bg-slate-700/50 rounded p-3 space-y-1">
-                        {supplierProperties.map((prop) => (
+                        {supplierProperties.map((prop: any) => (
                           <div key={prop.property_id} className="text-slate-200 text-sm">
                             • {prop.property_name} - {prop.property_address}
                           </div>
@@ -618,25 +740,10 @@ export default function AdminDashboard() {
                 </div>
               </DialogContent>
             </Dialog>
+          </TabsContent>
 
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  {t('admin.billParser')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-slate-400 text-sm mb-4">
-                  {t('admin.billParserDesc')}
-                </p>
-                <Button onClick={() => setShowBillParser(true)} className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
-                  <FileText className="w-4 h-4 mr-2" />
-                  {t('admin.openBillParser')}
-                </Button>
-              </CardContent>
-            </Card>
-            <Card className="bg-slate-800 border-slate-700">
+          <TabsContent value="users" className="m-0 p-6 space-y-4">
+            <Card className="bg-slate-800 border-0 shadow-none">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-slate-100">{t('admin.userManagement')}</CardTitle>
                 <Dialog open={showCreate} onOpenChange={setShowCreate}>
@@ -715,7 +822,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.map((user) => (
+                      {users.map((user: User) => (
                         <TableRow key={user.id} className="border-slate-700">
                           <TableCell className="text-slate-200">{user.name}</TableCell>
                           <TableCell className="text-slate-300">{user.email}</TableCell>
@@ -891,8 +998,8 @@ export default function AdminDashboard() {
               </DialogContent>
             </Dialog>
           </TabsContent>
-        </Tabs>
-      </main>
+        </div>
+      </Tabs>
 
       {/* Refresh Patterns Dialog */}
       <Dialog open={showRefreshDialog} onOpenChange={setShowRefreshDialog}>
@@ -920,7 +1027,7 @@ export default function AdminDashboard() {
                   {t('admin.updatedPatterns', { count: refreshResults.filter(r => r.action === 'created' || r.action === 'updated').length })}
                 </p>
                 <div className="max-h-96 overflow-y-auto space-y-2">
-                  {refreshResults.map((result, idx) => (
+                  {refreshResults.map((result: any, idx: number) => (
                     <div
                       key={idx}
                       className={`p-3 rounded border ${
@@ -969,3 +1076,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

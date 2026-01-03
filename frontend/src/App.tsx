@@ -1,8 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { api, User } from './api';
-import AdminDashboard from './pages/AdminDashboard';
-import LandlordDashboard from './pages/LandlordDashboard';
+import Dashboard from './pages/Dashboard';
 import RenterView from './pages/RenterView';
 import Login from './pages/Login';
 import ConfirmEmail from './pages/ConfirmEmail';
@@ -81,20 +80,10 @@ function App() {
                       <Route path="/confirm-email" element={<ConfirmEmail />} />
                       <Route path="/renter/:token" element={<RenterView />} />
             <Route
-              path="/admin/*"
-              element={
-                user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />
-              }
-            />
-            <Route
               path="/*"
               element={
                 user ? (
-                  user.role === 'admin' ? (
-                    <Navigate to="/admin" />
-                  ) : (
-                    <LandlordDashboard />
-                  )
+                  <Dashboard />
                 ) : (
                   <Navigate to="/login" />
                 )

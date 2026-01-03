@@ -3,7 +3,6 @@ import { useAuth } from '../App';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useI18n } from '../lib/i18n';
@@ -889,15 +888,8 @@ export default function TextPatternView() {
 
 
   return (
-    <Card className="bg-slate-800 border-slate-700">
-      <CardHeader>
-        <CardTitle className="text-slate-100">Tools</CardTitle>
-        <CardDescription className="text-slate-400">
-          Create text-based extraction patterns by selecting labels and offset to value positions from PDF text
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="create" value={activeTab} onValueChange={(value) => {
+    <div className="space-y-0">
+      <Tabs value={activeTab} onValueChange={(value) => {
           setActiveTab(value);
           // Clear file input so same file can be uploaded again
           if (fileInputRef.current) {
@@ -957,130 +949,139 @@ export default function TextPatternView() {
               }, 0);
             }
           }
-        }} className="space-y-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            <TabsList className="bg-slate-700 border border-slate-600">
-              <TabsTrigger value="create" className="data-[state=active]:bg-slate-600">Create Pattern</TabsTrigger>
-              <TabsTrigger value="match" className="data-[state=active]:bg-slate-600">Match Pattern</TabsTrigger>
-              {user?.role === 'admin' && (
-                <TabsTrigger value="edit" className="data-[state=active]:bg-slate-600">Edit Pattern</TabsTrigger>
-              )}
-            </TabsList>
+        }} className="w-full">
+          <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
+            <TabsTrigger value="create" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+              Create Pattern
+            </TabsTrigger>
+            <TabsTrigger value="match" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+              Match Pattern
+            </TabsTrigger>
+            {user?.role === 'admin' && (
+              <TabsTrigger value="edit" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+                Edit Pattern
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
+            <div className="p-6">
+              <div className="flex items-center gap-4 flex-wrap mb-4">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="pdf-upload" className="cursor-pointer">
+                    <input
+                      ref={fileInputRef}
+                      id="pdf-upload"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (activeTab === 'create') {
+                            handleFileUpload(file);
+                          } else if (activeTab === 'edit') {
+                            handleEditPdfUpload(file);
+                          } else {
+                            handleMatchPdf(file);
+                          }
+                          // Clear input value so same file can be uploaded again
+                          e.target.value = '';
+                        }
+                      }}
+                      disabled={loading}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={loading}
+                      className="flex items-center gap-2 border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => document.getElementById('pdf-upload')?.click()}
+                    >
+                      <Upload className="h-4 w-4" />
+                      {t('tools.uploadPdf')}
+                    </Button>
+                  </label>
+                
+                  {activeTab === 'create' && sharedPdfFilename && (
+                    <span className="text-sm text-slate-400">
+                      {t('tools.filename')}: <span className="text-slate-300">{sharedPdfFilename}</span>
+                    </span>
+                  )}
+                  
+                  {activeTab === 'match' && sharedPdfFile && (
+                    matchingPatterns ? (
+                      <div className="text-slate-400 text-sm flex items-center gap-2">
+                        <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
+                        {t('tools.calculatingConfidence')}
+                      </div>
+                    ) : matches.length > 0 ? (
+                      <Select 
+                        value={selectedPatternId} 
+                        onValueChange={(value) => {
+                          setSelectedPatternId(value);
+                          if (value && sharedPdfFile) {
+                            handleExtract(value, sharedPdfFile);
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        <SelectTrigger className="w-80 bg-slate-700 border-slate-600 text-slate-100">
+                          <SelectValue placeholder={t('tools.selectPatternToExtract')} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          {matches.map((match) => (
+                            <SelectItem key={match.pattern_id} value={match.pattern_id} className="text-slate-100">
+                              {match.pattern_name} ({(match.confidence * 100).toFixed(1)}% - {match.matched_fields}/{match.total_fields} fields)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null
+                  )}
+                  
+                  {activeTab === 'edit' && pdfText && (
+                    matchingPatterns ? (
+                      <div className="text-slate-400 text-sm flex items-center gap-2">
+                        <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
+                        {t('tools.calculatingConfidence')}
+                      </div>
+                    ) : editMatches.length > 0 ? (
+                      <Select 
+                        value={selectedPatternId} 
+                        onValueChange={(value) => {
+                          setSelectedPatternId(value);
+                          if (value) {
+                            loadPatternForEditing(value);
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        <SelectTrigger className="w-80 bg-slate-700 border-slate-600 text-slate-100">
+                          <SelectValue placeholder={t('tools.selectPatternToEdit')} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          {editMatches.map((match) => (
+                            <SelectItem key={match.pattern_id} value={match.pattern_id} className="text-slate-100">
+                              {match.pattern_name} ({(match.confidence * 100).toFixed(1)}% - {match.matched_fields}/{match.total_fields} fields)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <TabsContent value="create" className="m-0 p-6">
+              <div className="space-y-4">
+                {pdfText && renderPatternEditor('create')}
+              </div>
+            </TabsContent>
             
-            <div className="flex items-center gap-2">
-              <label htmlFor="pdf-upload" className="cursor-pointer">
-              <input
-                ref={fileInputRef}
-                id="pdf-upload"
-                type="file"
-                accept=".pdf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (activeTab === 'create') {
-                      handleFileUpload(file);
-                    } else if (activeTab === 'edit') {
-                      handleEditPdfUpload(file);
-                    } else {
-                      handleMatchPdf(file);
-                    }
-                    // Clear input value so same file can be uploaded again
-                    e.target.value = '';
-                  }
-                }}
-                disabled={loading}
-                className="hidden"
-              />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={loading}
-                  className="flex items-center gap-2 border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => document.getElementById('pdf-upload')?.click()}
-                >
-                  <Upload className="h-4 w-4" />
-                  {t('tools.uploadPdf')}
-                </Button>
-              </label>
-              
-              {activeTab === 'create' && sharedPdfFilename && (
-                <span className="text-sm text-slate-400">
-                  {t('tools.filename')}: <span className="text-slate-300">{sharedPdfFilename}</span>
-                </span>
-              )}
-              
-              {activeTab === 'match' && sharedPdfFile && (
-                matchingPatterns ? (
-                  <div className="text-slate-400 text-sm flex items-center gap-2">
-                    <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
-                    {t('tools.calculatingConfidence')}
-                  </div>
-                ) : matches.length > 0 ? (
-                  <Select 
-                    value={selectedPatternId} 
-                    onValueChange={(value) => {
-                      setSelectedPatternId(value);
-                      if (value && sharedPdfFile) {
-                        handleExtract(value, sharedPdfFile);
-                      }
-                    }}
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="w-80 bg-slate-700 border-slate-600 text-slate-100">
-                      <SelectValue placeholder={t('tools.selectPatternToExtract')} />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-700 border-slate-600">
-                      {matches.map((match) => (
-                        <SelectItem key={match.pattern_id} value={match.pattern_id} className="text-slate-100">
-                          {match.pattern_name} ({(match.confidence * 100).toFixed(1)}% - {match.matched_fields}/{match.total_fields} fields)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null
-              )}
-              
-              {activeTab === 'edit' && pdfText && (
-                matchingPatterns ? (
-                  <div className="text-slate-400 text-sm flex items-center gap-2">
-                    <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
-                    {t('tools.calculatingConfidence')}
-                  </div>
-                ) : editMatches.length > 0 ? (
-                  <Select 
-                    value={selectedPatternId} 
-                    onValueChange={(value) => {
-                      setSelectedPatternId(value);
-                      if (value) {
-                        loadPatternForEditing(value);
-                      }
-                    }}
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="w-80 bg-slate-700 border-slate-600 text-slate-100">
-                      <SelectValue placeholder={t('tools.selectPatternToEdit')} />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-700 border-slate-600">
-                      {editMatches.map((match) => (
-                        <SelectItem key={match.pattern_id} value={match.pattern_id} className="text-slate-100">
-                          {match.pattern_name} ({(match.confidence * 100).toFixed(1)}% - {match.matched_fields}/{match.total_fields} fields)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null
-              )}
-            </div>
-          </div>
-          
-          <TabsContent value="create" className="space-y-4">
-            <div className="space-y-4">
-              {pdfText && renderPatternEditor('create')}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="match" className="space-y-4">
-            <div className="space-y-4">
+            <TabsContent value="match" className="m-0 p-6">
+              <div className="space-y-4">
               {!pdfText && (
                 <div className="text-slate-400 text-center py-8">
                   {t('tools.uploadPdfToMatch')}
@@ -1108,12 +1109,12 @@ export default function TextPatternView() {
                   </pre>
                 </div>
               )}
-            </div>
-          </TabsContent>
-          
-          {user?.role === 'admin' && (
-            <TabsContent value="edit" className="space-y-4">
-              <div className="space-y-4">
+              </div>
+            </TabsContent>
+            
+            {user?.role === 'admin' && (
+              <TabsContent value="edit" className="m-0 p-6">
+                <div className="space-y-4">
                 {!pdfText && (
                   <div className="text-slate-400 text-center py-8">
                     {t('tools.uploadPdfToSeeMatches')}
@@ -1126,26 +1127,25 @@ export default function TextPatternView() {
                   </div>
                 )}
                 
-                {editingPattern && pdfText && renderPatternEditor('edit')}
-              </div>
-            </TabsContent>
-          )}
+                  {editingPattern && pdfText && renderPatternEditor('edit')}
+                </div>
+              </TabsContent>
+            )}
+
+            {error && (
+              <Alert className="m-6 mt-0 bg-red-900/50 border-red-700">
+                <AlertDescription className="text-red-200">{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {success && (
+              <Alert className="m-6 mt-0 bg-emerald-900/50 border-emerald-700">
+                <AlertDescription className="text-emerald-200">{success}</AlertDescription>
+              </Alert>
+            )}
+          </div>
         </Tabs>
-        
-        {error && (
-          <Alert className="mt-4 bg-red-900/50 border-red-700">
-            <AlertDescription className="text-red-200">{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert className="mt-4 bg-emerald-900/50 border-emerald-700">
-            <AlertDescription className="text-emerald-200">{success}</AlertDescription>
-          </Alert>
-        )}
-      </CardContent>
-      
-    </Card>
+    </div>
   );
 }
 
