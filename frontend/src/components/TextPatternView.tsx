@@ -21,6 +21,12 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function TextPatternView() {
   const { token, user } = useAuth();
   const { t } = useI18n();
+  // Shared PDF state across all tabs
+  const [sharedPdfFile, setSharedPdfFile] = useState<File | null>(null);
+  const [sharedPdfText, setSharedPdfText] = useState<string>('');
+  const [sharedPdfFilename, setSharedPdfFilename] = useState<string>('');
+  
+  // Tab-specific PDF text (for display in textarea)
   const [pdfText, setPdfText] = useState<string>('');
   const [selectedLabel, setSelectedLabel] = useState<string>('');
   const [selectedLabelStart, setSelectedLabelStart] = useState<number | null>(null);
@@ -39,7 +45,6 @@ export default function TextPatternView() {
   const [activeTab, setActiveTab] = useState<string>('create');
   
   // Pattern matching state
-  const [matchingPdf, setMatchingPdf] = useState<File | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [extractionResult, setExtractionResult] = useState<any | null>(null);
   const [matchingPatterns, setMatchingPatterns] = useState(false);
@@ -48,12 +53,6 @@ export default function TextPatternView() {
   const [selectedPatternId, setSelectedPatternId] = useState<string>('');
   const [editingPattern, setEditingPattern] = useState<any | null>(null);
   const [editMatches, setEditMatches] = useState<any[]>([]);
-  const [editPdfFile, setEditPdfFile] = useState<File | null>(null);
-  
-  // Filename tracking for each tab
-  const [createPdfFilename, setCreatePdfFilename] = useState<string>('');
-  const [matchPdfFilename, setMatchPdfFilename] = useState<string>('');
-  const [editPdfFilename, setEditPdfFilename] = useState<string>('');
   
   const fieldOptions = [
     { value: 'amount', label: t('common.amount') },
@@ -121,8 +120,12 @@ export default function TextPatternView() {
       }
       
       const data = await response.json();
+      // Update shared state
+      setSharedPdfFile(file);
+      setSharedPdfText(data.text);
+      setSharedPdfFilename(file.name);
+      // Update tab-specific state
       setPdfText(data.text);
-      setCreatePdfFilename(file.name);
       setSuccess('PDF uploaded successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -490,8 +493,12 @@ export default function TextPatternView() {
       const allMatches = matchData.matches || [];
       console.log(`[Match PDF] Found ${allMatches.length} patterns:`, allMatches.map((m: any) => `${m.pattern_name} (${(m.confidence * 100).toFixed(1)}%)`));
       setMatches(allMatches);
-      setMatchingPdf(file);
-      setMatchPdfFilename(file.name);
+      // Update shared state
+      setSharedPdfFile(file);
+      setSharedPdfText(uploadData.text || '');
+      setSharedPdfFilename(file.name);
+      // Update tab-specific state
+      setPdfText(uploadData.text || '');
       // Auto-select best confidence pattern (first in sorted list)
       if (allMatches.length > 0) {
         const bestMatch = allMatches[0]; // Already sorted by confidence descending
@@ -513,7 +520,7 @@ export default function TextPatternView() {
   };
 
   const handleExtract = async (patternId: string, file?: File) => {
-    const fileToUse = file || matchingPdf;
+    const fileToUse = file || sharedPdfFile;
     if (!token || !fileToUse) return;
     setLoading(true);
     setError('');
@@ -552,7 +559,6 @@ export default function TextPatternView() {
     setLoading(true);
     setMatchingPatterns(true);
     setError('');
-    setEditPdfFile(file);
     setEditMatches([]);
     setEditingPattern(null);
     setSelectedPatternId('');
@@ -593,7 +599,12 @@ export default function TextPatternView() {
       const matchData = await matchResponse.json();
       const allEditMatches = matchData.matches || [];
       setEditMatches(allEditMatches);
-      setEditPdfFilename(file.name);
+      // Update shared state
+      setSharedPdfFile(file);
+      setSharedPdfText(uploadData.text || '');
+      setSharedPdfFilename(file.name);
+      // Update tab-specific state
+      setPdfText(uploadData.text || '');
       console.log(`[Edit PDF] Found ${allEditMatches.length} patterns:`, allEditMatches.map((m: any) => `${m.pattern_name} (${(m.confidence * 100).toFixed(1)}%)`));
       // Auto-select best confidence pattern (first in sorted list)
       if (allEditMatches.length > 0) {
@@ -664,9 +675,9 @@ export default function TextPatternView() {
           <div className="flex justify-between items-center">
             <div className="text-sm text-slate-400">
               Editing: <span className="text-slate-300 font-semibold">{editingPattern.name}</span>
-              {editPdfFilename && (
+              {sharedPdfFilename && (
                 <span className="text-slate-400 ml-2">
-                  | Filename: <span className="text-slate-300">{editPdfFilename}</span>
+                  | Filename: <span className="text-slate-300">{sharedPdfFilename}</span>
                 </span>
               )}
               <br />
@@ -870,8 +881,8 @@ export default function TextPatternView() {
       setTimeout(() => setSuccess(''), 3000);
       
       // Reload pattern matches if PDF is still loaded
-      if (editPdfFile) {
-        await handleEditPdfUpload(editPdfFile);
+      if (sharedPdfFile) {
+        await handleEditPdfUpload(sharedPdfFile);
       }
     } catch (err: any) {
       setError(err.message || 'Error updating pattern');
@@ -886,7 +897,7 @@ export default function TextPatternView() {
       <CardHeader>
         <CardTitle className="text-slate-100">Tools</CardTitle>
         <CardDescription className="text-slate-400">
-          Create text-based extraction patterns by selecting labels and values from PDF text
+          Create text-based extraction patterns by selecting labels and offset to value positions from PDF text
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -896,9 +907,8 @@ export default function TextPatternView() {
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-          // Clear form when switching to create tab
+          // Clear form when switching to create tab (but keep shared PDF)
           if (value === 'create') {
-            setPdfText('');
             setFieldPatterns(new Map());
             setLineOffsets(new Map());
             setPatternName('');
@@ -908,30 +918,49 @@ export default function TextPatternView() {
             setSelectedLabelStart(null);
             setHighlightedLine(null);
             setCurrentField('amount');
-            setCreatePdfFilename('');
+            // Load shared PDF if available
+            if (sharedPdfText) {
+              setPdfText(sharedPdfText);
+            }
           }
-          // Clear extraction result when switching to match tab
+          // Auto-match when switching to match tab if shared PDF exists
           if (value === 'match') {
             setExtractionResult(null);
             setSelectedPatternId('');
             setMatches([]);
-            setMatchingPdf(null);
-            setPdfText('');
-            setMatchPdfFilename('');
+            // Load shared PDF if available
+            if (sharedPdfText) {
+              setPdfText(sharedPdfText);
+            }
+            // Auto-trigger matching if shared PDF file exists
+            if (sharedPdfFile && token) {
+              // Use setTimeout to avoid state update during render
+              setTimeout(() => {
+                handleMatchPdf(sharedPdfFile);
+              }, 0);
+            }
           }
-          // Clear edit state when switching to edit tab
+          // Clear edit state when switching to edit tab (but keep shared PDF)
           if (value === 'edit') {
             setEditingPattern(null);
             setSelectedPatternId('');
             setEditMatches([]);
-            setEditPdfFile(null);
-            setPdfText('');
             setFieldPatterns(new Map());
             setLineOffsets(new Map());
             setPatternName('');
             setSupplier('');
             setBillType('utilities');
-            setEditPdfFilename('');
+            // Load shared PDF if available
+            if (sharedPdfText) {
+              setPdfText(sharedPdfText);
+            }
+            // Auto-trigger matching if shared PDF file exists
+            if (sharedPdfFile && token) {
+              // Use setTimeout to avoid state update during render
+              setTimeout(() => {
+                handleEditPdfUpload(sharedPdfFile);
+              }, 0);
+            }
           }
         }} className="space-y-4">
           <div className="flex items-center gap-4 flex-wrap">
@@ -979,13 +1008,13 @@ export default function TextPatternView() {
                 </Button>
               </label>
               
-              {activeTab === 'create' && createPdfFilename && (
+              {activeTab === 'create' && sharedPdfFilename && (
                 <span className="text-sm text-slate-400">
-                  Filename: <span className="text-slate-300">{createPdfFilename}</span>
+                  Filename: <span className="text-slate-300">{sharedPdfFilename}</span>
                 </span>
               )}
               
-              {activeTab === 'match' && matchingPdf && (
+              {activeTab === 'match' && sharedPdfFile && (
                 matchingPatterns ? (
                   <div className="text-slate-400 text-sm flex items-center gap-2">
                     <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
@@ -996,8 +1025,8 @@ export default function TextPatternView() {
                     value={selectedPatternId} 
                     onValueChange={(value) => {
                       setSelectedPatternId(value);
-                      if (value && matchingPdf) {
-                        handleExtract(value, matchingPdf);
+                      if (value && sharedPdfFile) {
+                        handleExtract(value, sharedPdfFile);
                       }
                     }}
                     disabled={loading}
@@ -1073,9 +1102,9 @@ export default function TextPatternView() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label className="text-slate-300">Extracted Data</Label>
-                    {matchPdfFilename && (
+                    {sharedPdfFilename && (
                       <span className="text-sm text-slate-400">
-                        | Filename: <span className="text-slate-300">{matchPdfFilename}</span>
+                        | Filename: <span className="text-slate-300">{sharedPdfFilename}</span>
                       </span>
                     )}
                   </div>
