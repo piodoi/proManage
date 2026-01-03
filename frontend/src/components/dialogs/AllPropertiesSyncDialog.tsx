@@ -5,32 +5,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 import { usePreferences } from '../../hooks/usePreferences';
+import SupplierProgressDisplay, { type SupplierProgress } from '../supplierSync/SupplierProgressDisplay';
+import DiscoveredBillItem, { type DiscoveredBill } from '../supplierSync/DiscoveredBillItem';
 
-type SupplierProgress = {
+type SupplierGroup = {
+  supplier_id: string;
   supplier_name: string;
-  contract_id?: string;
-  status: 'starting' | 'processing' | 'completed' | 'error';
-  bills_found: number;
-  bills_created: number;
-  error?: string;
-  properties_affected?: string[];
-};
-
-type DiscoveredBill = {
-  id: string;
-  property_id: string;
-  property_name: string;
-  supplier_name: string;
-  bill_number?: string;
-  amount: number;
-  due_date: string;
-  iban?: string;
-  contract_id?: string;
-  description: string;
-  bill_data?: any;
+  properties: Property[];
+  property_suppliers: PropertySupplier[]; // All property_suppliers for this supplier
+  has_credentials: boolean;
 };
 
 type AllPropertiesSyncDialogProps = {
@@ -42,7 +27,7 @@ type AllPropertiesSyncDialogProps = {
   onError: (error: string) => void;
 };
 
-type Stage = 'options' | 'suppliers' | 'scraping' | 'bills';
+type Stage = 'suppliers' | 'scraping' | 'bills';
 
 export default function AllPropertiesSyncDialog({
   token,
@@ -54,9 +39,10 @@ export default function AllPropertiesSyncDialog({
 }: AllPropertiesSyncDialogProps) {
   const { t } = useI18n();
   const { preferences } = usePreferences();
-  const [stage, setStage] = useState<Stage>('options');
-  const [refreshRentBills, setRefreshRentBills] = useState(false);
+  const [stage, setStage] = useState<Stage>('suppliers');
+  const [refreshRentBills, setRefreshRentBills] = useState(true); // Default on
   const [allPropertySuppliers, setAllPropertySuppliers] = useState<Map<string, PropertySupplier[]>>(new Map());
+  const [supplierGroups, setSupplierGroups] = useState<SupplierGroup[]>([]);
   const [selectedSupplierKeys, setSelectedSupplierKeys] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SupplierProgress[]>([]);
@@ -64,6 +50,7 @@ export default function AllPropertiesSyncDialog({
   const [selectedBillIds, setSelectedBillIds] = useState<Set<string>>(new Set());
   const [syncId, setSyncId] = useState<string | null>(null);
   const [savingBills, setSavingBills] = useState(false);
+  const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const progressMapRef = useRef<Map<string, SupplierProgress>>(new Map());
   const discoveredBillsRef = useRef<DiscoveredBill[]>([]);
@@ -72,14 +59,14 @@ export default function AllPropertiesSyncDialog({
   useEffect(() => {
     if (open && token) {
       loadAllPropertySuppliers();
-      setStage('options');
-      setRefreshRentBills(false);
-      setSelectedSupplierKeys(new Set());
+      setStage('suppliers');
+      setRefreshRentBills(true); // Default on
       setProgress([]);
       setDiscoveredBills([]);
       setSelectedBillIds(new Set());
       setSyncing(false);
       setSavingBills(false);
+      setTotalRentBillsGenerated(0);
       progressMapRef.current.clear();
       discoveredBillsRef.current = [];
     }
@@ -101,70 +88,58 @@ export default function AllPropertiesSyncDialog({
       
       setAllPropertySuppliers(suppliersMap);
       
-      // Group suppliers by supplier_id + contract_id to sync only once
-      const supplierGroups = new Map<string, { supplier_id: string; contract_id?: string; supplier_name: string; properties: Property[] }>();
+      // Group suppliers by supplier name (or supplier_id if available) - like Manage Supplier Credentials
+      const groupsMap = new Map<string, SupplierGroup>();
       
       suppliersMap.forEach((suppliers, propertyId) => {
         const property = properties.find(p => p.id === propertyId);
         if (!property) return;
         
         suppliers.forEach(ps => {
+          // Use supplier_id as key (or supplier name if ID not available, but ID should always be available)
+          const key = ps.supplier.id || ps.supplier.name;
+          if (!groupsMap.has(key)) {
+            groupsMap.set(key, {
+              supplier_id: ps.supplier.id,
+              supplier_name: ps.supplier.name,
+              properties: [],
+              property_suppliers: [],
+              has_credentials: false,
+            });
+          }
+          const group = groupsMap.get(key)!;
+          if (!group.properties.find(p => p.id === property.id)) {
+            group.properties.push(property);
+          }
+          group.property_suppliers.push(ps);
           if (ps.has_credentials) {
-            const key = `${ps.supplier.id}_${ps.contract_id || 'no_contract'}`;
-            if (!supplierGroups.has(key)) {
-              supplierGroups.set(key, {
-                supplier_id: ps.supplier.id,
-                contract_id: ps.contract_id || undefined,
-                supplier_name: ps.supplier.name,
-                properties: []
-              });
-            }
-            supplierGroups.get(key)!.properties.push(property);
+            group.has_credentials = true;
           }
         });
       });
       
-      // Auto-select all supplier groups
-      setSelectedSupplierKeys(new Set(supplierGroups.keys()));
+      const groupsArray = Array.from(groupsMap.values());
+      setSupplierGroups(groupsArray);
+      
+      // Auto-select all supplier groups that have credentials by default
+      const eligibleKeys = groupsArray
+        .filter(g => g.has_credentials)
+        .map(g => g.supplier_id || g.supplier_name);
+      setSelectedSupplierKeys(new Set(eligibleKeys));
     } catch (err) {
       console.error('Failed to load property suppliers:', err);
       onError(err instanceof Error ? err.message : 'Failed to load suppliers');
     }
   };
 
-  const getSupplierGroups = () => {
-    const groups = new Map<string, { supplier_id: string; contract_id?: string; supplier_name: string; properties: Property[] }>();
-    
-    allPropertySuppliers.forEach((suppliers, propertyId) => {
-      const property = properties.find(p => p.id === propertyId);
-      if (!property) return;
-      
-      suppliers.forEach(ps => {
-        if (ps.has_credentials) {
-          const key = `${ps.supplier.id}_${ps.contract_id || 'no_contract'}`;
-          if (!groups.has(key)) {
-            groups.set(key, {
-              supplier_id: ps.supplier.id,
-              contract_id: ps.contract_id || undefined,
-              supplier_name: ps.supplier.name,
-              properties: []
-            });
-          }
-          groups.get(key)!.properties.push(property);
-        }
-      });
-    });
-    
-    return Array.from(groups.entries());
-  };
-
-  const supplierGroups = getSupplierGroups();
+  const eligibleSupplierGroups = supplierGroups.filter(g => g.has_credentials);
+  const ineligibleSupplierGroups = supplierGroups.filter(g => !g.has_credentials);
 
   const handleSelectAllSuppliers = () => {
-    if (selectedSupplierKeys.size === supplierGroups.length) {
+    if (selectedSupplierKeys.size === eligibleSupplierGroups.length) {
       setSelectedSupplierKeys(new Set());
     } else {
-      setSelectedSupplierKeys(new Set(supplierGroups.map(([key]) => key)));
+      setSelectedSupplierKeys(new Set(eligibleSupplierGroups.map(g => g.supplier_id || g.supplier_name)));
     }
   };
 
@@ -187,7 +162,8 @@ export default function AllPropertiesSyncDialog({
     // If refresh rent bills is checked, generate rent bills first
     if (refreshRentBills) {
       try {
-        await generateRentBills();
+        const count = await generateRentBills();
+        setTotalRentBillsGenerated(count);
       } catch (err) {
         onError(err instanceof Error ? err.message : 'Failed to generate rent bills');
         return;
@@ -198,8 +174,8 @@ export default function AllPropertiesSyncDialog({
     startScraping();
   };
 
-  const generateRentBills = async () => {
-    if (!token) return;
+  const generateRentBills = async (): Promise<number> => {
+    if (!token) return 0;
     
     const warningDays = preferences.rent_warning_days || 5;
     const today = new Date();
@@ -246,6 +222,7 @@ export default function AllPropertiesSyncDialog({
     
     // Get all existing bills once
     const existingBills = await api.bills.list(token);
+    let billsGenerated = 0;
     
     // Check existing bills and create/update
     for (const { renter, property } of allRenters) {
@@ -286,11 +263,14 @@ export default function AllPropertiesSyncDialog({
           // Create new bill
           await api.bills.create(token, billData);
         }
+        billsGenerated++;
       } catch (err) {
         console.error(`Failed to create/update rent bill for renter ${renter.id}:`, err);
         throw err; // Re-throw to show error in UI
       }
     }
+    
+    return billsGenerated;
   };
 
   const startScraping = () => {
@@ -304,14 +284,47 @@ export default function AllPropertiesSyncDialog({
     setSyncId(newSyncId);
 
     // Build sync request for all properties
-    const selectedGroups = supplierGroups.filter(([key]) => selectedSupplierKeys.has(key));
+    // For each selected supplier, create groups by supplier_id+contract_id (backend requirement)
+    const syncGroups: Array<{ supplier_id: string; contract_id?: string; property_ids: string[] }> = [];
+    
+    selectedSupplierKeys.forEach(supplierKey => {
+      const supplierGroup = supplierGroups.find(g => (g.supplier_id || g.supplier_name) === supplierKey);
+      if (!supplierGroup || !supplierGroup.has_credentials) return;
+      
+      // Group property_suppliers by contract_id for this supplier
+      const contractGroups = new Map<string, { contract_id?: string; property_ids: Set<string> }>();
+      
+      supplierGroup.property_suppliers.forEach(ps => {
+        if (!ps.has_credentials) return;
+        
+        const contractKey = ps.contract_id || 'no_contract';
+        if (!contractGroups.has(contractKey)) {
+          contractGroups.set(contractKey, {
+            contract_id: ps.contract_id || undefined,
+            property_ids: new Set(),
+          });
+        }
+        const property = properties.find(p => 
+          allPropertySuppliers.get(p.id)?.some(ps2 => ps2.id === ps.id)
+        );
+        if (property) {
+          contractGroups.get(contractKey)!.property_ids.add(property.id);
+        }
+      });
+      
+      // Create sync groups for each contract_id
+      contractGroups.forEach((contractGroup) => {
+        syncGroups.push({
+          supplier_id: supplierGroup.supplier_id,
+          contract_id: contractGroup.contract_id,
+          property_ids: Array.from(contractGroup.property_ids),
+        });
+      });
+    });
+    
     const syncData = {
       sync_id: newSyncId,
-      supplier_groups: selectedGroups.map(([key, group]) => ({
-        supplier_id: group.supplier_id,
-        contract_id: group.contract_id,
-        property_ids: group.properties.map(p => p.id),
-      })),
+      supplier_groups: syncGroups,
       discover_only: true,
     };
 
@@ -562,107 +575,36 @@ export default function AllPropertiesSyncDialog({
     onOpenChange(false);
   };
 
-  const getStatusIcon = (status: SupplierProgress['status']) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
-      case 'error':
-        return <XCircle className="w-5 h-5 text-red-400" />;
-      case 'processing':
-        return <Spinner className="w-5 h-5 text-blue-400" />;
-      default:
-        return <Clock className="w-5 h-5 text-slate-400" />;
-    }
-  };
-
-  const getStatusText = (status: SupplierProgress['status']) => {
-    switch (status) {
-      case 'completed':
-        return t('supplier.completed');
-      case 'error':
-        return t('supplier.error');
-      case 'processing':
-        return t('supplier.processing');
-      case 'starting':
-        return t('supplier.starting');
-      default:
-        return t('common.loading');
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch {
-      return dateString;
-    }
-  };
-
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('ro-RO', {
-      style: 'currency',
-      currency: 'RON',
-    }).format(amount);
-  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-slate-100">
-            {stage === 'options' && t('supplier.syncAllProperties')}
-            {stage === 'suppliers' && t('supplier.selectSuppliers')}
+            {stage === 'suppliers' && t('supplier.syncAllProperties')}
             {stage === 'scraping' && t('supplier.syncProgress')}
             {stage === 'bills' && t('supplier.selectBills')}
           </DialogTitle>
           <DialogDescription className="text-slate-400 sr-only">
-            {stage === 'options' && t('supplier.syncAllProperties')}
-            {stage === 'suppliers' && t('supplier.selectSuppliers')}
+            {stage === 'suppliers' && t('supplier.syncAllProperties')}
             {stage === 'scraping' && t('supplier.syncProgress')}
             {stage === 'bills' && t('supplier.selectBills')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col flex-1 min-h-0 space-y-4">
-          {/* Stage 0: Options */}
-          {stage === 'options' && (
-            <div className="flex flex-col flex-1 min-h-0 space-y-4">
-              <div className="flex items-center space-x-2 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
-                <Checkbox
-                  id="refresh-rent-bills"
-                  checked={refreshRentBills}
-                  onCheckedChange={(checked) => setRefreshRentBills(checked === true)}
-                />
-                <Label htmlFor="refresh-rent-bills" className="text-slate-300 cursor-pointer">
-                  {t('supplier.refreshRentBills')}
-                </Label>
-              </div>
-              <p className="text-sm text-slate-400">
-                {t('supplier.refreshRentBillsDescription')}
-              </p>
-              <div className="flex justify-end pt-2 border-t border-slate-700">
-                <Button
-                  onClick={() => setStage('suppliers')}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {t('common.next')}
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Stage 1: Supplier Selection */}
           {stage === 'suppliers' && (
             <div className="flex flex-col flex-1 min-h-0 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-300 font-medium">{t('supplier.selectSuppliersToSync')}</p>
-                {supplierGroups.length > 0 && (
+                {eligibleSupplierGroups.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleSelectAllSuppliers}
                     className="text-xs"
                   >
-                    {selectedSupplierKeys.size === supplierGroups.length
+                    {selectedSupplierKeys.size === eligibleSupplierGroups.length
                       ? t('supplier.deselectAll')
                       : t('supplier.selectAll')}
                   </Button>
@@ -670,12 +612,30 @@ export default function AllPropertiesSyncDialog({
               </div>
 
               <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
-                {supplierGroups.length === 0 ? (
+                {eligibleSupplierGroups.length === 0 && ineligibleSupplierGroups.length === 0 && (
                   <p className="text-sm text-slate-400 text-center py-4">
                     {t('supplier.noSuppliers')}
                   </p>
-                ) : (
-                  supplierGroups.map(([key, group]) => (
+                )}
+
+                {/* Refresh rent bills checkbox - same style as suppliers */}
+                <div className="flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
+                  <Checkbox
+                    id="refresh-rent-bills"
+                    checked={refreshRentBills}
+                    onCheckedChange={(checked) => setRefreshRentBills(checked === true)}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="refresh-rent-bills" className="text-sm font-medium text-slate-100 cursor-pointer">
+                      {t('supplier.refreshRentBills')}
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Eligible suppliers */}
+                {eligibleSupplierGroups.map((group) => {
+                  const key = group.supplier_id || group.supplier_name;
+                  return (
                     <div
                       key={key}
                       className="flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600"
@@ -686,27 +646,56 @@ export default function AllPropertiesSyncDialog({
                       />
                       <div className="flex-1">
                         <p className="text-sm font-medium text-slate-100">{group.supplier_name}</p>
-                        {group.contract_id && (
-                          <p className="text-xs text-slate-400 mt-1">
-                            {t('supplier.contractId')}: {group.contract_id}
-                          </p>
-                        )}
-                        <p className="text-xs text-slate-400 mt-1">
-                          {t('supplier.propertiesCount', { count: group.properties.length })}
-                        </p>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
+                          <span>
+                            {t('supplier.properties')}: <span className="text-slate-300">{group.properties.length}</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  ))
+                  );
+                })}
+
+                {/* Ineligible suppliers */}
+                {ineligibleSupplierGroups.length > 0 && (
+                  <>
+                    <div className="border-t border-slate-600 my-3"></div>
+                    <p className="text-xs text-slate-400 font-medium mb-2">
+                      {t('supplier.notEligible')}:
+                    </p>
+                    {ineligibleSupplierGroups.map((group) => {
+                      const key = group.supplier_id || group.supplier_name;
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center space-x-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700 opacity-60"
+                        >
+                          <Checkbox disabled />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-slate-400">{group.supplier_name}</p>
+                            <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
+                              <span>
+                                {t('supplier.properties')}: <span className="text-slate-300">{group.properties.length}</span>
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-400 mt-1">
+                              {t('supplier.credentialsMissing')}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
               </div>
 
-              <div className="flex justify-end pt-2 border-t border-slate-700 space-x-2">
-                <Button
-                  onClick={() => setStage('options')}
-                  variant="outline"
-                >
-                  {t('common.back')}
-                </Button>
+              {totalRentBillsGenerated > 0 && (
+                <div className="text-xs text-slate-400 text-center pt-2 border-t border-slate-700">
+                  {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2 border-t border-slate-700">
                 <Button
                   onClick={handleStartSync}
                   disabled={selectedSupplierKeys.size === 0}
@@ -729,54 +718,7 @@ export default function AllPropertiesSyncDialog({
               )}
 
               {progress.length > 0 && (
-                <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-3">
-                  {progress.map((item, index) => (
-                    <div
-                      key={`${item.supplier_name}_${item.contract_id || 'no_contract'}_${index}`}
-                      className="bg-slate-700 rounded-lg p-4 border border-slate-600"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3 flex-1">
-                          {getStatusIcon(item.status)}
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-100">
-                              {item.supplier_name}
-                              {item.contract_id && (
-                                <span className="text-xs text-slate-400 ml-2">({item.contract_id})</span>
-                              )}
-                            </p>
-                            <div className="flex items-center space-x-4 mt-1">
-                              <span className="text-xs text-slate-400">
-                                {getStatusText(item.status)}
-                              </span>
-                              {item.status === 'completed' && (
-                                <span className="text-xs text-slate-400">
-                                  {t('supplier.found')} {item.bills_found}
-                                </span>
-                              )}
-                              {item.status === 'processing' && item.bills_found > 0 && (
-                                <span className="text-xs text-slate-400">
-                                  {t('supplier.found')} {item.bills_found} {t('bill.bills')}
-                                </span>
-                              )}
-                            </div>
-                            {item.properties_affected && item.properties_affected.length > 0 && (
-                              <p className="text-xs text-slate-400 mt-1">
-                                {t('supplier.properties')}: {item.properties_affected.length}
-                              </p>
-                            )}
-                            {item.error && (
-                              <div className="mt-2 flex items-start space-x-2">
-                                <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                                <p className="text-xs text-red-400">{item.error}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <SupplierProgressDisplay progress={progress} />
               )}
 
               {syncing && (
@@ -821,39 +763,12 @@ export default function AllPropertiesSyncDialog({
               ) : (
                 <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
                   {discoveredBills.map((bill) => (
-                    <div
+                    <DiscoveredBillItem
                       key={bill.id}
-                      className="flex items-start space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600"
-                    >
-                      <Checkbox
-                        checked={selectedBillIds.has(bill.id)}
-                        onCheckedChange={() => handleBillToggle(bill.id)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-slate-100">{bill.description}</p>
-                            <p className="text-xs text-slate-400 mt-1">{bill.property_name}</p>
-                          </div>
-                          <p className="text-sm font-semibold text-slate-100">
-                            {formatAmount(bill.amount)}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-4 mt-1 text-xs text-slate-400">
-                          {bill.bill_number && (
-                            <span>{t('bill.billNumber')}: {bill.bill_number}</span>
-                          )}
-                          <span>{t('bill.dueDate')}: {formatDate(bill.due_date)}</span>
-                          {bill.contract_id && (
-                            <span>{t('supplier.contractId')}: {bill.contract_id}</span>
-                          )}
-                        </div>
-                        {bill.iban && (
-                          <p className="text-xs text-slate-400 mt-1">IBAN: {bill.iban}</p>
-                        )}
-                      </div>
-                    </div>
+                      bill={bill}
+                      selected={selectedBillIds.has(bill.id)}
+                      onToggle={handleBillToggle}
+                    />
                   ))}
                 </div>
               )}

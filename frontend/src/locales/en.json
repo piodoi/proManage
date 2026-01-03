@@ -234,6 +234,7 @@
     "syncAllProperties": "Sync All Properties",
     "refreshRentBills": "Refresh Rent Bills",
     "refreshRentBillsDescription": "Generate rent bills for all tenants dated on the calculated due date (warning days before due, but no less than 1st of the month). The month number will be used as the bill number.",
+    "rentBillsGenerated": "Renters",
     "propertiesCount": "{count} property/properties",
     "properties": "Properties",
     "notEligible": "Not Eligible",

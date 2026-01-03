@@ -1,0 +1,63 @@
+import { Checkbox } from '@/components/ui/checkbox';
+import { formatDate, formatAmount } from '../../utils/supplierSyncUtils';
+import { useI18n } from '../../lib/i18n';
+
+export type DiscoveredBill = {
+  id: string;
+  supplier_name: string;
+  bill_number?: string;
+  amount: number;
+  due_date: string;
+  iban?: string;
+  contract_id?: string;
+  description: string;
+  property_id?: string;
+  property_name?: string;
+  bill_data?: any;
+};
+
+type DiscoveredBillItemProps = {
+  bill: DiscoveredBill;
+  selected: boolean;
+  onToggle: (billId: string) => void;
+};
+
+export default function DiscoveredBillItem({ bill, selected, onToggle }: DiscoveredBillItemProps) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex items-start space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
+      <Checkbox
+        checked={selected}
+        onCheckedChange={() => onToggle(bill.id)}
+        className="mt-1"
+      />
+      <div className="flex-1">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-100">{bill.description}</p>
+            {bill.property_name && (
+              <p className="text-xs text-slate-400 mt-1">{bill.property_name}</p>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-slate-100">
+            {formatAmount(bill.amount)}
+          </p>
+        </div>
+        <div className="flex items-center space-x-4 mt-1 text-xs text-slate-400">
+          {bill.bill_number && (
+            <span>{t('bill.billNumber')}: {bill.bill_number}</span>
+          )}
+          <span>{t('bill.dueDate')}: {formatDate(bill.due_date)}</span>
+          {bill.contract_id && (
+            <span>{t('supplier.contractId')}: {bill.contract_id}</span>
+          )}
+        </div>
+        {bill.iban && (
+          <p className="text-xs text-slate-400 mt-1">IBAN: {bill.iban}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+

@@ -4,29 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
-import { CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
+import SupplierProgressDisplay, { type SupplierProgress } from '../supplierSync/SupplierProgressDisplay';
+import DiscoveredBillItem, { type DiscoveredBill } from '../supplierSync/DiscoveredBillItem';
 
-type SupplierProgress = {
-  supplier_name: string;
-  status: 'starting' | 'processing' | 'completed' | 'error';
-  bills_found: number;
-  bills_created: number;
-  error?: string;
-};
-
-type DiscoveredBill = {
-  id: string; // Temporary ID for selection
-  supplier_name: string;
-  bill_number?: string;
-  amount: number;
-  due_date: string;
-  iban?: string;
-  contract_id?: string;
-  description: string;
-  // Full bill data from backend
-  bill_data?: any;
-};
 
 type SupplierSyncDialogProps = {
   token: string | null;
@@ -580,48 +561,7 @@ export default function SupplierSyncDialog({
               )}
 
               {progress.length > 0 && (
-                <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-3">
-                  {progress.map((item, index) => (
-                    <div
-                      key={item.supplier_name || index}
-                      className="bg-slate-700 rounded-lg p-4 border border-slate-600"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3 flex-1">
-                          {getStatusIcon(item.status)}
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-100">
-                              {item.supplier_name}
-                            </p>
-                            <div className="flex items-center space-x-4 mt-1">
-                              <span className="text-xs text-slate-400">
-                                {getStatusText(item.status)}
-                              </span>
-                              {item.status === 'completed' && (
-                                <>
-                                  <span className="text-xs text-slate-400">
-                                    {t('supplier.found')} {item.bills_found}
-                                  </span>
-                                </>
-                              )}
-                              {item.status === 'processing' && item.bills_found > 0 && (
-                                <span className="text-xs text-slate-400">
-                                  {t('supplier.found')} {item.bills_found} {t('bill.bills')}
-                                </span>
-                              )}
-                            </div>
-                            {item.error && (
-                              <div className="mt-2 flex items-start space-x-2">
-                                <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                                <p className="text-xs text-red-400">{item.error}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <SupplierProgressDisplay progress={progress} />
               )}
 
               {syncing && (
@@ -666,36 +606,12 @@ export default function SupplierSyncDialog({
               ) : (
                 <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
                   {discoveredBills.map((bill) => (
-                    <div
+                    <DiscoveredBillItem
                       key={bill.id}
-                      className="flex items-start space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600"
-                    >
-                      <Checkbox
-                        checked={selectedBillIds.has(bill.id)}
-                        onCheckedChange={() => handleBillToggle(bill.id)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-slate-100">{bill.description}</p>
-                          <p className="text-sm font-semibold text-slate-100">
-                            {formatAmount(bill.amount)}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-4 mt-1 text-xs text-slate-400">
-                          {bill.bill_number && (
-                            <span>{t('bill.billNumber')}: {bill.bill_number}</span>
-                          )}
-                          <span>{t('bill.dueDate')}: {formatDate(bill.due_date)}</span>
-                          {bill.contract_id && (
-                            <span>{t('supplier.contractId')}: {bill.contract_id}</span>
-                          )}
-                        </div>
-                        {bill.iban && (
-                          <p className="text-xs text-slate-400 mt-1">IBAN: {bill.iban}</p>
-                        )}
-                      </div>
-                    </div>
+                      bill={bill}
+                      selected={selectedBillIds.has(bill.id)}
+                      onToggle={handleBillToggle}
+                    />
                   ))}
                 </div>
               )}
