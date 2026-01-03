@@ -109,7 +109,7 @@ export default function PropertyCard({
 
   return (
     <>
-      <Card key={property.id} className="bg-slate-800 border-slate-700">
+      <Card key={property.id} className="bg-slate-950 border-slate-700">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-slate-100">{property.name}</CardTitle>
