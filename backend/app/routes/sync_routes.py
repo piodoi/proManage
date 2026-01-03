@@ -1070,22 +1070,92 @@ async def sync_all_properties_supplier_bills(
                 # Sync supplier once for all properties
                 property_to_association = {}  # Map property_id -> (association_id, apartment_id) for E-bloc
                 try:
-                    # Special handling for E-bloc - use externalized helper
+                    # Special handling for E-bloc - use externalized helper with immediate bill sending
                     if supplier.name.lower() == "e-bloc":
                         from app.utils.ebloc_sync_helper import sync_ebloc_all_properties
+                        import asyncio
                         
                         # Prepare properties list
                         properties_list = [(p.property_id, p.contract_id) for p in group.properties]
                         
-                        # Sync E-bloc for all properties
-                        group_bills, property_to_association = await sync_ebloc_all_properties(
-                            properties_list,
-                            username,
-                            password
+                        # Use callback to send bills immediately as they're discovered
+                        bills_queue = asyncio.Queue()
+                        
+                        def bills_callback(bill_data: Dict[str, Any]):
+                            """Callback to queue bills for immediate sending"""
+                            bills_queue.put_nowait(bill_data)
+                        
+                        # Start sync task
+                        sync_task = asyncio.create_task(
+                            sync_ebloc_all_properties(
+                                properties_list,
+                                username,
+                                password,
+                                bill_callback=bills_callback if request.discover_only else None
+                            )
                         )
+                        
+                        # Process bills from queue and send immediately (only in discover mode)
+                        property_to_association = {}
+                        group_bills = []
+                        
+                        if request.discover_only:
+                            while True:
+                                try:
+                                    # Wait for bill with short timeout to allow checking task status
+                                    item = await asyncio.wait_for(bills_queue.get(), timeout=0.1)
+                                    
+                                    # Process bill and send immediately
+                                    bill_data = item
+                                    matched_property_id = match_bill_to_property(bill_data)
+                                    
+                                    if matched_property_id:
+                                        bill_data["property_id"] = matched_property_id
+                                        prop = db.get_property(matched_property_id)
+                                        if prop:
+                                            bill_with_property = {
+                                                **bill_data,
+                                                "supplier_name": supplier.name,
+                                                "property_name": prop.name
+                                            }
+                                            bills_discovered.append(bill_with_property)
+                                            logger.info(f"*** BILL sent: {bill_with_property.get('bill_number')} for property {prop.name}")
+                                            # Send bill immediately via SSE
+                                            yield send_event("bill_discovered", {
+                                                "supplier_name": supplier.name,
+                                                "bill": bill_with_property
+                                            })
+                                    
+                                    group_bills.append(bill_data)
+                                    bills_queue.task_done()
+                                except asyncio.TimeoutError:
+                                    # Check if sync task is done
+                                    if sync_task.done():
+                                        break
+                                    continue
+                        
+                        # Wait for sync to complete and get results
+                        group_bills_result, property_to_association = await sync_task
+                        # Use result from task if queue didn't collect all bills
+                        if not request.discover_only or len(group_bills) < len(group_bills_result):
+                            group_bills = group_bills_result
                         
                         bills_found = len(group_bills)
                         bills_created = 0  # Will be set after distribution
+                        
+                        # For E-bloc, skip the discover_only section below since bills already sent incrementally
+                        if request.discover_only and supplier.name.lower() == "e-bloc":
+                            # Send final completion event for E-bloc
+                            yield send_event("progress", {
+                                "supplier_name": supplier.name,
+                                "contract_id": None,
+                                "status": "completed",
+                                "bills_found": bills_found,
+                                "bills_created": 0,
+                                "properties_affected": property_ids,
+                                "bills": None  # Don't send bills here, already sent incrementally
+                            })
+                            continue
                     else:
                         # Non-E-bloc suppliers - use regular sync
                         # Find property supplier for first property to get property_supplier_id
@@ -1199,6 +1269,10 @@ async def sync_all_properties_supplier_bills(
                         return None
                     
                     if request.discover_only:
+                        # Skip E-bloc here since it was already processed above with incremental sending
+                        if supplier.name.lower() == "e-bloc":
+                            continue  # E-bloc already handled, move to next supplier
+                        
                         # In discover mode, assign each bill to exactly one property
                         all_bills_for_display = []
                         for bill_data in group_bills:

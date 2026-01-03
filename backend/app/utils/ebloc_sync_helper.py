@@ -1,7 +1,7 @@
 """Helper utilities for E-bloc supplier synchronization"""
 import logging
 import re
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, Callable
 from datetime import datetime
 
 from app.database import db
@@ -217,7 +217,8 @@ async def match_property_to_association_with_apartment(
 async def sync_ebloc_all_properties(
     properties: List[Tuple[str, Optional[str]]],  # List of (property_id, contract_id) tuples
     username: str,
-    password: str
+    password: str,
+    bill_callback: Optional[Callable[[Dict[str, Any]], None]] = None  # Callback to process bills as they're discovered
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Tuple[str, Optional[str]]]]:
     """
     Sync E-bloc supplier for multiple properties.
@@ -321,38 +322,56 @@ async def sync_ebloc_all_properties(
         if not association_ids_list:
             raise Exception("Could not find any associations to sync")
         
-        # Fetch bills for all associations at once
-        scraped_bills = await scraper.get_bills(association_ids=association_ids_list)
-        
-        # Convert scraped bills to bill_data format
+        # Fetch bills for all associations - process each association and send bills incrementally
         group_bills = []
-        for scraped_bill in scraped_bills:
-            if not scraped_bill.bill_number or scraped_bill.amount is None:
-                continue
+        
+        # We need to manually iterate through associations to send bills incrementally
+        # since get_bills processes all at once
+        for idx, (assoc_id, apt_id) in enumerate(association_ids_list, 1):
+            # Set cookies for this association/apartment
+            await scraper._set_cookies_from_config(assoc_id, apt_id)
+            # Navigate to a page to ensure cookies are set
+            await scraper.page.goto(scraper.config.base_url, wait_until="networkidle")
+            await scraper.page.wait_for_timeout(250)
             
-            bill_status = BillStatus.OVERDUE if scraped_bill.amount > 0 else BillStatus.PAID
-            due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
+            # Get bills for this association
+            assoc_bills = await scraper._fetch_bills_page()
             
-            # Filter out special blanket contract_id "A000000" - never save it
-            contract_id = scraped_bill.contract_id
-            if contract_id and str(contract_id).strip().upper() == "A000000":
-                contract_id = None
+            # Log summary once per association cycle
+            logger.info(f"[E-bloc] Association {idx}/{len(association_ids_list)} ({assoc_id}): Found {len(assoc_bills)} bill(s)")
             
-            bill_data = {
-                "property_id": None,  # Will be set during distribution
-                "renter_id": None,
-                "bill_type": BillType.EBLOC.value,
-                "description": "E-bloc",
-                "amount": scraped_bill.amount or 0.0,
-                "currency": "RON",  # Default for E-bloc
-                "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
-                "iban": None,
-                "bill_number": scraped_bill.bill_number,
-                "extraction_pattern_id": None,
-                "contract_id": contract_id,  # This is the association_id for E-bloc (or None if A000000)
-                "status": bill_status.value
-            }
-            group_bills.append(bill_data)
+            # Convert scraped bills to bill_data format and send incrementally
+            for scraped_bill in assoc_bills:
+                if not scraped_bill.bill_number or scraped_bill.amount is None:
+                    continue
+                
+                bill_status = BillStatus.OVERDUE if scraped_bill.amount > 0 else BillStatus.PAID
+                due_date = scraped_bill.due_date if scraped_bill.due_date else datetime.utcnow()
+                
+                # Filter out special blanket contract_id "A000000" - never save it
+                contract_id = assoc_id  # Use association_id as contract_id for E-bloc
+                if contract_id and str(contract_id).strip().upper() == "A000000":
+                    contract_id = None
+                
+                bill_data = {
+                    "property_id": None,  # Will be set during distribution
+                    "renter_id": None,
+                    "bill_type": BillType.EBLOC.value,
+                    "description": "E-bloc",
+                    "amount": scraped_bill.amount or 0.0,
+                    "currency": "RON",  # Default for E-bloc
+                    "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
+                    "iban": None,
+                    "bill_number": scraped_bill.bill_number,
+                    "extraction_pattern_id": None,
+                    "contract_id": contract_id,  # This is the association_id for E-bloc (or None if A000000)
+                    "status": bill_status.value
+                }
+                group_bills.append(bill_data)
+                
+                # Send bill immediately via callback if provided
+                if bill_callback:
+                    bill_callback(bill_data)
         
         return group_bills, property_to_association
     

@@ -164,8 +164,10 @@ export default function AllPropertiesSyncDialog({
   const handleSelectAllSuppliers = () => {
     if (selectedSupplierKeys.size === eligibleSupplierGroups.length) {
       setSelectedSupplierKeys(new Set());
+      setRefreshRentBills(false); // Deselect renter bills too
     } else {
       setSelectedSupplierKeys(new Set(eligibleSupplierGroups.map(g => g.supplier_id || g.supplier_name)));
+      setRefreshRentBills(true); // Select renter bills too
     }
   };
 
@@ -692,12 +694,12 @@ export default function AllPropertiesSyncDialog({
         <DialogHeader>
           <DialogTitle className="text-slate-100">
             {stage === 'suppliers' && t('supplier.syncAllProperties')}
-            {stage === 'scraping' && t('supplier.syncProgress')}
+            {stage === 'scraping' && t('supplier.syncBills')}
             {stage === 'bills' && t('supplier.selectBills')}
           </DialogTitle>
           <DialogDescription className="text-slate-400 sr-only">
             {stage === 'suppliers' && t('supplier.syncAllProperties')}
-            {stage === 'scraping' && t('supplier.syncProgress')}
+            {stage === 'scraping' && t('supplier.syncBills')}
             {stage === 'bills' && t('supplier.selectBills')}
           </DialogDescription>
         </DialogHeader>
@@ -837,10 +839,7 @@ export default function AllPropertiesSyncDialog({
               )}
 
               {progress.length > 0 && (
-                <div>
-                  <p className="text-sm text-slate-300 font-medium mb-2">{t('supplier.syncProgress')}</p>
-                  <SupplierProgressDisplay progress={progress} />
-                </div>
+                <SupplierProgressDisplay progress={progress} />
               )}
 
               {/* Discovered Bills - shown incrementally as they're parsed */}

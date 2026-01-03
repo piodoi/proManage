@@ -185,7 +185,9 @@ class WebScraper:
             logger.info(f"[{self.config.supplier_name} Scraper] Browser initialized, proceeding with login...")
             
             if self.config.login_method == "form":
-                return await self._login_form(username, password)
+                login_result = await self._login_form(username, password)
+                # Log immediately after login (login success is logged inside _login_form)
+                return login_result
             elif self.config.login_method == "api":
                 return await self._login_api(username, password)
             else:
@@ -264,16 +266,33 @@ class WebScraper:
                 # Form might submit automatically, just wait a bit
                 await self.page.wait_for_timeout(2000)
         
-        # Wait after login as configured
-        if self.config.wait_after_login > 0:
-            await self.page.wait_for_timeout(int(self.config.wait_after_login * 1000))
+        # Reduced wait after login (50% of configured)
+        wait_time = int(self.config.wait_after_login * 500) if self.config.wait_after_login > 0 else 0
+        if wait_time > 0:
+            await self.page.wait_for_timeout(wait_time)
         
-        # Get current URL and page content
-        current_url = self.page.url
-        page_html = await self.page.content()
+        # Wait for navigation to complete before accessing page content
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            # If networkidle times out, at least wait for load state
+            try:
+                await self.page.wait_for_load_state("load", timeout=5000)
+            except Exception:
+                pass  # Continue anyway
+        
+        # Get current URL and page content (with retry in case page is still navigating)
+        try:
+            current_url = self.page.url
+            page_html = await self.page.content()
+        except Exception as e:
+            # Page might still be navigating, wait a bit more and retry
+            await self.page.wait_for_timeout(1000)
+            await self.page.wait_for_load_state("load", timeout=5000)
+            current_url = self.page.url
+            page_html = await self.page.content()
+        
         self._save_html_dump(page_html, "after_login")
-        
-        logger.debug(f"[{self.config.supplier_name} Scraper] Current URL after login: {current_url}")
         
         # Check if login was successful - successful login redirects to Dashboard.aspx
         login_success = False
@@ -352,27 +371,24 @@ class WebScraper:
         if association_ids and self.config.cookie_config:
             # Fetch bills for each association/apartment combination
             for idx, (assoc_id, apt_id) in enumerate(association_ids, 1):
-                logger.info(f"[{self.config.supplier_name} Scraper] Processing association {idx}/{len(association_ids)}: {assoc_id}, apartment: {apt_id}")
-                
                 # Set cookies for this association/apartment
-                logger.debug(f"[{self.config.supplier_name} Scraper] Setting cookies for association {assoc_id}, apartment {apt_id}...")
                 await self._set_cookies_from_config(assoc_id, apt_id)
                 
                 # Navigate to a page to ensure cookies are set
-                logger.debug(f"[{self.config.supplier_name} Scraper] Navigating to base URL to set cookies...")
                 await self.page.goto(self.config.base_url, wait_until="networkidle")
                 await self.page.wait_for_timeout(250)
-                logger.debug(f"[{self.config.supplier_name} Scraper] Cookies set, now fetching bills...")
                 
                 # Get bills for this association
                 assoc_bills = await self._fetch_bills_page()
-                logger.info(f"[{self.config.supplier_name} Scraper] Found {len(assoc_bills)} bill(s) for association {assoc_id}")
                 
                 # Set contract_id (association_id) on each bill for proper distribution
                 for bill in assoc_bills:
                     if not bill.contract_id:
                         bill.contract_id = assoc_id
                 bills.extend(assoc_bills)
+                
+                # Summary log per association cycle
+                logger.info(f"[{self.config.supplier_name} Scraper] Association {idx}/{len(association_ids)} ({assoc_id}): Found {len(assoc_bills)} bill(s)")
             
             return bills
         
