@@ -230,12 +230,15 @@
     "rentBillsGenerated": "Chiriași",
     "propertiesCount": "{count} proprietate/proprietăți",
     "properties": "Proprietăți",
+    "renters": "Chiriași",
     "notEligible": "Neeligibil",
     "credentialsMissing": "Credențiale lipsă",
     "selectBills": "Selectează Facturi de Salvat",
     "selectBillsToSave": "Selectează Facturi de Salvat",
     "saveBills": "Salvează Facturi",
-    "noBillsDiscovered": "Nu au fost găsite facturi"
+    "noBillsDiscovered": "Nu au fost găsite facturi",
+    "discoveredBills": "Facturi descoperite",
+    "syncProgress": "Progres sincronizare"
   },
   "ebloc": {
     "syncEbloc": "Sincronizează E-Bloc",

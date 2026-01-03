@@ -237,12 +237,15 @@
     "rentBillsGenerated": "Renters",
     "propertiesCount": "{count} property/properties",
     "properties": "Properties",
+    "renters": "Renters",
     "notEligible": "Not Eligible",
     "credentialsMissing": "Credentials missing",
     "selectBills": "Select Bills to Save",
     "selectBillsToSave": "Select Bills to Save",
     "saveBills": "Save Bills",
-    "noBillsDiscovered": "No bills discovered"
+    "noBillsDiscovered": "No bills discovered",
+    "discoveredBills": "Discovered Bills",
+    "syncProgress": "Sync Progress"
   },
   "ebloc": {
     "syncEbloc": "Sync E-Bloc",

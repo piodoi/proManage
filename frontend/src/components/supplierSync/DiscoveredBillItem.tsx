@@ -35,10 +35,12 @@ export default function DiscoveredBillItem({ bill, selected, onToggle }: Discove
       <div className="flex-1">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-100">{bill.description}</p>
-            {bill.property_name && (
-              <p className="text-xs text-slate-400 mt-1">{bill.property_name}</p>
-            )}
+            <p className="text-sm font-medium text-slate-100">
+              <span className="font-bold">{bill.supplier_name}</span>
+              {bill.property_name && (
+                <span className="text-slate-300 ml-2">- {bill.property_name}</span>
+              )}
+            </p>
           </div>
           <p className="text-sm font-semibold text-slate-100">
             {formatAmount(bill.amount)}

@@ -51,6 +51,8 @@ export default function AllPropertiesSyncDialog({
   const [syncId, setSyncId] = useState<string | null>(null);
   const [savingBills, setSavingBills] = useState(false);
   const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
+  const [propertiesWithRentersCount, setPropertiesWithRentersCount] = useState(0);
+  const [totalRentersCount, setTotalRentersCount] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const progressMapRef = useRef<Map<string, SupplierProgress>>(new Map());
   const discoveredBillsRef = useRef<DiscoveredBill[]>([]);
@@ -59,6 +61,7 @@ export default function AllPropertiesSyncDialog({
   useEffect(() => {
     if (open && token) {
       loadAllPropertySuppliers();
+      loadRenterCounts();
       setStage('suppliers');
       setRefreshRentBills(true); // Default on
       setProgress([]);
@@ -71,6 +74,29 @@ export default function AllPropertiesSyncDialog({
       discoveredBillsRef.current = [];
     }
   }, [open, token, properties]);
+
+  const loadRenterCounts = async () => {
+    if (!token) return;
+    
+    let propertiesWithRenters = 0;
+    let totalRenters = 0;
+    
+    for (const property of properties) {
+      try {
+        const renters = await api.renters.list(token, property.id);
+        const rentersWithAmount = renters.filter(r => r.rent_amount_eur && r.rent_amount_eur > 0);
+        if (rentersWithAmount.length > 0) {
+          propertiesWithRenters++;
+          totalRenters += rentersWithAmount.length;
+        }
+      } catch (err) {
+        console.error(`Failed to load renters for property ${property.id}:`, err);
+      }
+    }
+    
+    setPropertiesWithRentersCount(propertiesWithRenters);
+    setTotalRentersCount(totalRenters);
+  };
 
   const loadAllPropertySuppliers = async () => {
     if (!token) return;
@@ -154,8 +180,9 @@ export default function AllPropertiesSyncDialog({
   };
 
   const handleStartSync = async () => {
-    if (selectedSupplierKeys.size === 0) {
-      onError('Please select at least one supplier');
+    // Allow sync if either suppliers are selected OR refresh rent bills is checked
+    if (selectedSupplierKeys.size === 0 && !refreshRentBills) {
+      onError('Please select at least one supplier or enable Refresh Rent Bills');
       return;
     }
 
@@ -170,6 +197,13 @@ export default function AllPropertiesSyncDialog({
       }
     }
 
+    // If no suppliers selected, just close the dialog after generating rent bills
+    if (selectedSupplierKeys.size === 0) {
+      onOpenChange(false);
+      onSuccess();
+      return;
+    }
+
     setStage('scraping');
     startScraping();
   };
@@ -180,30 +214,6 @@ export default function AllPropertiesSyncDialog({
     const warningDays = preferences.rent_warning_days || 5;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    // Calculate due date: end of current month (or next month if we're past the warning period)
-    const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
-    dueDate.setHours(0, 0, 0, 0);
-    
-    // If we're too close to the end of the month, use next month's end
-    const daysUntilEndOfMonth = dueDate.getDate() - today.getDate();
-    if (daysUntilEndOfMonth < warningDays) {
-      dueDate.setMonth(dueDate.getMonth() + 1);
-      dueDate.setDate(0); // Last day of next month
-    }
-    
-    // Calculate bill date: due_date - warning_days, but no less than 1st of the month
-    const billDate = new Date(dueDate);
-    billDate.setDate(billDate.getDate() - warningDays);
-    
-    // Ensure bill date is at least the 1st of the month
-    if (billDate.getDate() < 1) {
-      billDate.setDate(1);
-    }
-    
-    // Use the month number as the bill number (from the due date month)
-    const monthNumber = dueDate.getMonth() + 1;
-    const billNumber = monthNumber.toString();
     
     // Get all renters for all properties
     const allRenters: Array<{ renter: Renter; property: Property }> = [];
@@ -227,6 +237,34 @@ export default function AllPropertiesSyncDialog({
     // Check existing bills and create/update
     for (const { renter, property } of allRenters) {
       try {
+        // Calculate due date using renter's rent_day for this month
+        const rentDay = renter.rent_day || 1; // Default to 1st if not set
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+        
+        // Calculate due date: rent_day of current month (or next month if rent_day has passed)
+        let dueDate = new Date(currentYear, currentMonth, rentDay);
+        dueDate.setHours(0, 0, 0, 0);
+        
+        // If rent_day has passed this month, use next month
+        if (dueDate < today) {
+          dueDate = new Date(currentYear, currentMonth + 1, rentDay);
+          dueDate.setHours(0, 0, 0, 0);
+        }
+        
+        // Calculate bill date: due_date - warning_days, but no less than 1st of the month
+        const billDate = new Date(dueDate);
+        billDate.setDate(billDate.getDate() - warningDays);
+        
+        // Ensure bill date is at least the 1st of the month
+        if (billDate.getDate() < 1) {
+          billDate.setDate(1);
+        }
+        
+        // Use the month number as the bill number (from the due date month)
+        const monthNumber = dueDate.getMonth() + 1;
+        const billNumber = monthNumber.toString();
+        
         // Find existing rent bill with same bill_number (month number)
         const existingRentBill = existingBills.find(
           bill => 
@@ -236,6 +274,14 @@ export default function AllPropertiesSyncDialog({
             bill.bill_number === billNumber
         );
         
+        // Format dates as YYYY-MM-DD (local time, not UTC) to avoid timezone issues
+        const formatLocalDate = (date: Date): string => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+        
         const billData: any = {
           property_id: property.id,
           renter_id: renter.id,
@@ -243,16 +289,14 @@ export default function AllPropertiesSyncDialog({
           description: t('bill.rent'),
           amount: renter.rent_amount_eur || 0,
           currency: preferences.rent_currency || 'EUR',
-          due_date: dueDate.toISOString().split('T')[0],
-          bill_date: billDate.toISOString().split('T')[0],
+          due_date: formatLocalDate(dueDate),
+          bill_date: formatLocalDate(billDate),
           bill_number: billNumber,
           status: 'pending' as const,
         };
         
         // Calculate status based on due date
-        const dueDateObj = new Date(dueDate);
-        dueDateObj.setHours(0, 0, 0, 0);
-        if (dueDateObj < today) {
+        if (dueDate < today) {
           billData.status = 'overdue';
         }
         
@@ -284,42 +328,37 @@ export default function AllPropertiesSyncDialog({
     setSyncId(newSyncId);
 
     // Build sync request for all properties
-    // For each selected supplier, create groups by supplier_id+contract_id (backend requirement)
-    const syncGroups: Array<{ supplier_id: string; contract_id?: string; property_ids: string[] }> = [];
+    // Group by supplier_id only (backend will sync once per supplier, then distribute bills)
+    const syncGroups: Array<{ supplier_id: string; properties: Array<{ property_id: string; contract_id?: string }> }> = [];
     
     selectedSupplierKeys.forEach(supplierKey => {
       const supplierGroup = supplierGroups.find(g => (g.supplier_id || g.supplier_name) === supplierKey);
       if (!supplierGroup || !supplierGroup.has_credentials) return;
       
-      // Group property_suppliers by contract_id for this supplier
-      const contractGroups = new Map<string, { contract_id?: string; property_ids: Set<string> }>();
+      // Collect all properties for this supplier with their contract_ids
+      const propertyMappings: Array<{ property_id: string; contract_id?: string }> = [];
       
       supplierGroup.property_suppliers.forEach(ps => {
         if (!ps.has_credentials) return;
         
-        const contractKey = ps.contract_id || 'no_contract';
-        if (!contractGroups.has(contractKey)) {
-          contractGroups.set(contractKey, {
-            contract_id: ps.contract_id || undefined,
-            property_ids: new Set(),
-          });
-        }
         const property = properties.find(p => 
           allPropertySuppliers.get(p.id)?.some(ps2 => ps2.id === ps.id)
         );
         if (property) {
-          contractGroups.get(contractKey)!.property_ids.add(property.id);
+          propertyMappings.push({
+            property_id: property.id,
+            contract_id: ps.contract_id || undefined,
+          });
         }
       });
       
-      // Create sync groups for each contract_id
-      contractGroups.forEach((contractGroup) => {
+      // Create one sync group per supplier (not per contract_id)
+      if (propertyMappings.length > 0) {
         syncGroups.push({
           supplier_id: supplierGroup.supplier_id,
-          contract_id: contractGroup.contract_id,
-          property_ids: Array.from(contractGroup.property_ids),
+          properties: propertyMappings,
         });
-      });
+      }
     });
     
     const syncData = {
@@ -418,9 +457,50 @@ export default function AllPropertiesSyncDialog({
   const handleSSEEvent = (eventType: string, data: any) => {
     if (eventType === 'start') {
       setSyncing(true);
+    } else if (eventType === 'bill_discovered') {
+      // Handle incremental bill discovery
+      if (data.bill) {
+        const bill = data.bill;
+        // Extract supplier name (remove property info if present, e.g., "E-bloc - Prop1, Prop2" -> "E-bloc")
+        let supplier_name = data.supplier_name;
+        const dashIndex = supplier_name.indexOf(' - ');
+        if (dashIndex > 0) {
+          supplier_name = supplier_name.substring(0, dashIndex);
+        }
+        
+        // Each bill should have exactly one property_id assigned by backend
+        const property_id = bill.property_id;
+        const property = property_id ? properties.find(p => p.id === property_id) : undefined;
+        const property_name = property?.name;
+        
+        const discoveredBill: DiscoveredBill = {
+          id: crypto.randomUUID(),
+          property_id: property_id,
+          property_name: property_name,
+          supplier_name: supplier_name,
+          bill_number: bill.bill_number || undefined,
+          amount: bill.amount || 0,
+          due_date: bill.due_date,
+          iban: bill.iban || undefined,
+          contract_id: bill.contract_id || undefined,
+          description: bill.description || supplier_name,
+          bill_data: { ...bill, property_id: property_id },
+        };
+        discoveredBillsRef.current.push(discoveredBill);
+        // Update state to show bills incrementally
+        setDiscoveredBills([...discoveredBillsRef.current]);
+        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+      }
     } else if (eventType === 'progress') {
+      // Extract supplier name (remove property info if present)
+      let supplier_name = data.supplier_name;
+      const dashIndex = supplier_name.indexOf(' - ');
+      if (dashIndex > 0) {
+        supplier_name = supplier_name.substring(0, dashIndex);
+      }
+      
       const supplierProgress: SupplierProgress = {
-        supplier_name: data.supplier_name,
+        supplier_name: supplier_name,
         contract_id: data.contract_id,
         status: data.status,
         bills_found: data.bills_found || 0,
@@ -429,39 +509,55 @@ export default function AllPropertiesSyncDialog({
         properties_affected: data.properties_affected || [],
       };
 
-      const progressKey = `${data.supplier_name}_${data.contract_id || 'no_contract'}`;
+      const progressKey = `${supplier_name}_${data.contract_id || 'no_contract'}`;
       progressMapRef.current.set(progressKey, supplierProgress);
       setProgress(Array.from(progressMapRef.current.values()));
 
+      // Legacy support: handle bills in progress event (shouldn't happen with new code)
       if (data.bills && Array.isArray(data.bills)) {
+        // Legacy support: handle bills in progress event (shouldn't happen with new code)
         data.bills.forEach((bill: any) => {
-          const property = properties.find(p => p.id === bill.property_id);
+          // Extract supplier name (remove property info if present)
+          let supplier_name = data.supplier_name;
+          const dashIndex = supplier_name.indexOf(' - ');
+          if (dashIndex > 0) {
+            supplier_name = supplier_name.substring(0, dashIndex);
+          }
+          
+          // Each bill should have exactly one property_id assigned by backend
+          const property_id = bill.property_id;
+          const property = property_id ? properties.find(p => p.id === property_id) : undefined;
+          const property_name = property?.name;
+          
           const discoveredBill: DiscoveredBill = {
             id: crypto.randomUUID(),
-            property_id: bill.property_id,
-            property_name: property?.name || bill.property_id,
-            supplier_name: data.supplier_name,
+            property_id: property_id,
+            property_name: property_name,
+            supplier_name: supplier_name,
             bill_number: bill.bill_number || undefined,
             amount: bill.amount || 0,
             due_date: bill.due_date,
             iban: bill.iban || undefined,
             contract_id: bill.contract_id || undefined,
-            description: bill.description || data.supplier_name,
-            bill_data: { ...bill, property_id: bill.property_id },
+            description: bill.description || supplier_name,
+            bill_data: { ...bill, property_id: property_id },
           };
           discoveredBillsRef.current.push(discoveredBill);
         });
       }
     } else if (eventType === 'complete') {
+      // Stop syncing, but if we have bills, switch to bills stage
       setSyncing(false);
-      const filteredBills = discoveredBillsRef.current;
-      setDiscoveredBills(filteredBills);
-      setSelectedBillIds(new Set(filteredBills.map(b => b.id)));
-      setStage('bills');
+      if (discoveredBillsRef.current.length > 0) {
+        setDiscoveredBills([...discoveredBillsRef.current]);
+        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+        setStage('bills');
+      }
     } else if (eventType === 'error') {
       setSyncing(false);
       onError(data.error || 'Sync failed');
     } else if (eventType === 'cancelled') {
+      // Stop syncing but keep discovered bills available
       setSyncing(false);
       setProgress((prev) =>
         prev.map((p) =>
@@ -470,7 +566,14 @@ export default function AllPropertiesSyncDialog({
             : p
         )
       );
-      onOpenChange(false);
+      // If we have discovered bills, show them; otherwise close dialog
+      if (discoveredBillsRef.current.length > 0) {
+        setDiscoveredBills([...discoveredBillsRef.current]);
+        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+        setStage('bills');
+      } else {
+        onOpenChange(false);
+      }
     }
   };
 
@@ -493,7 +596,14 @@ export default function AllPropertiesSyncDialog({
       abortControllerRef.current = null;
     }
     setSyncing(false);
-    onOpenChange(false);
+    // If we have discovered bills, show them instead of closing
+    if (discoveredBillsRef.current.length > 0) {
+      setDiscoveredBills([...discoveredBillsRef.current]);
+      setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+      setStage('bills');
+    } else {
+      onOpenChange(false);
+    }
   };
 
   const handleSelectAllBills = () => {
@@ -629,6 +739,14 @@ export default function AllPropertiesSyncDialog({
                     <Label htmlFor="refresh-rent-bills" className="text-sm font-medium text-slate-100 cursor-pointer">
                       {t('supplier.refreshRentBills')}
                     </Label>
+                    <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
+                      <span>
+                        {t('supplier.properties')}: <span className="text-slate-300">{propertiesWithRentersCount}</span>
+                      </span>
+                      <span>
+                        {t('supplier.renters')}: <span className="text-slate-300">{totalRentersCount}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -698,7 +816,7 @@ export default function AllPropertiesSyncDialog({
               <div className="flex justify-end pt-2 border-t border-slate-700">
                 <Button
                   onClick={handleStartSync}
-                  disabled={selectedSupplierKeys.size === 0}
+                  disabled={selectedSupplierKeys.size === 0 && !refreshRentBills}
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
                   {t('supplier.syncBills')}
@@ -707,9 +825,10 @@ export default function AllPropertiesSyncDialog({
             </div>
           )}
 
-          {/* Stage 2: Scraping Progress */}
+          {/* Stage 2: Scraping Progress - shows progress and bills incrementally */}
           {stage === 'scraping' && (
-            <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex flex-col flex-1 min-h-0 space-y-4">
+              {/* Progress Display */}
               {syncing && progress.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 space-y-4">
                   <Spinner className="w-8 h-8 text-slate-400" />
@@ -718,7 +837,41 @@ export default function AllPropertiesSyncDialog({
               )}
 
               {progress.length > 0 && (
-                <SupplierProgressDisplay progress={progress} />
+                <div>
+                  <p className="text-sm text-slate-300 font-medium mb-2">{t('supplier.syncProgress')}</p>
+                  <SupplierProgressDisplay progress={progress} />
+                </div>
+              )}
+
+              {/* Discovered Bills - shown incrementally as they're parsed */}
+              {discoveredBills.length > 0 && (
+                <div className="flex flex-col space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-slate-300 font-medium">
+                      {t('supplier.discoveredBills')} ({discoveredBills.length})
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllBills}
+                      className="text-xs"
+                    >
+                      {selectedBillIds.size === discoveredBills.length
+                        ? t('supplier.deselectAll')
+                        : t('supplier.selectAll')}
+                    </Button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2 max-h-64">
+                    {discoveredBills.map((bill) => (
+                      <DiscoveredBillItem
+                        key={bill.id}
+                        bill={bill}
+                        selected={selectedBillIds.has(bill.id)}
+                        onToggle={handleBillToggle}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
 
               {syncing && (

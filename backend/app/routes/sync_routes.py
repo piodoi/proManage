@@ -2,6 +2,7 @@
 import logging
 import asyncio
 import platform
+import re
 from datetime import datetime
 from typing import Optional, List, Callable, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
@@ -56,13 +57,18 @@ async def _sync_supplier_scraper(
     save_html_dumps: bool = False,
     progress_callback: Optional[Callable] = None,
     discover_only: bool = False,
-    bills_callback: Optional[Callable] = None
+    bills_callback: Optional[Callable] = None,
+    contract_ids_to_accept: Optional[List[str]] = None  # If None or empty, don't filter by contract_id
 ) -> tuple[int, int]:  # Returns (bills_found, bills_created)
     """Sync bills from supplier using web scraper"""
     from app.web_scraper import WebScraper, load_scraper_config
     from app.pdf_parser import parse_pdf_with_patterns
     
-    logger.info(f"[{supplier.name} Scraper] Starting sync for property {property_id}")
+    # If contract_ids_to_accept is provided, log accordingly; otherwise log single property
+    if contract_ids_to_accept is not None:
+        logger.info(f"[{supplier.name} Scraper] Starting sync for multiple properties (contract IDs: {contract_ids_to_accept or 'all'})")
+    else:
+        logger.info(f"[{supplier.name} Scraper] Starting sync for property {property_id}")
     
     if progress_callback:
         progress_callback(supplier.name, "starting", 0, 0)
@@ -94,9 +100,9 @@ async def _sync_supplier_scraper(
             progress_callback(supplier.name, "error", 0, 0, "Property not found")
         return 0, 0
     
-    # Get property supplier to check/update contract_id
+    # Get property supplier to check/update contract_id (only used if contract_ids_to_accept is None)
     property_supplier = db.get_property_supplier(property_supplier_id)
-    contract_id_filter = property_supplier.contract_id if property_supplier else None
+    contract_id_filter = property_supplier.contract_id if property_supplier and contract_ids_to_accept is None else None
     contract_id_to_save = None
     
     try:
@@ -108,7 +114,16 @@ async def _sync_supplier_scraper(
             raise Exception(error_msg)
         
         # Get bills
-        scraped_bills = await scraper.get_bills()
+        # For E-bloc with multiple contract_ids (association IDs), fetch bills for each association
+        scraped_bills = []
+        if supplier.name.lower() == "e-bloc" and contract_ids_to_accept and len(contract_ids_to_accept) > 0:
+            # For E-bloc, contract_ids are association IDs - fetch bills for each one
+            # Note: apartment_id is not stored in contract_id, so we pass None
+            association_ids = [(cid, None) for cid in contract_ids_to_accept]
+            scraped_bills = await scraper.get_bills(association_ids=association_ids)
+        else:
+            # Regular flow - single association or non-E-bloc supplier
+            scraped_bills = await scraper.get_bills()
         bills_found = len(scraped_bills)
         logger.info(f"[{supplier.name} Scraper] Found {bills_found} bill(s)")
         
@@ -127,7 +142,14 @@ async def _sync_supplier_scraper(
             extracted_contract_id = scraped_bill.contract_id
             
             # Filter by contract_id EARLY - before expensive operations
-            if contract_id_filter:
+            # If contract_ids_to_accept is provided, use that list; otherwise use single contract_id_filter
+            if contract_ids_to_accept is not None and len(contract_ids_to_accept) > 0:
+                # Multi-property sync: filter by list of contract IDs
+                extracted_str = str(extracted_contract_id).strip() if extracted_contract_id else None
+                if not extracted_str or extracted_str not in [str(cid).strip() for cid in contract_ids_to_accept]:
+                    continue  # Skip bills that don't match any of the accepted contract IDs
+            elif contract_id_filter:
+                # Single-property sync: filter by single contract ID
                 filter_str = str(contract_id_filter).strip()
                 extracted_str = str(extracted_contract_id).strip() if extracted_contract_id else None
                 if not extracted_str or extracted_str != filter_str:
@@ -944,10 +966,13 @@ async def sync_ebloc(
         await scraper.close()
 
 
+class PropertyContractMapping(BaseModel):
+    property_id: str
+    contract_id: Optional[str] = None
+
 class SupplierGroup(BaseModel):
     supplier_id: str
-    contract_id: Optional[str] = None
-    property_ids: List[str]
+    properties: List[PropertyContractMapping]  # Changed from property_ids + contract_id to list of property+contract mappings
 
 
 class SyncAllRequest(BaseModel):
@@ -982,10 +1007,10 @@ async def sync_all_properties_supplier_bills(
             
             # Verify all properties belong to the user
             for group in request.supplier_groups:
-                for property_id in group.property_ids:
-                    prop = db.get_property(property_id)
+                for prop_mapping in group.properties:
+                    prop = db.get_property(prop_mapping.property_id)
                     if not prop:
-                        yield send_event("error", {"error": f"Property {property_id} not found"})
+                        yield send_event("error", {"error": f"Property {prop_mapping.property_id} not found"})
                         return
                     if prop.landlord_id != current_user.user_id:
                         yield send_event("error", {"error": "Access denied"})
@@ -994,7 +1019,7 @@ async def sync_all_properties_supplier_bills(
             all_patterns = db.list_extraction_patterns()
             bills_discovered = []
             
-            # Sync each supplier group once
+            # Sync each supplier group once (grouped by supplier_id only)
             for group in request.supplier_groups:
                 if is_cancelled():
                     yield send_event("cancelled", {"message": "Sync cancelled"})
@@ -1002,139 +1027,361 @@ async def sync_all_properties_supplier_bills(
                 
                 supplier = db.get_supplier(group.supplier_id)
                 if not supplier:
+                    property_ids = [p.property_id for p in group.properties]
                     yield send_event("progress", {
                         "supplier_name": "Unknown",
-                        "contract_id": group.contract_id,
+                        "contract_id": None,
                         "status": "error",
                         "bills_found": 0,
                         "bills_created": 0,
                         "error": f"Supplier {group.supplier_id} not found",
-                        "properties_affected": group.property_ids
+                        "properties_affected": property_ids
                     })
                     continue
                 
                 # Get credentials
                 credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, supplier.id)
                 if not credential or not credential.username or not credential.password_hash:
+                    property_ids = [p.property_id for p in group.properties]
                     yield send_event("progress", {
                         "supplier_name": supplier.name,
-                        "contract_id": group.contract_id,
+                        "contract_id": None,
                         "status": "error",
                         "bills_found": 0,
                         "bills_created": 0,
                         "error": "No credentials configured",
-                        "properties_affected": group.property_ids
+                        "properties_affected": property_ids
                     })
                     continue
                 
                 username = decrypt_password(credential.username)
                 password = decrypt_password(credential.password_hash)
                 
+                property_ids = [p.property_id for p in group.properties]
                 yield send_event("progress", {
                     "supplier_name": supplier.name,
-                    "contract_id": group.contract_id,
+                    "contract_id": None,
                     "status": "starting",
                     "bills_found": 0,
                     "bills_created": 0,
-                    "properties_affected": group.property_ids
+                    "properties_affected": property_ids
                 })
                 
-                # Sync supplier once
+                # Sync supplier once for all properties
+                property_to_association = {}  # Map property_id -> (association_id, apartment_id) for E-bloc
                 try:
-                    # Find property supplier for first property to get property_supplier_id
-                    first_property_suppliers = db.list_property_suppliers(group.property_ids[0])
-                    property_supplier = next((ps for ps in first_property_suppliers if ps.supplier_id == supplier.id), None)
-                    if not property_supplier:
-                        yield send_event("progress", {
-                            "supplier_name": supplier.name,
-                            "contract_id": group.contract_id,
-                            "status": "error",
-                            "bills_found": 0,
-                            "bills_created": 0,
-                            "error": "Property supplier not found",
-                            "properties_affected": group.property_ids
-                        })
-                        continue
-                    
-                    def progress_callback(supplier_name: str, status: str, bills_found: int = 0, bills_created: int = 0, error: Optional[str] = None):
-                        """Progress callback for sync"""
-                        pass  # We'll handle progress manually
-                    
-                    group_bills = []  # Collect bills for this supplier group
-                    
-                    def bills_callback(bill_data: Dict[str, Any]):
-                        """Callback to collect discovered bills - receives single bill dict"""
-                        # Filter bills by contract_id if specified
-                        if group.contract_id and bill_data.get("contract_id") != group.contract_id:
-                            return
+                    # Special handling for E-bloc - use externalized helper
+                    if supplier.name.lower() == "e-bloc":
+                        from app.utils.ebloc_sync_helper import sync_ebloc_all_properties
                         
-                        group_bills.append(bill_data)
-                    
-                    yield send_event("progress", {
-                        "supplier_name": supplier.name,
-                        "contract_id": group.contract_id,
-                        "status": "processing",
-                        "bills_found": 0,
-                        "bills_created": 0,
-                        "properties_affected": group.property_ids
-                    })
-                    
-                    bills_found, bills_created = await _sync_supplier_scraper(
-                        property_id=group.property_ids[0],  # Use first property for sync
-                        username=username,
-                        password=password,
-                        supplier=supplier,
-                        patterns=all_patterns,
-                        logger=logger,
-                        property_supplier_id=property_supplier.id,
-                        save_html_dumps=False,
-                        progress_callback=None,  # We handle progress manually
-                        discover_only=request.discover_only,
-                        bills_callback=bills_callback
-                    )
-                    
-                    # Distribute discovered bills to all properties in the group
-                    for bill_data in group_bills:
-                        for property_id in group.property_ids:
-                            bills_discovered.append({
-                                **bill_data,
-                                "property_id": property_id,
-                                "supplier_name": supplier.name,
-                                "contract_id": group.contract_id,
-                            })
-                    
-                    # Send progress with bills for each property
-                    for property_id in group.property_ids:
-                        property_bills = [b for b in bills_discovered if b.get("property_id") == property_id and b.get("supplier_name") == supplier.name]
-                        if property_bills:
+                        # Prepare properties list
+                        properties_list = [(p.property_id, p.contract_id) for p in group.properties]
+                        
+                        # Sync E-bloc for all properties
+                        group_bills, property_to_association = await sync_ebloc_all_properties(
+                            properties_list,
+                            username,
+                            password
+                        )
+                        
+                        bills_found = len(group_bills)
+                        bills_created = 0  # Will be set after distribution
+                    else:
+                        # Non-E-bloc suppliers - use regular sync
+                        # Find property supplier for first property to get property_supplier_id
+                        first_property_id = group.properties[0].property_id
+                        first_property_suppliers = db.list_property_suppliers(first_property_id)
+                        property_supplier = next((ps for ps in first_property_suppliers if ps.supplier_id == supplier.id), None)
+                        if not property_supplier:
                             yield send_event("progress", {
                                 "supplier_name": supplier.name,
-                                "contract_id": group.contract_id,
-                                "status": "processing",
-                                "bills_found": len(property_bills),
+                                "contract_id": None,
+                                "status": "error",
+                                "bills_found": 0,
                                 "bills_created": 0,
-                                "properties_affected": [property_id],
-                                "bills": property_bills
+                                "error": "Property supplier not found",
+                                "properties_affected": property_ids
                             })
+                            continue
+                        
+                        # Collect all contract IDs from properties in this group (for filtering)
+                        # Only filter if there are multiple different contract_ids; otherwise get all bills
+                        contract_ids = [p.contract_id for p in group.properties if p.contract_id]
+                        unique_contract_ids = list(set(contract_ids)) if contract_ids else []
+                        # If all properties have the same contract_id (or all are None), don't filter - get all bills
+                        # Only filter if there are multiple different contract_ids
+                        contract_ids_to_accept = unique_contract_ids if len(unique_contract_ids) > 1 else None
+                        
+                        group_bills = []  # Collect bills for this supplier group
+                        
+                        def bills_callback(bill_data: Dict[str, Any]):
+                            """Callback to collect discovered bills - receives single bill dict"""
+                            # No filtering here - we'll filter when distributing to properties
+                            group_bills.append(bill_data)
+                        
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "contract_id": None,
+                            "status": "processing",
+                            "bills_found": 0,
+                            "bills_created": 0,
+                            "properties_affected": property_ids
+                        })
+                        
+                        bills_found, bills_created = await _sync_supplier_scraper(
+                            property_id=first_property_id,  # Use first property for sync (just for reference)
+                            username=username,
+                            password=password,
+                            supplier=supplier,
+                            patterns=all_patterns,
+                            logger=logger,
+                            property_supplier_id=property_supplier.id,
+                            save_html_dumps=False,
+                            progress_callback=None,  # We handle progress manually
+                            discover_only=request.discover_only,
+                            bills_callback=bills_callback,
+                            contract_ids_to_accept=contract_ids_to_accept  # Pass list of contract IDs to accept (or None for no filtering)
+                        )
                     
-                    yield send_event("progress", {
-                        "supplier_name": supplier.name,
-                        "contract_id": group.contract_id,
-                        "status": "completed",
-                        "bills_found": len(group_bills),
-                        "bills_created": bills_created if not request.discover_only else 0,
-                        "properties_affected": group.property_ids
-                    })
+                    # Match each bill to exactly one property
+                    # Logic: 1) Match by contract_id if available, 2) Match by apartment number
+                    def match_bill_to_property(bill_data: Dict[str, Any]) -> Optional[str]:
+                        """Match a bill to exactly one property. Returns property_id or None."""
+                        bill_contract_id = bill_data.get("contract_id")
+                        
+                        # Step 1: Try matching by contract_id
+                        if bill_contract_id and str(bill_contract_id).strip().upper() != "A000000":
+                            # For E-bloc, contract_id is actually association_id
+                            if supplier.name.lower() == "e-bloc":
+                                # Match by association_id
+                                for prop_mapping in group.properties:
+                                    if prop_mapping.property_id in property_to_association:
+                                        assoc_id, _ = property_to_association[prop_mapping.property_id]
+                                        if str(assoc_id).strip() == str(bill_contract_id).strip():
+                                            return prop_mapping.property_id
+                                # Also check property_supplier contract_id
+                                for prop_mapping in group.properties:
+                                    property_suppliers = db.list_property_suppliers(prop_mapping.property_id)
+                                    property_supplier = next((ps for ps in property_suppliers if ps.supplier_id == supplier.id), None)
+                                    if property_supplier and property_supplier.contract_id:
+                                        if str(property_supplier.contract_id).strip() == str(bill_contract_id).strip():
+                                            return prop_mapping.property_id
+                            else:
+                                # For non-E-bloc, match by contract_id
+                                for prop_mapping in group.properties:
+                                    # Check prop_mapping.contract_id first
+                                    if prop_mapping.contract_id and str(prop_mapping.contract_id).strip() == str(bill_contract_id).strip():
+                                        return prop_mapping.property_id
+                                    # Check property_supplier.contract_id
+                                    property_suppliers = db.list_property_suppliers(prop_mapping.property_id)
+                                    property_supplier = next((ps for ps in property_suppliers if ps.supplier_id == supplier.id), None)
+                                    if property_supplier and property_supplier.contract_id:
+                                        if str(property_supplier.contract_id).strip() == str(bill_contract_id).strip():
+                                            return prop_mapping.property_id
+                        
+                        # Step 2: Match by apartment number (for E-bloc)
+                        if supplier.name.lower() == "e-bloc":
+                            # Extract apartment number from bill_number (e.g., "Octombrie 2025 Ap.8")
+                            bill_number = bill_data.get("bill_number", "")
+                            apt_match = re.search(r'Ap\.\s*(\d+)', bill_number, re.I)
+                            if apt_match:
+                                bill_apt_number = apt_match.group(1).strip()
+                                # Match with property address apartment number
+                                for prop_mapping in group.properties:
+                                    prop = db.get_property(prop_mapping.property_id)
+                                    if prop and prop.address:
+                                        from app.utils.ebloc_sync_helper import extract_apartment_number_from_address
+                                        prop_apt_number = extract_apartment_number_from_address(prop.address)
+                                        if prop_apt_number and prop_apt_number == bill_apt_number:
+                                            return prop_mapping.property_id
+                        
+                        # No match found
+                        return None
+                    
+                    if request.discover_only:
+                        # In discover mode, assign each bill to exactly one property
+                        all_bills_for_display = []
+                        for bill_data in group_bills:
+                            matched_property_id = match_bill_to_property(bill_data)
+                            
+                            if matched_property_id:
+                                prop = db.get_property(matched_property_id)
+                                bill_with_property = {
+                                    **bill_data,
+                                    "property_id": matched_property_id,
+                                    "supplier_name": supplier.name,
+                                }
+                                all_bills_for_display.append(bill_with_property)
+                                bills_discovered.append(bill_with_property)
+                            else:
+                                # No match found - still include bill but without property_id
+                                logger.warning(f"[{supplier.name}] Could not match bill {bill_data.get('bill_number')} to any property")
+                                bill_with_property = {
+                                    **bill_data,
+                                    "supplier_name": supplier.name,
+                                }
+                                all_bills_for_display.append(bill_with_property)
+                                bills_discovered.append(bill_with_property)
+                        
+                        # Send bills incrementally as they're discovered
+                        # First, send progress update without bills (for progress display)
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "contract_id": None,
+                            "status": "processing",
+                            "bills_found": len(group_bills),
+                            "bills_created": 0,
+                            "properties_affected": property_ids,
+                            "bills": None  # Don't send bills in progress event
+                        })
+                        
+                        # Send each bill individually as they're discovered
+                        for bill_with_property in all_bills_for_display:
+                            yield send_event("bill_discovered", {
+                                "supplier_name": supplier.name,
+                                "bill": bill_with_property
+                            })
+                        
+                        # Final completion event
+                        yield send_event("progress", {
+                            "supplier_name": supplier.name,
+                            "contract_id": None,
+                            "status": "completed",
+                            "bills_found": len(group_bills),
+                            "bills_created": 0,
+                            "properties_affected": property_ids,
+                            "bills": None  # Don't send bills here, already sent incrementally
+                        })
+                    else:
+                        # In save mode, match each bill to exactly one property and save it
+                        bills_saved_count = 0
+                        bills_saved_info = []  # List of (property_name, bill_count) for logging
+                        
+                        for bill_data in group_bills:
+                            matched_property_id = match_bill_to_property(bill_data)
+                            
+                            if not matched_property_id:
+                                logger.warning(f"[{supplier.name}] Could not match bill {bill_data.get('bill_number')} to any property, skipping")
+                                continue
+                            
+                            prop = db.get_property(matched_property_id)
+                            prop_name = prop.name if prop else matched_property_id
+                            
+                            # Save the bill to the matched property
+                            try:
+                                # Filter out A000000 contract_id - never save it
+                                bill_contract_id = bill_data.get("contract_id")
+                                bill_contract_id_to_save = bill_contract_id
+                                if bill_contract_id_to_save and str(bill_contract_id_to_save).strip().upper() == "A000000":
+                                    bill_contract_id_to_save = None
+                                
+                                # Convert bill_data to Bill object and save
+                                due_date_str = bill_data["due_date"].replace('Z', '+00:00')
+                                due_date = datetime.fromisoformat(due_date_str)
+                                if due_date.tzinfo:
+                                    due_date = due_date.replace(tzinfo=None)
+                                
+                                bill_type = BillType(bill_data["bill_type"])
+                                bill_status = BillStatus(bill_data.get("status", "pending"))
+                                
+                                # Check if bill already exists
+                                existing_bills = db.list_bills(property_id=matched_property_id)
+                                existing = None
+                                bill_number = bill_data.get("bill_number")
+                                
+                                if bill_number:
+                                    existing = next(
+                                        (b for b in existing_bills 
+                                         if b.bill_number == bill_number 
+                                         and b.bill_type == bill_type),
+                                        None
+                                    )
+                                
+                                if not existing and bill_data.get("amount"):
+                                    for b in existing_bills:
+                                        if (b.bill_type == bill_type and 
+                                            b.description == bill_data.get("description", "") and
+                                            abs(b.amount - bill_data["amount"]) < 0.01):
+                                            if b.due_date:
+                                                days_diff = abs((b.due_date - due_date).days)
+                                                if days_diff <= 5:
+                                                    existing = b
+                                                    break
+                                
+                                if existing:
+                                    # Update existing bill
+                                    existing.amount = bill_data["amount"]
+                                    existing.due_date = due_date
+                                    if bill_data.get("iban"):
+                                        existing.iban = bill_data["iban"]
+                                    if bill_number:
+                                        existing.bill_number = bill_number
+                                    if bill_contract_id_to_save:
+                                        existing.contract_id = bill_contract_id_to_save
+                                    if bill_data.get("extraction_pattern_id"):
+                                        existing.extraction_pattern_id = bill_data["extraction_pattern_id"]
+                                    if due_date < datetime.utcnow() and existing.status == BillStatus.PENDING:
+                                        existing.status = BillStatus.OVERDUE
+                                    elif due_date >= datetime.utcnow() and existing.status == BillStatus.OVERDUE:
+                                        existing.status = BillStatus.PENDING
+                                    db.save_bill(existing)
+                                else:
+                                    # Create new bill
+                                    bill = Bill(
+                                        property_id=matched_property_id,
+                                        renter_id=bill_data.get("renter_id"),
+                                        bill_type=bill_type,
+                                        description=bill_data.get("description", ""),
+                                        amount=bill_data["amount"],
+                                        due_date=due_date,
+                                        iban=bill_data.get("iban"),
+                                        bill_number=bill_number,
+                                        extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                                        contract_id=bill_contract_id_to_save,
+                                        status=bill_status
+                                    )
+                                    db.save_bill(bill)
+                                
+                                bills_saved_count += 1
+                                bills_discovered.append({
+                                    **bill_data,
+                                    "property_id": matched_property_id,
+                                    "supplier_name": supplier.name,
+                                    "contract_id": bill_contract_id_to_save,
+                                })
+                                
+                                # Track property name for logging
+                                found_info = next((info for info in bills_saved_info if info[0] == prop_name), None)
+                                if found_info:
+                                    found_info[1] += 1
+                                else:
+                                    bills_saved_info.append([prop_name, 1])
+                                
+                            except Exception as e:
+                                logger.error(f"Error saving bill for property {prop_name}: {e}", exc_info=True)
+                        
+                        # Build property info string for logging
+                        property_info = ", ".join([f"{name} ({count})" for name, count in bills_saved_info])
+                        
+                        yield send_event("progress", {
+                            "supplier_name": f"{supplier.name} - {property_info}" if property_info else supplier.name,
+                            "contract_id": None,
+                            "status": "completed",
+                            "bills_found": len(group_bills),
+                            "bills_created": bills_saved_count,
+                            "properties_affected": property_ids,
+                            "bills": None
+                        })
                 except Exception as e:
                     logger.error(f"Error syncing supplier {supplier.name}: {e}", exc_info=True)
                     yield send_event("progress", {
                         "supplier_name": supplier.name,
-                        "contract_id": group.contract_id,
+                        "contract_id": None,
                         "status": "error",
                         "bills_found": 0,
                         "bills_created": 0,
                         "error": str(e),
-                        "properties_affected": group.property_ids
+                        "properties_affected": property_ids
                     })
             
             yield send_event("complete", {
@@ -1238,8 +1485,12 @@ async def save_all_discovered_bills(
                     existing.iban = bill_data["iban"]
                 if bill_number:
                     existing.bill_number = bill_number
-                if bill_data.get("contract_id"):
-                    existing.contract_id = bill_data["contract_id"]
+                contract_id_to_save = bill_data.get("contract_id")
+                # Filter out A000000 contract_id - never save it
+                if contract_id_to_save and str(contract_id_to_save).strip().upper() == "A000000":
+                    contract_id_to_save = None
+                if contract_id_to_save:
+                    existing.contract_id = contract_id_to_save
                 if bill_data.get("extraction_pattern_id"):
                     existing.extraction_pattern_id = bill_data["extraction_pattern_id"]
                 if due_date < datetime.utcnow() and existing.status == BillStatus.PENDING:
@@ -1266,6 +1517,19 @@ async def save_all_discovered_bills(
                 )
                 db.save_bill(bill)
                 bills_created.append(bill.id)
+                
+                # For E-bloc bills, save contract_id (association_id) to property_supplier if not already set
+                if bill_type == BillType.EBLOC and bill_data.get("contract_id"):
+                    contract_id = bill_data["contract_id"]
+                    prop_suppliers = db.list_property_suppliers(property_id)
+                    # Find E-bloc supplier
+                    ebloc_supplier = next((s for s in db.list_suppliers() if s.name.lower() == "e-bloc"), None)
+                    if ebloc_supplier:
+                        prop_supplier = next((ps for ps in prop_suppliers if ps.supplier_id == ebloc_supplier.id), None)
+                        if prop_supplier and not prop_supplier.contract_id:
+                            prop_supplier.contract_id = contract_id
+                            db.save_property_supplier(prop_supplier)
+                            logger.info(f"[E-bloc] Saved contract_id {contract_id} to property supplier for property {property_id}")
         except Exception as e:
             logger.error(f"Error saving bill: {e}", exc_info=True)
             continue

@@ -326,12 +326,19 @@ class WebScraper:
         # For now, we'll use form-based login
         raise NotImplementedError("API-based login not yet implemented")
     
-    async def get_bills(self, association_id: Optional[str] = None, apartment_id: Optional[str] = None) -> List[ScrapedBill]:
+    async def get_bills(
+        self, 
+        association_id: Optional[str] = None, 
+        apartment_id: Optional[str] = None,
+        association_ids: Optional[List[Tuple[str, Optional[str]]]] = None
+    ) -> List[ScrapedBill]:
         """Scrape bills from the supplier website
         
         Args:
             association_id: Optional association ID for cookie-based selection (e-bloc style)
             apartment_id: Optional apartment ID for cookie-based selection (e-bloc style)
+            association_ids: Optional list of (association_id, apartment_id) tuples for multiple associations (e-bloc style)
+                            If provided, bills will be fetched for each association/apartment combination
         """
         if not self.logged_in:
             raise Exception("Not logged in. Call login() first.")
@@ -339,13 +346,48 @@ class WebScraper:
         if not self.page:
             await self._init_browser()
         
-        # Set cookies if association/apartment IDs are provided
+        bills = []
+        
+        # Handle multiple associations (e-bloc style)
+        if association_ids and self.config.cookie_config:
+            # Fetch bills for each association/apartment combination
+            for idx, (assoc_id, apt_id) in enumerate(association_ids, 1):
+                logger.info(f"[{self.config.supplier_name} Scraper] Processing association {idx}/{len(association_ids)}: {assoc_id}, apartment: {apt_id}")
+                
+                # Set cookies for this association/apartment
+                logger.debug(f"[{self.config.supplier_name} Scraper] Setting cookies for association {assoc_id}, apartment {apt_id}...")
+                await self._set_cookies_from_config(assoc_id, apt_id)
+                
+                # Navigate to a page to ensure cookies are set
+                logger.debug(f"[{self.config.supplier_name} Scraper] Navigating to base URL to set cookies...")
+                await self.page.goto(self.config.base_url, wait_until="networkidle")
+                await self.page.wait_for_timeout(250)
+                logger.debug(f"[{self.config.supplier_name} Scraper] Cookies set, now fetching bills...")
+                
+                # Get bills for this association
+                assoc_bills = await self._fetch_bills_page()
+                logger.info(f"[{self.config.supplier_name} Scraper] Found {len(assoc_bills)} bill(s) for association {assoc_id}")
+                
+                # Set contract_id (association_id) on each bill for proper distribution
+                for bill in assoc_bills:
+                    if not bill.contract_id:
+                        bill.contract_id = assoc_id
+                bills.extend(assoc_bills)
+            
+            return bills
+        
+        # Single association (existing behavior)
         if association_id and self.config.cookie_config:
             await self._set_cookies_from_config(association_id, apartment_id)
             # Navigate to a page to ensure cookies are set
             await self.page.goto(self.config.base_url, wait_until="networkidle")
             await self.page.wait_for_timeout(500)
         
+        bills = await self._fetch_bills_page()
+        return bills
+    
+    async def _fetch_bills_page(self) -> List[ScrapedBill]:
+        """Internal method to fetch bills from the bills page (after cookies are set)"""
         bills = []
         
         try:
@@ -355,11 +397,13 @@ class WebScraper:
                 logger.warning(f"[{self.config.supplier_name} Scraper] No bills URL configured")
                 return bills
             
-            logger.info(f"[{self.config.supplier_name} Scraper] Fetching bills page...")
+            logger.info(f"[{self.config.supplier_name} Scraper] Fetching bills page: {bills_url}")
             await self.page.goto(bills_url, wait_until="networkidle")
+            logger.info(f"[{self.config.supplier_name} Scraper] Bills page received, waiting for dynamic content...")
             
-            # Wait a bit for dynamic content to load
-            await self.page.wait_for_timeout(2000)
+            # Wait a bit for dynamic content to load (reduced from 2000ms to 1000ms)
+            await self.page.wait_for_timeout(1000)
+            logger.info(f"[{self.config.supplier_name} Scraper] Starting bill extraction...")
             
             page_html = await self.page.content()
             self._save_html_dump(page_html, "bills_page")
