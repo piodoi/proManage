@@ -1,5 +1,5 @@
 {
-  "id": "text_20260102_213217_Engie",
+  "id": "engie",
   "name": "Engie",
   "bill_type": "utilities",
   "supplier": "Engie Romania SA",
@@ -48,8 +48,13 @@
       "field_name": "address",
       "label_text": "Adresa locului de",
       "line_offset": 2
+    },
+    {
+      "field_name": "legal_name",
+      "label_text": "Apel taxabil, conform tarifelor stabilite de către operatorii de telefonie.",
+      "line_offset": 1
     }
   ],
   "created_at": "2026-01-02T21:32:17.320023",
-  "updated_at": "2026-01-02T21:32:17.320030"
+  "updated_at": "2026-01-03T13:21:58.941876"
 }

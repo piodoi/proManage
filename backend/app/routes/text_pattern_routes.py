@@ -251,7 +251,7 @@ async def save_text_pattern(
     """Save a text-based extraction pattern to file."""
     pattern_id = f"text_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{pattern.name.replace(' ', '_')}"
     
-    # Save only field_name, label_text, and line_offset (no regex generation)
+    # Save only field_name, label_text, and line_offset (no value_text, value_regex)
     processed_patterns = []
     for field_pattern in pattern.field_patterns:
         processed_patterns.append({
@@ -260,24 +260,72 @@ async def save_text_pattern(
             "line_offset": field_pattern.line_offset,
         })
     
-    text_pattern = TextPattern(
-        id=pattern_id,
-        name=pattern.name,
-        bill_type=pattern.bill_type,
-        supplier=pattern.supplier,
-        field_patterns=processed_patterns,
-        created_at=datetime.utcnow().isoformat(),
-        updated_at=datetime.utcnow().isoformat(),
-    )
+    # Build pattern dict manually to ensure no value_text/value_regex fields
+    pattern_dict = {
+        "id": pattern_id,
+        "name": pattern.name,
+        "bill_type": pattern.bill_type,
+        "supplier": pattern.supplier,
+        "field_patterns": processed_patterns,  # Already cleaned, only has field_name, label_text, line_offset
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
     
-    # Save to file
+    # Save to file (manually constructed to avoid Pydantic adding optional fields)
     pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
     with open(pattern_file, 'w', encoding='utf-8') as f:
-        json.dump(text_pattern.model_dump(), f, indent=2, ensure_ascii=False)
+        json.dump(pattern_dict, f, indent=2, ensure_ascii=False)
     
     logger.info(f"Saved text pattern to {pattern_file}")
     
     return {"pattern_id": pattern_id, "message": "Pattern saved successfully"}
+
+
+@router.get("/list-patterns")
+async def list_text_patterns(
+    current_user: TokenData = Depends(require_landlord),
+):
+    """List all text patterns with their metadata."""
+    patterns = []
+    if os.path.exists(TEXT_PATTERNS_DIR):
+        for filename in os.listdir(TEXT_PATTERNS_DIR):
+            if filename.endswith('.json'):
+                try:
+                    pattern_file = os.path.join(TEXT_PATTERNS_DIR, filename)
+                    with open(pattern_file, 'r', encoding='utf-8') as f:
+                        pattern = json.load(f)
+                        filename_base = filename[:-5]  # Remove .json extension
+                        patterns.append({
+                            "pattern_id": filename_base,
+                            "name": pattern.get('name', ''),
+                            "supplier": pattern.get('supplier', ''),
+                            "bill_type": pattern.get('bill_type', 'utilities'),
+                            "field_count": len(pattern.get('field_patterns', [])),
+                            "created_at": pattern.get('created_at', ''),
+                            "updated_at": pattern.get('updated_at', ''),
+                        })
+                except Exception as e:
+                    logger.warning(f"Error loading pattern {filename}: {e}")
+    
+    # Sort by name
+    patterns.sort(key=lambda p: p['name'].lower())
+    return {"patterns": patterns}
+
+
+@router.get("/get-pattern/{pattern_id}")
+async def get_text_pattern(
+    pattern_id: str,
+    current_user: TokenData = Depends(require_landlord),
+):
+    """Get a specific text pattern by ID."""
+    pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
+    if not os.path.exists(pattern_file):
+        raise HTTPException(status_code=404, detail="Pattern not found")
+    
+    with open(pattern_file, 'r', encoding='utf-8') as f:
+        pattern = json.load(f)
+    
+    return pattern
 
 
 @router.post("/match-pdf")
@@ -293,7 +341,7 @@ async def match_text_pattern(
     pdf_text = extract_text_from_pdf(pdf_bytes)
     pdf_lines = pdf_text.splitlines()
     
-    # Load all patterns
+    # Load all patterns from text_patterns folder
     patterns = []
     if os.path.exists(TEXT_PATTERNS_DIR):
         for filename in os.listdir(TEXT_PATTERNS_DIR):
@@ -303,9 +351,10 @@ async def match_text_pattern(
                     with open(pattern_file, 'r', encoding='utf-8') as f:
                         pattern = json.load(f)
                         filename_base = filename[:-5]  # Remove .json extension
+                        # Use filename as pattern_id (not the ID field in JSON)
                         patterns.append({
                             'pattern': pattern,
-                            'filename_base': filename_base
+                            'pattern_id': filename_base  # Use filename as pattern_id
                         })
                 except Exception as e:
                     logger.warning(f"Error loading pattern {filename}: {e}")
@@ -313,11 +362,14 @@ async def match_text_pattern(
     matches = []
     for pattern_data in patterns:
         pattern = pattern_data['pattern']
-        filename_base = pattern_data['filename_base']
+        pattern_id = pattern_data['pattern_id']  # Use filename-based pattern_id
         
         # Calculate confidence based on how many field patterns match
         matched_fields = 0
         total_fields = len(pattern.get('field_patterns', []))
+        
+        if total_fields == 0:
+            continue  # Skip patterns with no fields
         
         for field_pattern in pattern.get('field_patterns', []):
             label_text = field_pattern.get('label_text', '')
@@ -328,17 +380,18 @@ async def match_text_pattern(
                 if re.search(label_regex, pdf_text):
                     matched_fields += 1
         
-        if matched_fields > 0:
-            confidence = matched_fields / total_fields if total_fields > 0 else 0
-            matches.append({
-                "pattern_id": filename_base,  # Use filename as pattern_id
-                "pattern_name": pattern['name'],
-                "supplier": pattern.get('supplier'),
-                "confidence": confidence,
-                "matched_fields": matched_fields,
-                "total_fields": total_fields,
-            })
+        # Include all patterns, even with 0 confidence (for unknown PDFs)
+        confidence = matched_fields / total_fields if total_fields > 0 else 0
+        matches.append({
+            "pattern_id": pattern_id,  # Use filename-based pattern_id
+            "pattern_name": pattern.get('name', filename_base),
+            "supplier": pattern.get('supplier'),
+            "confidence": confidence,
+            "matched_fields": matched_fields,
+            "total_fields": total_fields,
+        })
     
+    # Sort by confidence (highest first), but include all patterns
     matches.sort(key=lambda m: m['confidence'], reverse=True)
     
     return {
@@ -489,4 +542,117 @@ async def extract_with_text_pattern(
         extracted_data['legal_name'] = pattern_supplier
     
     return {"extracted_data": extracted_data}
+
+
+@router.get("/list-patterns")
+async def list_text_patterns(
+    current_user: TokenData = Depends(require_landlord),
+):
+    """List all text patterns with their metadata."""
+    patterns = []
+    if os.path.exists(TEXT_PATTERNS_DIR):
+        for filename in os.listdir(TEXT_PATTERNS_DIR):
+            if filename.endswith('.json'):
+                try:
+                    pattern_file = os.path.join(TEXT_PATTERNS_DIR, filename)
+                    with open(pattern_file, 'r', encoding='utf-8') as f:
+                        pattern = json.load(f)
+                        filename_base = filename[:-5]  # Remove .json extension
+                        patterns.append({
+                            "pattern_id": filename_base,
+                            "name": pattern.get('name', ''),
+                            "supplier": pattern.get('supplier', ''),
+                            "bill_type": pattern.get('bill_type', 'utilities'),
+                            "field_count": len(pattern.get('field_patterns', [])),
+                            "created_at": pattern.get('created_at', ''),
+                            "updated_at": pattern.get('updated_at', ''),
+                        })
+                except Exception as e:
+                    logger.warning(f"Error loading pattern {filename}: {e}")
+    
+    # Sort by name
+    patterns.sort(key=lambda p: p['name'].lower())
+    return {"patterns": patterns}
+
+
+@router.get("/get-pattern/{pattern_id}")
+async def get_text_pattern(
+    pattern_id: str,
+    current_user: TokenData = Depends(require_landlord),
+):
+    """Get a specific text pattern by ID."""
+    pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
+    if not os.path.exists(pattern_file):
+        raise HTTPException(status_code=404, detail="Pattern not found")
+    
+    with open(pattern_file, 'r', encoding='utf-8') as f:
+        pattern = json.load(f)
+    
+    return pattern
+
+
+@router.put("/update-pattern/{pattern_id}")
+async def update_text_pattern(
+    pattern_id: str,
+    pattern: TextPatternCreate,
+    current_user: TokenData = Depends(require_landlord),
+):
+    """Update an existing text pattern - adds new fields, keeps existing ones."""
+    pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
+    if not os.path.exists(pattern_file):
+        raise HTTPException(status_code=404, detail="Pattern not found")
+    
+    # Load existing pattern
+    with open(pattern_file, 'r', encoding='utf-8') as f:
+        existing_pattern = json.load(f)
+    
+    # Create a map of existing field patterns by field_name
+    # Clean up old fields (value_text, value_regex) from existing patterns
+    existing_fields = {}
+    for fp in existing_pattern.get('field_patterns', []):
+        existing_fields[fp['field_name']] = {
+            "field_name": fp['field_name'],
+            "label_text": fp.get('label_text', ''),
+            "line_offset": fp.get('line_offset', 0),
+        }
+    
+    # Merge: keep existing fields, add/update new ones from the request
+    for field_pattern in pattern.field_patterns:
+        existing_fields[field_pattern.field_name] = {
+            "field_name": field_pattern.field_name,
+            "label_text": field_pattern.label_text,
+            "line_offset": field_pattern.line_offset,
+        }
+    
+    # Convert back to list (only field_name, label_text, line_offset)
+    merged_field_patterns = list(existing_fields.values())
+    
+    # Update pattern metadata
+    # Ensure field_patterns only contain field_name, label_text, line_offset (no value_text, value_regex)
+    cleaned_field_patterns = []
+    for fp in merged_field_patterns:
+        cleaned_field_patterns.append({
+            "field_name": fp.get('field_name', ''),
+            "label_text": fp.get('label_text', ''),
+            "line_offset": fp.get('line_offset', 0),
+        })
+    
+    # Build pattern dict manually to ensure no value_text/value_regex fields
+    pattern_dict = {
+        "id": pattern_id,
+        "name": pattern.name,
+        "bill_type": pattern.bill_type,
+        "supplier": pattern.supplier,
+        "field_patterns": cleaned_field_patterns,  # Already cleaned, only has field_name, label_text, line_offset
+        "created_at": existing_pattern.get('created_at', datetime.utcnow().isoformat()),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    
+    # Save updated pattern (manually constructed to avoid Pydantic adding optional fields)
+    with open(pattern_file, 'w', encoding='utf-8') as f:
+        json.dump(pattern_dict, f, indent=2, ensure_ascii=False)
+    
+    logger.info(f"Updated text pattern {pattern_file}")
+    
+    return {"pattern_id": pattern_id, "message": "Pattern updated successfully"}
 
