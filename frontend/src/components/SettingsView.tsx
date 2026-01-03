@@ -30,7 +30,15 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
   const [personalEmailInput, setPersonalEmailInput] = useState<string>('');
   const [ibanInput, setIbanInput] = useState<string>('');
   const [ibanError, setIbanError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('subscription');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    // Get from sessionStorage if available, otherwise default
+    return sessionStorage.getItem('settingsActiveTab') || 'subscription';
+  });
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    sessionStorage.setItem('settingsActiveTab', value);
+  };
 
   useEffect(() => {
     if (token) {
@@ -126,7 +134,7 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
 
   return (
     <div className="space-y-0">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
           <TabsTrigger value="subscription" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
             {t('settings.subscriptionStatus')}
