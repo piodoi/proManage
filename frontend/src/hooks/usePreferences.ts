@@ -12,7 +12,9 @@ export function usePreferences() {
     rent_warning_days: 5,
     rent_currency: 'EUR',
     bill_currency: 'RON',
-    phone_number: null
+    phone_number: null,
+    landlord_name: null,
+    iban: null
   });
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -91,6 +93,8 @@ export function usePreferences() {
     setRentCurrency: (rent_currency: string) => savePreferences({ rent_currency }),
     setBillCurrency: (bill_currency: string) => savePreferences({ bill_currency }),
     setPhoneNumber: (phone_number: string | null) => savePreferences({ phone_number }),
+    setLandlordName: (landlord_name: string | null) => savePreferences({ landlord_name }),
+    setIban: (iban: string | null) => savePreferences({ iban }),
     savePreferences,
   };
 }

@@ -370,6 +370,8 @@ export type Preferences = {
   rent_currency: string;
   bill_currency: string;
   phone_number?: string | null;
+  landlord_name?: string | null;
+  iban?: string | null;
 };
 
 export type AuthResponse = {

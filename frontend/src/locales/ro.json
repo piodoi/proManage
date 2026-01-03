@@ -393,7 +393,16 @@
     "phoneNumberDesc": "Adăugați numărul dvs. de telefon cu codul de țară pentru a activa funcțiile de partajare WhatsApp.",
     "phoneNumberLabel": "Număr de Telefon (cu cod de țară)",
     "phoneNumberPlaceholder": "+40712345678",
-    "phoneNumberHelp": "Introduceți numărul dvs. complet de telefon inclusiv codul de țară (ex: +40712345678). Este necesar pentru partajarea WhatsApp."
+    "phoneNumberHelp": "Introduceți numărul dvs. complet de telefon inclusiv codul de țară (ex: +40712345678). Este necesar pentru partajarea WhatsApp.",
+    "personalDetails": "Detalii Personale",
+    "personalDetailsDesc": "Configurați informațiile dvs. personale pentru facturi de chirie și plăți.",
+    "landlordName": "Nume Proprietar",
+    "landlordNamePlaceholder": "Ion Popescu",
+    "landlordNameHelp": "Numele dvs. așa cum ar trebui să apară pe facturile de chirie și cererile de plată.",
+    "iban": "IBAN",
+    "ibanPlaceholder": "RO49 AAAA 1B31 0075 9384 0000",
+    "ibanHelp": "IBAN-ul dvs. pentru primirea plăților de chirie. Trebuie să fie un format IBAN valid.",
+    "invalidIban": "Format IBAN invalid. Vă rugăm verificați și încercați din nou."
   },
   "errors": {
     "generic": "A apărut o eroare",

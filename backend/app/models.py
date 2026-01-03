@@ -405,4 +405,6 @@ class UserPreferences(BaseModel):
     rent_currency: Optional[str] = "EUR"  # Preferred currency for rent: "EUR", "RON", or "USD"
     bill_currency: Optional[str] = "RON"  # Preferred currency for bills: "EUR", "RON", or "USD"
     phone_number: Optional[str] = None  # User's phone number with country code for WhatsApp
+    landlord_name: Optional[str] = None  # Landlord's name for rent bills and payments
+    iban: Optional[str] = None  # IBAN for rent payments
     updated_at: datetime = Field(default_factory=datetime.utcnow)

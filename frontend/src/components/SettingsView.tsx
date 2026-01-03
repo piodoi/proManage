@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, Settings, AlertCircle, Phone } from 'lucide-react';
+import { Mail, Settings, AlertCircle, Phone, User } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import SupplierCredentialsSettings from './SupplierCredentialsSettings';
+import { validateIban, formatIban } from '../utils/iban';
 
 type SettingsViewProps = {
   token: string | null;
@@ -18,12 +19,15 @@ type SettingsViewProps = {
 
 export default function SettingsView({ token, onError }: SettingsViewProps) {
   const { t } = useI18n();
-  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setPhoneNumber } = usePreferences();
+  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setPhoneNumber, setLandlordName, setIban } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
   const [rentWarningDaysInput, setRentWarningDaysInput] = useState<string>('');
   const [phoneNumberInput, setPhoneNumberInput] = useState<string>('');
+  const [landlordNameInput, setLandlordNameInput] = useState<string>('');
+  const [ibanInput, setIbanInput] = useState<string>('');
+  const [ibanError, setIbanError] = useState<string>('');
 
   useEffect(() => {
     if (token) {
@@ -41,8 +45,48 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
     setPhoneNumberInput(preferences.phone_number || '');
   }, [preferences.phone_number]);
 
-  const handleSavePhoneNumber = () => {
-    setPhoneNumber(phoneNumberInput || null);
+  useEffect(() => {
+    setLandlordNameInput(preferences.landlord_name || '');
+  }, [preferences.landlord_name]);
+
+  useEffect(() => {
+    setIbanInput(preferences.iban || '');
+  }, [preferences.iban]);
+
+  const handleSavePersonalDetails = () => {
+    // Validate IBAN if provided
+    if (ibanInput.trim()) {
+      const cleanedIban = ibanInput.replace(/\s+/g, '');
+      if (!validateIban(cleanedIban)) {
+        setIbanError(t('settings.invalidIban') || 'Invalid IBAN format');
+        return;
+      }
+      setIban(cleanedIban);
+    } else {
+      setIban(null);
+    }
+    setIbanError('');
+    
+    setPhoneNumber(phoneNumberInput.trim() || null);
+    setLandlordName(landlordNameInput.trim() || null);
+  };
+
+  const handleIbanChange = (value: string) => {
+    setIbanInput(value);
+    setIbanError('');
+  };
+
+  const handleIbanBlur = () => {
+    if (ibanInput.trim()) {
+      const cleanedIban = ibanInput.replace(/\s+/g, '');
+      if (!validateIban(cleanedIban)) {
+        setIbanError(t('settings.invalidIban') || 'Invalid IBAN format');
+      } else {
+        // Format the IBAN for display
+        setIbanInput(formatIban(cleanedIban));
+        setIbanError('');
+      }
+    }
   };
 
   const loadSubscription = async () => {
@@ -241,35 +285,67 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
           <CardTitle className="text-slate-100 flex items-center gap-2">
-            <Phone className="w-5 h-5" />
-            {t('settings.phoneNumber')}
+            <User className="w-5 h-5" />
+            {t('settings.personalDetails')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-slate-400 text-sm">
-            {t('settings.phoneNumberDesc')}
+            {t('settings.personalDetailsDesc')}
           </p>
           <div>
-            <Label className="text-slate-300">{t('settings.phoneNumberLabel')}</Label>
-            <div className="flex gap-2 mt-1">
+            <Label className="text-slate-300">{t('settings.landlordName')}</Label>
+            <Input
+              type="text"
+              value={landlordNameInput}
+              onChange={(e) => setLandlordNameInput(e.target.value)}
+              className="bg-slate-700 border-slate-600 text-slate-100 mt-1"
+              placeholder={t('settings.landlordNamePlaceholder')}
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              {t('settings.landlordNameHelp')}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-slate-300">{t('settings.phoneNumberLabel')}</Label>
               <Input
                 type="tel"
                 value={phoneNumberInput}
                 onChange={(e) => setPhoneNumberInput(e.target.value)}
-                className="bg-slate-700 border-slate-600 text-slate-100"
+                className="bg-slate-700 border-slate-600 text-slate-100 mt-1"
                 placeholder={t('settings.phoneNumberPlaceholder')}
               />
-              <Button
-                onClick={handleSavePhoneNumber}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {t('common.save')}
-              </Button>
+              <p className="text-xs text-slate-500 mt-1">
+                {t('settings.phoneNumberHelp')}
+              </p>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {t('settings.phoneNumberHelp')}
-            </p>
+            <div>
+              <Label className="text-slate-300">{t('settings.iban')}</Label>
+              <Input
+                type="text"
+                value={ibanInput}
+                onChange={(e) => handleIbanChange(e.target.value)}
+                onBlur={handleIbanBlur}
+                className={`bg-slate-700 border-slate-600 text-slate-100 mt-1 ${ibanError ? 'border-red-500' : ''}`}
+                placeholder={t('settings.ibanPlaceholder')}
+              />
+              {ibanError && (
+                <p className="text-xs text-red-400 mt-1">
+                  {ibanError}
+                </p>
+              )}
+              <p className="text-xs text-slate-500 mt-1">
+                {t('settings.ibanHelp')}
+              </p>
+            </div>
           </div>
+          <Button
+            onClick={handleSavePersonalDetails}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {t('common.save')}
+          </Button>
         </CardContent>
       </Card>
 

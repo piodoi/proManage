@@ -400,7 +400,16 @@
     "phoneNumberDesc": "Add your phone number with country code to enable WhatsApp sharing features.",
     "phoneNumberLabel": "Phone Number (with country code)",
     "phoneNumberPlaceholder": "+1234567890",
-    "phoneNumberHelp": "Enter your full phone number including country code (e.g., +40712345678). This is required for WhatsApp sharing."
+    "phoneNumberHelp": "Enter your full phone number including country code (e.g., +40712345678). This is required for WhatsApp sharing.",
+    "personalDetails": "Personal Details",
+    "personalDetailsDesc": "Configure your personal information for rent bills and payments.",
+    "landlordName": "Landlord Name",
+    "landlordNamePlaceholder": "John Doe",
+    "landlordNameHelp": "Your name as it should appear on rent bills and payment requests.",
+    "iban": "IBAN",
+    "ibanPlaceholder": "RO49 AAAA 1B31 0075 9384 0000",
+    "ibanHelp": "Your IBAN for receiving rent payments. Must be a valid IBAN format.",
+    "invalidIban": "Invalid IBAN format. Please check and try again."
   },
   "errors": {
     "generic": "An error occurred",

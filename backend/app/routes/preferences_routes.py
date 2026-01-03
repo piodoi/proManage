@@ -19,6 +19,8 @@ class PreferencesUpdate(BaseModel):
     rent_currency: Optional[str] = None
     bill_currency: Optional[str] = None
     phone_number: Optional[str] = None
+    landlord_name: Optional[str] = None
+    iban: Optional[str] = None
 
 
 @router.get("")
@@ -33,7 +35,9 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
             "rent_warning_days": 5,
             "rent_currency": "EUR",
             "bill_currency": "RON",
-            "phone_number": None
+            "phone_number": None,
+            "landlord_name": None,
+            "iban": None
         }
     return {
         "language": preferences.language or "en",
@@ -41,7 +45,9 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
         "rent_warning_days": preferences.rent_warning_days if preferences.rent_warning_days is not None else 5,
         "rent_currency": preferences.rent_currency if preferences.rent_currency else "EUR",
         "bill_currency": preferences.bill_currency if preferences.bill_currency else "EUR",
-        "phone_number": preferences.phone_number
+        "phone_number": preferences.phone_number,
+        "landlord_name": preferences.landlord_name,
+        "iban": preferences.iban
     }
 
 
@@ -68,6 +74,10 @@ async def save_preferences(
             existing.bill_currency = data.bill_currency
         if data.phone_number is not None:
             existing.phone_number = data.phone_number
+        if data.landlord_name is not None:
+            existing.landlord_name = data.landlord_name
+        if data.iban is not None:
+            existing.iban = data.iban
         preferences = existing
     else:
         # Create new preferences
@@ -78,11 +88,13 @@ async def save_preferences(
             rent_warning_days=data.rent_warning_days if data.rent_warning_days is not None else 5,
             rent_currency=data.rent_currency if data.rent_currency else "EUR",
             bill_currency=data.bill_currency if data.bill_currency else "EUR",
-            phone_number=data.phone_number
+            phone_number=data.phone_number,
+            landlord_name=data.landlord_name,
+            iban=data.iban
         )
     
     db.save_user_preferences(preferences)
-    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}, phone_number={'*' * 4 if preferences.phone_number else None}")
+    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}, phone_number={'*' * 4 if preferences.phone_number else None}, landlord_name={preferences.landlord_name}, iban={'*' * 4 if preferences.iban else None}")
     
     return {
         "language": preferences.language,
@@ -90,6 +102,8 @@ async def save_preferences(
         "rent_warning_days": preferences.rent_warning_days if preferences.rent_warning_days is not None else 5,
         "rent_currency": preferences.rent_currency if preferences.rent_currency else "EUR",
         "bill_currency": preferences.bill_currency if preferences.bill_currency else "EUR",
-        "phone_number": preferences.phone_number
+        "phone_number": preferences.phone_number,
+        "landlord_name": preferences.landlord_name,
+        "iban": preferences.iban
     }
 
