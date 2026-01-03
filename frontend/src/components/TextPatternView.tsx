@@ -28,7 +28,6 @@ export default function TextPatternView() {
   
   // Tab-specific PDF text (for display in textarea)
   const [pdfText, setPdfText] = useState<string>('');
-  const [selectedLabel, setSelectedLabel] = useState<string>('');
   const [selectedLabelStart, setSelectedLabelStart] = useState<number | null>(null);
   const [currentField, setCurrentField] = useState<string>('amount');
   const [fieldPatterns, setFieldPatterns] = useState<Map<string, FieldPattern>>(new Map());
@@ -64,7 +63,7 @@ export default function TextPatternView() {
     { value: 'contract_id', label: t('supplier.contractId') },
     { value: 'payment_details', label: t('common.paymentDetails') },
     { value: 'address', label: t('property.address') },
-    { value: 'legal_name', label: t('bill.legalName') || 'Legal Name' },
+    { value: 'legal_name', label: t('bill.legalName') },
   ];
 
   const scrollToLine = (lineNum: number) => {
@@ -126,7 +125,7 @@ export default function TextPatternView() {
       setSharedPdfFilename(file.name);
       // Update tab-specific state
       setPdfText(data.text);
-      setSuccess('PDF uploaded successfully');
+      setSuccess(t('tools.pdfUploaded'));
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
       setError(err.message || 'Error uploading PDF');
@@ -164,8 +163,8 @@ export default function TextPatternView() {
       return newMap;
     });
     
-    setSelectedLabel(selectedText);
-    setSuccess(`Label saved for ${fieldOptions.find(f => f.value === currentField)?.label} (offset: ${currentOffset})`);
+    const fieldLabel = fieldOptions.find(f => f.value === currentField)?.label || currentField;
+    setSuccess(t('tools.labelSaved', { field: fieldLabel, offset: currentOffset }));
     setTimeout(() => setSuccess(''), 3000);
     
     // Highlight target line if offset > 0
@@ -392,7 +391,7 @@ export default function TextPatternView() {
 
   const handleSavePattern = async () => {
     if (!token || !patternName || fieldPatterns.size === 0) {
-      setError('Pattern name and at least one field pattern required');
+      setError(t('tools.patternNameRequired'));
       return;
     }
     
@@ -425,14 +424,13 @@ export default function TextPatternView() {
         throw new Error(errorData.detail || 'Failed to save pattern');
       }
       
-      setSuccess('Pattern saved successfully');
+      setSuccess(t('tools.patternSaved'));
       setTimeout(() => setSuccess(''), 3000);
       // Reset form
       setPatternName('');
       setSupplier('');
       setFieldPatterns(new Map());
       setLineOffsets(new Map());
-      setSelectedLabel('');
     } catch (err: any) {
       setError(err.message || 'Error saving pattern');
     } finally {
@@ -674,14 +672,14 @@ export default function TextPatternView() {
         {mode === 'edit' && editingPattern && (
           <div className="flex justify-between items-center">
             <div className="text-sm text-slate-400">
-              Editing: <span className="text-slate-300 font-semibold">{editingPattern.name}</span>
+              {t('tools.editing')}: <span className="text-slate-300 font-semibold">{editingPattern.name}</span>
               {sharedPdfFilename && (
                 <span className="text-slate-400 ml-2">
                   | Filename: <span className="text-slate-300">{sharedPdfFilename}</span>
                 </span>
               )}
               <br />
-              Existing fields will be preserved. Add new fields below.
+              {t('tools.existingFieldsPreserved')}
             </div>
             <Button
               onClick={() => {
@@ -692,18 +690,17 @@ export default function TextPatternView() {
               variant="outline"
               className="bg-slate-700 border-slate-600 text-slate-100"
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         )}
         
         <div className="flex gap-4 items-center">
           <div className="flex gap-2 items-center">
-            <Label className="text-slate-300">Field</Label>
+            <Label className="text-slate-300">{t('tools.field')}</Label>
             <Select value={currentField} onValueChange={(value) => {
               setCurrentField(value);
-              setSelectedLabel('');
-              setSelectedLabelStart(null);
+      setSelectedLabelStart(null);
               setHighlightedLine(null);
             }}>
               <SelectTrigger className="w-48 bg-slate-700 border-slate-600 text-slate-100">
@@ -730,7 +727,7 @@ export default function TextPatternView() {
           </div>
           
           <div className="flex gap-2 items-center">
-            <Label className="text-slate-300">Line Offset:</Label>
+            <Label className="text-slate-300">{t('tools.lineOffset')}</Label>
             <Button
               type="button"
               size="sm"
@@ -757,12 +754,12 @@ export default function TextPatternView() {
           {fieldPatterns.get(currentField) && (
             <div className="flex gap-2 items-center text-sm text-slate-400">
               <span>
-                Label: "{fieldPatterns.get(currentField)!.label_text}" 
-                (offset: {fieldPatterns.get(currentField)!.line_offset})
+                {t('tools.label')}: "{fieldPatterns.get(currentField)!.label_text}" 
+                ({t('tools.offset')}: {fieldPatterns.get(currentField)!.line_offset})
               </span>
               <span className="text-slate-500">|</span>
               <span className="text-slate-300">
-                Value: "{predictExtractedValue(
+                {t('tools.value')}: "{predictExtractedValue(
                   currentField,
                   fieldPatterns.get(currentField)!.label_text,
                   fieldPatterns.get(currentField)!.line_offset
@@ -787,47 +784,46 @@ export default function TextPatternView() {
           />
           {highlightedLine !== null && (
             <div className="text-xs text-slate-400 mt-1">
-              Highlighted line {highlightedLine + 1} (target line for extraction)
+              {t('tools.highlightedLine', { line: highlightedLine + 1 })}
             </div>
           )}
           <div className="text-sm text-slate-400">
-            Instructions: Select the label text in the PDF. Use +/- buttons to adjust line offset (default: 0). 
-            If offset is 0, the value will be automatically extracted from the same line after the label.
+            {t('tools.instructions')}
           </div>
         </div>
         
         <div className="space-y-4">
           <div>
-            <Label className="text-slate-300">Pattern Name</Label>
+            <Label className="text-slate-300">{t('tools.patternName')}</Label>
             <Input
               value={patternName}
               onChange={(e) => setPatternName(e.target.value)}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="e.g., Engie Gas Bill"
+              placeholder={t('tools.patternNamePlaceholder')}
             />
           </div>
           
           <div>
-            <Label className="text-slate-300">Supplier</Label>
+            <Label className="text-slate-300">{t('tools.supplier')}</Label>
             <Input
               value={supplier}
               onChange={(e) => setSupplier(e.target.value)}
               className="bg-slate-700 border-slate-600 text-slate-100"
-              placeholder="Supplier name (used as legal_name if payment not selected)"
+              placeholder={t('tools.supplierPlaceholder')}
             />
           </div>
           
           <div>
-            <Label className="text-slate-300">Bill Type</Label>
+            <Label className="text-slate-300">{t('bill.billType')}</Label>
             <Select value={billType} onValueChange={(v: any) => setBillType(v)}>
               <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-slate-700 border-slate-600">
-                <SelectItem value="utilities" className="text-slate-100">Utilities</SelectItem>
-                <SelectItem value="rent" className="text-slate-100">Rent</SelectItem>
-                <SelectItem value="ebloc" className="text-slate-100">E-Bloc</SelectItem>
-                <SelectItem value="other" className="text-slate-100">Other</SelectItem>
+                <SelectItem value="utilities" className="text-slate-100">{t('bill.utilities')}</SelectItem>
+                <SelectItem value="rent" className="text-slate-100">{t('bill.rent')}</SelectItem>
+                <SelectItem value="ebloc" className="text-slate-100">{t('bill.ebloc')}</SelectItem>
+                <SelectItem value="other" className="text-slate-100">{t('bill.other')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -838,7 +834,7 @@ export default function TextPatternView() {
             className="bg-emerald-600 hover:bg-emerald-700"
           >
             <Save className="w-4 h-4 mr-2" />
-            {mode === 'create' ? 'Save Pattern' : 'Update Pattern'}
+            {mode === 'create' ? t('tools.savePattern') : t('tools.updatePattern')}
           </Button>
         </div>
       </div>
@@ -847,7 +843,7 @@ export default function TextPatternView() {
 
   const handleUpdatePattern = async () => {
     if (!token || !editingPattern || !patternName || fieldPatterns.size === 0) {
-      setError('Pattern name and at least one field pattern required');
+      setError(t('tools.patternNameRequired'));
       return;
     }
     
@@ -877,7 +873,7 @@ export default function TextPatternView() {
         throw new Error(errorData.detail || errorData.message || 'Failed to update pattern');
       }
       
-      setSuccess('Pattern updated successfully');
+      setSuccess(t('tools.patternUpdated'));
       setTimeout(() => setSuccess(''), 3000);
       
       // Reload pattern matches if PDF is still loaded
@@ -914,8 +910,7 @@ export default function TextPatternView() {
             setPatternName('');
             setSupplier('');
             setBillType('utilities');
-            setSelectedLabel('');
-            setSelectedLabelStart(null);
+      setSelectedLabelStart(null);
             setHighlightedLine(null);
             setCurrentField('amount');
             // Load shared PDF if available
@@ -1004,13 +999,13 @@ export default function TextPatternView() {
                   onClick={() => document.getElementById('pdf-upload')?.click()}
                 >
                   <Upload className="h-4 w-4" />
-                  Upload PDF
+                  {t('tools.uploadPdf')}
                 </Button>
               </label>
               
               {activeTab === 'create' && sharedPdfFilename && (
                 <span className="text-sm text-slate-400">
-                  Filename: <span className="text-slate-300">{sharedPdfFilename}</span>
+                  {t('tools.filename')}: <span className="text-slate-300">{sharedPdfFilename}</span>
                 </span>
               )}
               
@@ -1018,7 +1013,7 @@ export default function TextPatternView() {
                 matchingPatterns ? (
                   <div className="text-slate-400 text-sm flex items-center gap-2">
                     <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
-                    Calculating confidence...
+                    {t('tools.calculatingConfidence')}
                   </div>
                 ) : matches.length > 0 ? (
                   <Select 
@@ -1032,7 +1027,7 @@ export default function TextPatternView() {
                     disabled={loading}
                   >
                     <SelectTrigger className="w-80 bg-slate-700 border-slate-600 text-slate-100">
-                      <SelectValue placeholder="Select pattern to extract..." />
+                      <SelectValue placeholder={t('tools.selectPatternToExtract')} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-700 border-slate-600">
                       {matches.map((match) => (
@@ -1049,7 +1044,7 @@ export default function TextPatternView() {
                 matchingPatterns ? (
                   <div className="text-slate-400 text-sm flex items-center gap-2">
                     <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full"></div>
-                    Calculating confidence...
+                    {t('tools.calculatingConfidence')}
                   </div>
                 ) : editMatches.length > 0 ? (
                   <Select 
@@ -1063,7 +1058,7 @@ export default function TextPatternView() {
                     disabled={loading}
                   >
                     <SelectTrigger className="w-80 bg-slate-700 border-slate-600 text-slate-100">
-                      <SelectValue placeholder="Select pattern to edit..." />
+                      <SelectValue placeholder={t('tools.selectPatternToEdit')} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-700 border-slate-600">
                       {editMatches.map((match) => (
@@ -1088,7 +1083,7 @@ export default function TextPatternView() {
             <div className="space-y-4">
               {!pdfText && (
                 <div className="text-slate-400 text-center py-8">
-                  Upload a PDF to match against patterns
+                  {t('tools.uploadPdfToMatch')}
                 </div>
               )}
               
@@ -1101,7 +1096,7 @@ export default function TextPatternView() {
               {extractionResult && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Label className="text-slate-300">Extracted Data</Label>
+                    <Label className="text-slate-300">{t('tools.extractedData')}</Label>
                     {sharedPdfFilename && (
                       <span className="text-sm text-slate-400">
                         | Filename: <span className="text-slate-300">{sharedPdfFilename}</span>
@@ -1121,13 +1116,13 @@ export default function TextPatternView() {
               <div className="space-y-4">
                 {!pdfText && (
                   <div className="text-slate-400 text-center py-8">
-                    Upload a PDF to see matching patterns sorted by confidence level
+                    {t('tools.uploadPdfToSeeMatches')}
                   </div>
                 )}
                 
                 {pdfText && editMatches.length === 0 && !loading && (
                   <div className="text-slate-400 text-center py-8">
-                    No matching patterns found. Upload a PDF to match against existing patterns.
+                    {t('tools.noMatchingPatternsUpload')}
                   </div>
                 )}
                 
