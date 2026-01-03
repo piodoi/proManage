@@ -409,7 +409,11 @@
     "iban": "IBAN",
     "ibanPlaceholder": "RO49 AAAA 1B31 0075 9384 0000",
     "ibanHelp": "Your IBAN for receiving rent payments. Must be a valid IBAN format.",
-    "invalidIban": "Invalid IBAN format. Please check and try again."
+    "invalidIban": "Invalid IBAN format. Please check and try again.",
+    "personalEmail": "Personal Email",
+    "personalEmailPlaceholder": "your.email@example.com",
+    "personalEmailHelp": "Your email address for receiving notifications.",
+    "manageSuppliersCredentials": "Manage Suppliers Credentials"
   },
   "errors": {
     "generic": "An error occurred",

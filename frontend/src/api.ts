@@ -371,6 +371,7 @@ export type Preferences = {
   bill_currency: string;
   phone_number?: string | null;
   landlord_name?: string | null;
+  personal_email?: string | null;
   iban?: string | null;
 };
 

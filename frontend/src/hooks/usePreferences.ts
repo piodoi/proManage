@@ -14,6 +14,7 @@ export function usePreferences() {
     bill_currency: 'RON',
     phone_number: null,
     landlord_name: null,
+    personal_email: null,
     iban: null
   });
   const [loading, setLoading] = useState(true);
@@ -94,6 +95,7 @@ export function usePreferences() {
     setBillCurrency: (bill_currency: string) => savePreferences({ bill_currency }),
     setPhoneNumber: (phone_number: string | null) => savePreferences({ phone_number }),
     setLandlordName: (landlord_name: string | null) => savePreferences({ landlord_name }),
+    setPersonalEmail: (personal_email: string | null) => savePreferences({ personal_email }),
     setIban: (iban: string | null) => savePreferences({ iban }),
     savePreferences,
   };

@@ -402,7 +402,11 @@
     "iban": "IBAN",
     "ibanPlaceholder": "RO49 AAAA 1B31 0075 9384 0000",
     "ibanHelp": "IBAN-ul dvs. pentru primirea plăților de chirie. Trebuie să fie un format IBAN valid.",
-    "invalidIban": "Format IBAN invalid. Vă rugăm verificați și încercați din nou."
+    "invalidIban": "Format IBAN invalid. Vă rugăm verificați și încercați din nou.",
+    "personalEmail": "Email Personal",
+    "personalEmailPlaceholder": "email.dvs@exemplu.com",
+    "personalEmailHelp": "Adresa dvs. de email pentru primirea notificărilor.",
+    "manageSuppliersCredentials": "Gestionează Credențiale Furnizori"
   },
   "errors": {
     "generic": "A apărut o eroare",

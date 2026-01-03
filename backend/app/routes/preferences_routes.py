@@ -20,6 +20,7 @@ class PreferencesUpdate(BaseModel):
     bill_currency: Optional[str] = None
     phone_number: Optional[str] = None
     landlord_name: Optional[str] = None
+    personal_email: Optional[str] = None
     iban: Optional[str] = None
 
 
@@ -27,8 +28,32 @@ class PreferencesUpdate(BaseModel):
 async def get_preferences(current_user: TokenData = Depends(require_auth)):
     """Get current user's preferences"""
     preferences = db.get_user_preferences(current_user.user_id)
+    
+    # Auto-import personal_email from user email if not set
+    if preferences and not preferences.personal_email:
+        user = db.get_user(current_user.user_id)
+        if user:
+            preferences.personal_email = user.email
+            db.save_user_preferences(preferences)
+            logger.info(f"[Preferences] Auto-imported personal_email from user email for user {current_user.user_id}")
+    elif not preferences:
+        # Create preferences with auto-imported email
+        user = db.get_user(current_user.user_id)
+        if user:
+            preferences = UserPreferences(
+                user_id=current_user.user_id,
+                language="en",
+                view_mode="list",
+                rent_warning_days=5,
+                rent_currency="EUR",
+                bill_currency="RON",
+                personal_email=user.email
+            )
+            db.save_user_preferences(preferences)
+            logger.info(f"[Preferences] Created preferences with auto-imported personal_email for user {current_user.user_id}")
+    
     if not preferences:
-        # Return default preferences if none exist
+        # Return default preferences if none exist (fallback)
         return {
             "language": "en",
             "view_mode": "list",
@@ -37,6 +62,7 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
             "bill_currency": "RON",
             "phone_number": None,
             "landlord_name": None,
+            "personal_email": None,
             "iban": None
         }
     return {
@@ -47,6 +73,7 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
         "bill_currency": preferences.bill_currency if preferences.bill_currency else "EUR",
         "phone_number": preferences.phone_number,
         "landlord_name": preferences.landlord_name,
+        "personal_email": preferences.personal_email,
         "iban": preferences.iban
     }
 
@@ -76,6 +103,8 @@ async def save_preferences(
             existing.phone_number = data.phone_number
         if data.landlord_name is not None:
             existing.landlord_name = data.landlord_name
+        if data.personal_email is not None:
+            existing.personal_email = data.personal_email
         if data.iban is not None:
             existing.iban = data.iban
         preferences = existing
@@ -90,11 +119,12 @@ async def save_preferences(
             bill_currency=data.bill_currency if data.bill_currency else "EUR",
             phone_number=data.phone_number,
             landlord_name=data.landlord_name,
+            personal_email=data.personal_email,
             iban=data.iban
         )
     
     db.save_user_preferences(preferences)
-    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}, phone_number={'*' * 4 if preferences.phone_number else None}, landlord_name={preferences.landlord_name}, iban={'*' * 4 if preferences.iban else None}")
+    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}, phone_number={'*' * 4 if preferences.phone_number else None}, landlord_name={preferences.landlord_name}, personal_email={'*' * 4 if preferences.personal_email else None}, iban={'*' * 4 if preferences.iban else None}")
     
     return {
         "language": preferences.language,
@@ -104,6 +134,7 @@ async def save_preferences(
         "bill_currency": preferences.bill_currency if preferences.bill_currency else "EUR",
         "phone_number": preferences.phone_number,
         "landlord_name": preferences.landlord_name,
+        "personal_email": preferences.personal_email,
         "iban": preferences.iban
     }
 
