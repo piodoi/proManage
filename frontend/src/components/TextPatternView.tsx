@@ -219,11 +219,128 @@ export default function TextPatternView() {
         return currency === 'LEI' ? 'RON' : currency;
       }
       return 'RON';
+    } else if (fieldName === 'iban' && targetLine) {
+      // Remove spaces and extract IBAN (international format)
+      // IBAN format: [Country Code (2 letters)][Check Digits (2 digits)][BBAN (varies by country)]
+      const cleaned = targetLine.replace(/\s+/g, '').toUpperCase();
+      
+      // IBAN lengths by country code (most common ones)
+      const ibanLengths: { [key: string]: number } = {
+        'RO': 24, 'DE': 22, 'GB': 22, 'FR': 27, 'IT': 27, 'ES': 24, 'NL': 18,
+        'BE': 16, 'AT': 20, 'PL': 28, 'CH': 21, 'SE': 24, 'NO': 15, 'DK': 18,
+        'FI': 18, 'PT': 25, 'GR': 27, 'CZ': 24, 'HU': 28, 'IE': 22, 'SK': 24
+      };
+      
+      // Find IBAN start: country code + check digits
+      const startMatch = cleaned.match(/[A-Z]{2}\d{2}/);
+      if (startMatch) {
+        const startPos = startMatch.index!;
+        const countryCode = cleaned.substring(startPos, startPos + 2);
+        const expectedLength = ibanLengths[countryCode];
+        
+        if (expectedLength && startPos + expectedLength <= cleaned.length) {
+          const iban = cleaned.substring(startPos, startPos + expectedLength);
+          // Verify it's all alphanumeric
+          if (/^[A-Z0-9]+$/.test(iban)) {
+            return iban;
+          }
+        }
+        
+        // Fallback: try common lengths and check for bank name words after
+        const bankWords = ['BANCA', 'BANK', 'BANQUE', 'BANCO', 'BANKI', 'BANKA'];
+        for (const length of [15, 16, 18, 20, 22, 24, 27, 28, 34]) {
+          if (startPos + length <= cleaned.length) {
+            const candidate = cleaned.substring(startPos, startPos + length);
+            if (/^[A-Z0-9]+$/.test(candidate)) {
+              // Check if next chars are start of bank word
+              if (startPos + length < cleaned.length) {
+                const nextChars = cleaned.substring(startPos + length, startPos + length + 5);
+                if (!bankWords.some(w => nextChars.startsWith(w))) {
+                  return candidate;
+                }
+              } else {
+                return candidate;
+              }
+            }
+          }
+        }
+      }
+      
+      // Final fallback: match pattern
+      const ibanMatch = cleaned.match(/[A-Z]{2}\d{2}[A-Z0-9]{11,30}/);
+      if (ibanMatch) {
+        const iban = ibanMatch[0];
+        if (iban.length >= 15 && iban.length <= 34) {
+          return iban;
+        }
+      }
+      
+      return cleaned;
     } else if (fieldName === 'bill_number' && targetLine) {
-      return targetLine.replace(/^(Seria\s+ENG\s+nr\.?\s*|nr\.?\s*|No\.?\s*|Seria\s+[A-Z]+\s+nr\.?\s*)/i, '').trim();
+      // Smart prefix removal - only remove if followed by alphanumeric
+      const patterns = [
+        /^Seria\s+ENG\s+nr\.?\s+/i,
+        /^Seria\s+[A-Z]+\s+nr\.?\s+/i,
+        /^nr\.?\s+/i,
+        /^No\.\s+/i,
+        /^NO\s+/,
+        /^No\s+/i,
+      ];
+      
+      for (const pattern of patterns) {
+        const match = targetLine.match(pattern);
+        if (match) {
+          const remaining = targetLine.substring(match[0].length).trim();
+          if (remaining && /^[A-Z0-9]/i.test(remaining)) {
+            return remaining;
+          }
+        }
+      }
+      return targetLine.trim();
     } else if ((fieldName === 'due_date' || fieldName === 'bill_date') && targetLine) {
-      const dateMatch = targetLine.match(/\d{1,2}[\.\/\-]\d{1,2}[\.\/\-]\d{2,4}/);
-      return dateMatch ? dateMatch[0].trim() : targetLine;
+      // Try to parse date with month names
+      const roMonths: { [key: string]: number } = {
+        'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4, 'mai': 5, 'iunie': 6,
+        'iulie': 7, 'august': 8, 'septembrie': 9, 'octombrie': 10, 'noiembrie': 11, 'decembrie': 12
+      };
+      const enMonths: { [key: string]: number } = {
+        'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+        'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+      };
+      
+      const datePattern = /(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i;
+      const match = targetLine.match(datePattern);
+      
+      if (match) {
+        const day = parseInt(match[1]);
+        const monthName = match[2].toLowerCase();
+        const year = parseInt(match[3]);
+        
+        let month: number | undefined;
+        if (monthName in roMonths) {
+          month = roMonths[monthName];
+        } else if (monthName in enMonths) {
+          month = enMonths[monthName];
+        }
+        
+        if (month) {
+          return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+        }
+      }
+      
+      // Fallback to numeric date pattern
+      const numericMatch = targetLine.match(/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})/);
+      if (numericMatch) {
+        const day = parseInt(numericMatch[1]);
+        const month = parseInt(numericMatch[2]);
+        let year = parseInt(numericMatch[3]);
+        if (year < 100) {
+          year += year < 50 ? 2000 : 1900;
+        }
+        return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+      }
+      
+      return targetLine;
     }
     
     return targetLine;

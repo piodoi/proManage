@@ -1,0 +1,73 @@
+{
+  "id": "text_20260103_113935_e-bloc",
+  "name": "e-bloc",
+  "bill_type": "utilities",
+  "supplier": null,
+  "field_patterns": [
+    {
+      "field_name": "amount",
+      "label_text": "TOTAL DE PLATĂ:",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "currency",
+      "label_text": "Lei",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "due_date",
+      "label_text": "Data scadentă:",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "bill_date",
+      "label_text": "Data:",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "iban",
+      "label_text": "Cont curent:",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "bill_number",
+      "label_text": "NOTA DE PLATĂ PENTRU LUNA",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "contract_id",
+      "label_text": "Cod fiscal:",
+      "line_offset": 1,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "payment_details",
+      "label_text": "NOTA DE PLATĂ PENTRU LUNA",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    },
+    {
+      "field_name": "address",
+      "label_text": "Asociatia de Proprietari Bloc M6",
+      "line_offset": 0,
+      "value_text": null,
+      "value_regex": null
+    }
+  ],
+  "created_at": "2026-01-03T11:39:35.264217",
+  "updated_at": "2026-01-03T11:39:35.264225"
+}

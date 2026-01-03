@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import logging
+import asyncio
+import sys
 
 from app.routes import (
     auth_router,
@@ -34,6 +36,10 @@ logging.basicConfig(
     ],
     force=True  # Override any existing configuration
 )
+
+# Suppress harmless Windows asyncio connection cleanup errors
+# These occur when clients close connections before server cleanup completes
+logging.getLogger('asyncio').setLevel(logging.WARNING)
 
 # Ensure all our loggers are set to INFO level
 logging.getLogger('app').setLevel(logging.INFO)
@@ -74,6 +80,14 @@ async def startup_event():
     """Load extraction patterns and initialize suppliers from JSON files on startup."""
     load_extraction_patterns_from_json()
     initialize_suppliers()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    logger.info("Shutting down application...")
+    # Give connections time to close gracefully
+    await asyncio.sleep(0.1)
 
 
 @app.get("/health")
