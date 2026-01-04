@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 import AddressWarningDialog from './dialogs/AddressWarningDialog';
 import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
-import SupplierSyncDialog from './dialogs/SupplierSyncDialog';
+import AllPropertiesSyncDialog from './dialogs/AllPropertiesSyncDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 
@@ -298,9 +298,9 @@ export default function PropertyBillsView({
               {parsingPdf ? t('common.loading') : t('bill.uploadPdf')}
             </Button>
             {property && (
-              <SupplierSyncDialog
+              <AllPropertiesSyncDialog
                 token={token}
-                property={property}
+                properties={[property]}
                 open={showSyncDialog}
                 onOpenChange={setShowSyncDialog}
                 onSuccess={() => {

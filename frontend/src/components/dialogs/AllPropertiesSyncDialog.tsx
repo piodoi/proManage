@@ -20,7 +20,7 @@ type SupplierGroup = {
 
 type AllPropertiesSyncDialogProps = {
   token: string | null;
-  properties: Property[];
+  properties: Property[]; // Can be single property or multiple
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -56,6 +56,10 @@ export default function AllPropertiesSyncDialog({
   const abortControllerRef = useRef<AbortController | null>(null);
   const progressMapRef = useRef<Map<string, SupplierProgress>>(new Map());
   const discoveredBillsRef = useRef<DiscoveredBill[]>([]);
+  
+  // Detect if this is a single property sync
+  const isSingleProperty = properties.length === 1;
+  const singleProperty = isSingleProperty ? properties[0] : null;
 
   // Load all property suppliers when dialog opens
   useEffect(() => {
@@ -329,59 +333,90 @@ export default function AllPropertiesSyncDialog({
     const newSyncId = crypto.randomUUID();
     setSyncId(newSyncId);
 
-    // Build sync request for all properties
-    // Group by supplier_id only (backend will sync once per supplier, then distribute bills)
-    const syncGroups: Array<{ supplier_id: string; properties: Array<{ property_id: string; contract_id?: string }> }> = [];
-    
-    selectedSupplierKeys.forEach(supplierKey => {
-      const supplierGroup = supplierGroups.find(g => (g.supplier_id || g.supplier_name) === supplierKey);
-      if (!supplierGroup || !supplierGroup.has_credentials) return;
-      
-      // Collect all properties for this supplier with their contract_ids
-      const propertyMappings: Array<{ property_id: string; contract_id?: string }> = [];
-      
-      supplierGroup.property_suppliers.forEach(ps => {
-        if (!ps.has_credentials) return;
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const abortController = new AbortController();
+
+    let url: string;
+    let requestOptions: RequestInit;
+
+    if (isSingleProperty) {
+      // Single property sync - use single property endpoint
+      const selectedSupplierIds: string[] = [];
+      selectedSupplierKeys.forEach(supplierKey => {
+        const supplierGroup = supplierGroups.find(g => (g.supplier_id || g.supplier_name) === supplierKey);
+        if (!supplierGroup || !supplierGroup.has_credentials) return;
         
-        const property = properties.find(p => 
-          allPropertySuppliers.get(p.id)?.some(ps2 => ps2.id === ps.id)
-        );
-        if (property) {
-          propertyMappings.push({
-            property_id: property.id,
-            contract_id: ps.contract_id || undefined,
+        // Get property supplier IDs for this supplier
+        supplierGroup.property_suppliers.forEach(ps => {
+          if (ps.has_credentials) {
+            selectedSupplierIds.push(ps.id);
+          }
+        });
+      });
+      
+      url = `${apiBaseUrl}/suppliers/sync/${singleProperty!.id}?sync_id=${newSyncId}&supplier_ids=${encodeURIComponent(selectedSupplierIds.join(','))}&discover_only=true`;
+      requestOptions = {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream',
+        },
+        signal: abortController.signal,
+      };
+    } else {
+      // All properties sync - use sync-all endpoint
+      const syncGroups: Array<{ supplier_id: string; properties: Array<{ property_id: string; contract_id?: string }> }> = [];
+      
+      selectedSupplierKeys.forEach(supplierKey => {
+        const supplierGroup = supplierGroups.find(g => (g.supplier_id || g.supplier_name) === supplierKey);
+        if (!supplierGroup || !supplierGroup.has_credentials) return;
+        
+        // Collect all properties for this supplier with their contract_ids
+        const propertyMappings: Array<{ property_id: string; contract_id?: string }> = [];
+        
+        supplierGroup.property_suppliers.forEach(ps => {
+          if (!ps.has_credentials) return;
+          
+          const property = properties.find(p => 
+            allPropertySuppliers.get(p.id)?.some(ps2 => ps2.id === ps.id)
+          );
+          if (property) {
+            propertyMappings.push({
+              property_id: property.id,
+              contract_id: ps.contract_id || undefined,
+            });
+          }
+        });
+        
+        // Create one sync group per supplier (not per contract_id)
+        if (propertyMappings.length > 0) {
+          syncGroups.push({
+            supplier_id: supplierGroup.supplier_id,
+            properties: propertyMappings,
           });
         }
       });
       
-      // Create one sync group per supplier (not per contract_id)
-      if (propertyMappings.length > 0) {
-        syncGroups.push({
-          supplier_id: supplierGroup.supplier_id,
-          properties: propertyMappings,
-        });
-      }
-    });
-    
-    const syncData = {
-      sync_id: newSyncId,
-      supplier_groups: syncGroups,
-      discover_only: true,
-    };
+      const syncData = {
+        sync_id: newSyncId,
+        supplier_groups: syncGroups,
+        discover_only: true,
+      };
 
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const abortController = new AbortController();
+      url = `${apiBaseUrl}/suppliers/sync-all`;
+      requestOptions = {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify(syncData),
+        signal: abortController.signal,
+      };
+    }
 
-    fetch(`${apiBaseUrl}/suppliers/sync-all`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-      },
-      body: JSON.stringify(syncData),
-      signal: abortController.signal,
-    })
+    fetch(url, requestOptions)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -515,9 +550,8 @@ export default function AllPropertiesSyncDialog({
       progressMapRef.current.set(progressKey, supplierProgress);
       setProgress(Array.from(progressMapRef.current.values()));
 
-      // Legacy support: handle bills in progress event (shouldn't happen with new code)
+      // Handle bills in progress event (for single property sync compatibility)
       if (data.bills && Array.isArray(data.bills)) {
-        // Legacy support: handle bills in progress event (shouldn't happen with new code)
         data.bills.forEach((bill: any) => {
           // Extract supplier name (remove property info if present)
           let supplier_name = data.supplier_name;
@@ -526,8 +560,11 @@ export default function AllPropertiesSyncDialog({
             supplier_name = supplier_name.substring(0, dashIndex);
           }
           
-          // Each bill should have exactly one property_id assigned by backend
-          const property_id = bill.property_id;
+          // For single property sync, use the single property's ID
+          // For all properties sync, use property_id from bill (assigned by backend)
+          const property_id = isSingleProperty 
+            ? singleProperty!.id 
+            : (bill.property_id || (properties.length === 1 ? properties[0].id : undefined));
           const property = property_id ? properties.find(p => p.id === property_id) : undefined;
           const property_name = property?.name;
           
@@ -546,11 +583,21 @@ export default function AllPropertiesSyncDialog({
           };
           discoveredBillsRef.current.push(discoveredBill);
         });
+        // Update state to show bills incrementally
+        setDiscoveredBills([...discoveredBillsRef.current]);
+        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
       }
     } else if (eventType === 'complete') {
       // Stop syncing, but if we have bills, switch to bills stage
       setSyncing(false);
       if (discoveredBillsRef.current.length > 0) {
+        setDiscoveredBills([...discoveredBillsRef.current]);
+        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+        setStage('bills');
+      }
+    } else if (eventType === 'progress' && data.status === 'completed' && !syncing) {
+      // For single property sync, check if all suppliers are done
+      if (isSingleProperty && discoveredBillsRef.current.length > 0) {
         setDiscoveredBills([...discoveredBillsRef.current]);
         setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
         setStage('bills');
@@ -583,7 +630,10 @@ export default function AllPropertiesSyncDialog({
     if (syncId && token) {
       try {
         const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        await fetch(`${apiBaseUrl}/suppliers/sync-all/cancel?sync_id=${syncId}`, {
+        const cancelUrl = isSingleProperty
+          ? `${apiBaseUrl}/suppliers/sync/${singleProperty!.id}/cancel?sync_id=${syncId}`
+          : `${apiBaseUrl}/suppliers/sync-all/cancel?sync_id=${syncId}`;
+        await fetch(cancelUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -658,7 +708,11 @@ export default function AllPropertiesSyncDialog({
       
       const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       
-      const response = await fetch(`${apiBaseUrl}/suppliers/sync-all/save-bills`, {
+      const saveUrl = isSingleProperty
+        ? `${apiBaseUrl}/suppliers/sync/${singleProperty!.id}/save-bills`
+        : `${apiBaseUrl}/suppliers/sync-all/save-bills`;
+      
+      const response = await fetch(saveUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -693,13 +747,13 @@ export default function AllPropertiesSyncDialog({
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-slate-100">
-            {stage === 'suppliers' && t('supplier.syncAllProperties')}
-            {stage === 'scraping' && t('supplier.syncBills')}
+            {stage === 'suppliers' && (isSingleProperty ? t('supplier.selectSuppliers') : t('supplier.syncAllProperties'))}
+            {stage === 'scraping' && t('supplier.syncProgress')}
             {stage === 'bills' && t('supplier.selectBills')}
           </DialogTitle>
           <DialogDescription className="text-slate-400 sr-only">
-            {stage === 'suppliers' && t('supplier.syncAllProperties')}
-            {stage === 'scraping' && t('supplier.syncBills')}
+            {stage === 'suppliers' && (isSingleProperty ? t('supplier.selectSuppliers') : t('supplier.syncAllProperties'))}
+            {stage === 'scraping' && t('supplier.syncProgress')}
             {stage === 'bills' && t('supplier.selectBills')}
           </DialogDescription>
         </DialogHeader>
