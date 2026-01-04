@@ -30,6 +30,7 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
   const [personalEmailInput, setPersonalEmailInput] = useState<string>('');
   const [ibanInput, setIbanInput] = useState<string>('');
   const [ibanError, setIbanError] = useState<string>('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     // Get from sessionStorage if available, otherwise default
     return sessionStorage.getItem('settingsActiveTab') || 'subscription';
@@ -68,6 +69,16 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
     setIbanInput(preferences.iban || '');
   }, [preferences.iban]);
 
+  // Check if there are unsaved changes
+  useEffect(() => {
+    const phoneChanged = (phoneNumberInput.trim() || null) !== (preferences.phone_number || null);
+    const landlordChanged = (landlordNameInput.trim() || null) !== (preferences.landlord_name || null);
+    const emailChanged = (personalEmailInput.trim() || null) !== (preferences.personal_email || null);
+    const ibanChanged = (ibanInput.replace(/\s+/g, '').trim() || null) !== (preferences.iban || null);
+    
+    setHasUnsavedChanges(phoneChanged || landlordChanged || emailChanged || ibanChanged);
+  }, [phoneNumberInput, landlordNameInput, personalEmailInput, ibanInput, preferences.phone_number, preferences.landlord_name, preferences.personal_email, preferences.iban]);
+
   const handleSavePersonalDetails = () => {
     // Validate IBAN if provided
     if (ibanInput.trim()) {
@@ -85,6 +96,9 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
     setPhoneNumber(phoneNumberInput.trim() || null);
     setLandlordName(landlordNameInput.trim() || null);
     setPersonalEmail(personalEmailInput.trim() || null);
+    
+    // Reset unsaved changes flag after save
+    setHasUnsavedChanges(false);
   };
 
   const handleIbanChange = (value: string) => {
@@ -259,6 +273,7 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
             <Button
               onClick={handleSavePersonalDetails}
               className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={!hasUnsavedChanges || !!ibanError}
             >
               {t('common.save')}
             </Button>
