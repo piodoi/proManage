@@ -198,10 +198,34 @@ export default function RenterView() {
                       <TableCell className="text-slate-200">{item.bill.description}</TableCell>
                       <TableCell className="text-slate-300">{t(`bill.${item.bill.bill_type}`)}</TableCell>
                       <TableCell className="text-slate-200">
-                        {item.bill.amount.toFixed(2)} {item.bill.currency || 'RON'}
+                        {item.bill.currency && item.bill.currency !== 'RON' ? (
+                          <div>
+                            <div>{item.bill.amount.toFixed(2)} {item.bill.currency}</div>
+                            {balance?.exchange_rates && (
+                              <div className="text-xs text-slate-400">
+                                {(item.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span>{item.bill.amount.toFixed(2)} RON</span>
+                        )}
                       </TableCell>
-                      <TableCell className={item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
-                        {item.remaining.toFixed(2)} {item.bill.currency || 'RON'}
+                      <TableCell className={item.bill.status === 'paid' ? 'text-green-400' : item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
+                        {item.bill.status === 'paid' ? (
+                          '0.00'
+                        ) : item.bill.currency && item.bill.currency !== 'RON' ? (
+                          <div>
+                            <div>{item.remaining.toFixed(2)} {item.bill.currency}</div>
+                            {balance?.exchange_rates && (
+                              <div className="text-xs text-slate-400">
+                                {(item.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span>{item.remaining.toFixed(2)} RON</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-slate-300">
                         {new Date(item.bill.due_date).toLocaleDateString()}
