@@ -57,20 +57,29 @@ async def renter_bills(token: str):
     renter = db.get_renter_by_token(token)
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
-    # Get bills for this property that either apply to all renters (renter_id is None) or to this specific renter
+    
     all_bills = db.list_bills(property_id=renter.property_id)
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
+    
+    bill_ids = [bill.id for bill in bills]
+    all_payments = db.list_payments_for_bills(bill_ids)
+    payments_by_bill = {}
+    for payment in all_payments:
+        if payment.bill_id not in payments_by_bill:
+            payments_by_bill[payment.bill_id] = []
+        payments_by_bill[payment.bill_id].append(payment)
+    
     result = []
     for bill in bills:
-        # Calculate and update status based on due date
         bill = calculate_bill_status(bill)
-        payments = db.list_payments(bill_id=bill.id)
+        payments = payments_by_bill.get(bill.id, [])
         paid_amount = sum(p.amount for p in payments if p.status == PaymentStatus.COMPLETED)
         result.append({
             "bill": bill,
             "paid_amount": paid_amount,
             "remaining": bill.amount - paid_amount,
         })
+    
     return result
 
 
@@ -80,42 +89,42 @@ async def renter_balance(token: str):
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
     
-    # Get property to access landlord_id
     prop = db.get_property(renter.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     
-    # Get landlord's preferences to determine currency
     preferences = db.get_user_preferences(prop.landlord_id)
     bill_currency = preferences.bill_currency if preferences and preferences.bill_currency else "RON"
     
-    # Get exchange rates
     exchange_rates = await get_exchange_rates()
     
-    # Get bills for this property that either apply to all renters (renter_id is None) or to this specific renter
     all_bills = db.list_bills(property_id=renter.property_id)
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
     
-    # Calculate totals in original currency (bills are stored in their original currency)
+    bill_ids = [bill.id for bill in bills]
+    all_payments = db.list_payments_for_bills(bill_ids)
+    payments_by_bill = {}
+    for payment in all_payments:
+        if payment.bill_id not in payments_by_bill:
+            payments_by_bill[payment.bill_id] = []
+        payments_by_bill[payment.bill_id].append(payment)
+    
     total_due_original = 0.0
     total_paid_original = 0.0
     
     for bill in bills:
         if bill.status != BillStatus.PAID:
-            # Convert bill amount from bill currency to target currency
             bill_currency_original = bill.currency if bill.currency else "RON"
             total_due_original += convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
         
-        payments = db.list_payments(bill_id=bill.id)
-        for payment in payments:
+        bill_payments = payments_by_bill.get(bill.id, [])
+        for payment in bill_payments:
             if payment.status == PaymentStatus.COMPLETED:
-                # Payments are stored in the same currency as the bill
                 payment_currency_original = bill.currency if bill.currency else "RON"
                 total_paid_original += convert_currency(payment.amount, payment_currency_original, bill_currency, exchange_rates)
     
     balance_original = total_due_original - total_paid_original
     
-    # Build response
     response = {
         "total_due": total_due_original,
         "total_paid": total_paid_original,
@@ -124,7 +133,6 @@ async def renter_balance(token: str):
         "exchange_rates": exchange_rates,
     }
     
-    # If currency is EUR, also include RON conversion
     if bill_currency == "EUR":
         response["total_due_ron"] = convert_currency(total_due_original, "EUR", "RON", exchange_rates)
         response["total_paid_ron"] = convert_currency(total_paid_original, "EUR", "RON", exchange_rates)

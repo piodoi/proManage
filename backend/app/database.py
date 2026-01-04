@@ -375,6 +375,16 @@ class Database:
                 results = conn.execute(payments_table.select()).fetchall()
             return [_deserialize(Payment, r.data) for r in results]
 
+    def list_payments_for_bills(self, bill_ids: list[str]) -> list[Payment]:
+        """Fetch all payments for multiple bills at once (avoids N+1 queries)."""
+        if not bill_ids:
+            return []
+        with engine.connect() as conn:
+            results = conn.execute(
+                payments_table.select().where(payments_table.c.bill_id.in_(bill_ids))
+            ).fetchall()
+            return [_deserialize(Payment, r.data) for r in results]
+
     def save_payment(self, payment: Payment) -> Payment:
         with engine.connect() as conn:
             existing = conn.execute(

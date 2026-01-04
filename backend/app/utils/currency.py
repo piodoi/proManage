@@ -1,6 +1,8 @@
 """Currency conversion utilities."""
 import httpx
+import asyncio
 from typing import Dict
+from datetime import datetime, timedelta
 
 # Default exchange rates (fallback if API fails)
 DEFAULT_EXCHANGE_RATES = {
@@ -9,23 +11,62 @@ DEFAULT_EXCHANGE_RATES = {
     "RON": 4.97,
 }
 
+# Cache for exchange rates
+_exchange_rates_cache: Dict[str, float] | None = None
+_cache_timestamp: datetime | None = None
+_fetch_in_progress: bool = False
+CACHE_DURATION_MINUTES = 60  # Cache for 1 hour
 
-async def get_exchange_rates() -> Dict[str, float]:
-    """Fetch current exchange rates from API. Returns rates relative to EUR."""
+
+async def _fetch_rates_background():
+    """Background task to fetch exchange rates without blocking."""
+    global _exchange_rates_cache, _cache_timestamp, _fetch_in_progress
+    
+    if _fetch_in_progress:
+        return
+    
+    _fetch_in_progress = True
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get("https://api.exchangerate-api.com/v4/latest/EUR")
             if response.status_code == 200:
                 data = response.json()
-                return {
+                rates = {
                     "EUR": 1.0,
                     "USD": data.get("rates", {}).get("USD", DEFAULT_EXCHANGE_RATES["USD"]),
                     "RON": data.get("rates", {}).get("RON", DEFAULT_EXCHANGE_RATES["RON"]),
                 }
+                # Update cache
+                _exchange_rates_cache = rates
+                _cache_timestamp = datetime.now()
     except Exception:
         pass
-    # Fallback to default rates
-    return DEFAULT_EXCHANGE_RATES.copy()
+    finally:
+        _fetch_in_progress = False
+
+
+async def get_exchange_rates() -> Dict[str, float]:
+    """Get exchange rates instantly from cache, fetch in background if needed."""
+    global _exchange_rates_cache, _cache_timestamp
+    
+    # Check if cache needs refresh
+    needs_refresh = False
+    if _exchange_rates_cache is None or _cache_timestamp is None:
+        needs_refresh = True
+    else:
+        age = datetime.now() - _cache_timestamp
+        if age >= timedelta(minutes=CACHE_DURATION_MINUTES):
+            needs_refresh = True
+    
+    # If cache needs refresh, trigger background fetch (don't wait for it)
+    if needs_refresh and not _fetch_in_progress:
+        asyncio.create_task(_fetch_rates_background())
+    
+    # Return cached rates immediately, or defaults if no cache exists
+    if _exchange_rates_cache is not None:
+        return _exchange_rates_cache.copy()
+    else:
+        return DEFAULT_EXCHANGE_RATES.copy()
 
 
 def convert_currency(
