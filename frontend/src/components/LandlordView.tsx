@@ -15,6 +15,7 @@ import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { FileText } from 'lucide-react';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 type LandlordViewProps = {
   token: string | null;
@@ -37,28 +38,11 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
   const [showAllPropertiesSync, setShowAllPropertiesSync] = useState(false);
   const viewMode = (preferences.view_mode as 'list' | 'grid') || 'list';
-  const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
+  const { exchangeRates } = useExchangeRates();
 
   useEffect(() => {
     loadData();
-    loadExchangeRates();
   }, [token]);
-
-  const loadExchangeRates = async () => {
-    try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/EUR');
-      if (!response.ok) throw new Error('Failed to fetch exchange rates');
-      const data = await response.json();
-      setExchangeRates({
-        EUR: 1,
-        USD: data.rates?.USD || 1.1,
-        RON: data.rates?.RON || 4.97,
-      });
-    } catch (err) {
-      console.error('[LandlordView] Failed to load exchange rates:', err);
-      setExchangeRates({ EUR: 1, USD: 1.1, RON: 4.97 });
-    }
-  };
 
   const handleError = (err: unknown) => {
     const message = err instanceof Error ? err.message : t('errors.generic');

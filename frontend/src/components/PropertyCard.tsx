@@ -11,6 +11,7 @@ import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDi
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
+import { convertCurrency, formatAmount } from '../utils/currency';
 
 type PropertyCardProps = {
   token: string | null;
@@ -197,8 +198,8 @@ export default function PropertyCard({
               {renters.map((renter) => {
                 const rentAmountEUR = renter.rent_amount_eur || 0;
                 const rentAmountRON = rentAmountEUR > 0
-                  ? (rentAmountEUR * exchangeRates.RON).toFixed(2)
-                  : '0.00';
+                  ? convertCurrency(rentAmountEUR, 'EUR', 'RON', exchangeRates)
+                  : 0;
 
                 return (
                   <div key={renter.id} className="flex items-center justify-between text-sm">
@@ -208,8 +209,8 @@ export default function PropertyCard({
                         <span className="text-xs text-slate-400">
                           {rentAmountEUR > 0 && (
                             <>
-                              <span>{rentAmountEUR.toFixed(2)} EUR</span>
-                              <span className="ml-1">({rentAmountRON} RON)</span>
+                              <span>{formatAmount(rentAmountEUR, 'EUR')}</span>
+                              <span className="ml-1">({formatAmount(rentAmountRON, 'RON')})</span>
                             </>
                           )}
                           {renter.rent_day && (

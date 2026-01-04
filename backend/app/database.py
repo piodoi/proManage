@@ -20,9 +20,30 @@ DATABASE_URL = os.environ.get(
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"check_same_thread": False},
+        connect_args={
+            "check_same_thread": False,
+            "timeout": 30.0,  # Wait up to 30 seconds for locks to clear
+        },
         pool_pre_ping=True,
+        poolclass=QueuePool,  # Use connection pooling even for SQLite
+        pool_size=1,  # Single connection for SQLite to prevent corruption
+        max_overflow=0,  # No overflow connections
+        echo=False,  # Set to True for SQL debugging
     )
+    
+    # Enable WAL mode for better concurrency and data safety
+    from sqlalchemy import event
+    
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
+        cursor.execute("PRAGMA synchronous=NORMAL")  # Balance safety and speed
+        cursor.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
+        cursor.execute("PRAGMA temp_store=MEMORY")  # Use memory for temp tables
+        cursor.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
+        cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache (negative = KB)
+        cursor.close()
 else:
     engine = create_engine(
         DATABASE_URL,

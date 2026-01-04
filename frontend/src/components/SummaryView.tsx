@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '../lib/i18n';
 import { useAuth } from '../App';
 import { usePreferences } from '../hooks/usePreferences';
+import { useExchangeRates } from '../hooks/useExchangeRates';
+import { convertCurrency } from '../utils/currency';
 
 export default function SummaryView() {
   const { t } = useI18n();
@@ -17,30 +19,13 @@ export default function SummaryView() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [exchangeRates, setExchangeRates] = useState<{ EUR: number; USD: number; RON: number }>({ EUR: 1, USD: 1, RON: 4.97 });
+  const { exchangeRates } = useExchangeRates();
 
   useEffect(() => {
     if (token) {
       loadData();
-      loadExchangeRates();
     }
   }, [token]);
-
-  const loadExchangeRates = async () => {
-    try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/EUR');
-      if (!response.ok) throw new Error('Failed to fetch exchange rates');
-      const data = await response.json();
-      setExchangeRates({
-        EUR: 1,
-        USD: data.rates?.USD || 1.1,
-        RON: data.rates?.RON || 4.97,
-      });
-    } catch (err) {
-      console.error('[SummaryView] Failed to load exchange rates:', err);
-      setExchangeRates({ EUR: 1, USD: 1.1, RON: 4.97 });
-    }
-  };
 
   const loadData = async () => {
     if (!token) return;
@@ -66,42 +51,6 @@ export default function SummaryView() {
       setLoading(false);
     }
   };
-
-  // Convert bill amount from its currency to target currency using exchange rates
-  const convertBillAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string): number => {
-    if (fromCurrency === toCurrency) return amount;
-    
-    const fromUpper = fromCurrency.toUpperCase();
-    const toUpper = toCurrency.toUpperCase();
-    
-    // Exchange rates are relative to EUR: rates.EUR = 1, rates.USD = USD per EUR, rates.RON = RON per EUR
-    // Convert: fromCurrency -> EUR -> toCurrency
-    
-    // Step 1: Convert from source currency to EUR
-    let amountInEUR = 0;
-    if (fromUpper === 'EUR') {
-      amountInEUR = amount;
-    } else if (fromUpper === 'USD') {
-      amountInEUR = amount / exchangeRates.USD;
-    } else if (fromUpper === 'RON') {
-      amountInEUR = amount / exchangeRates.RON;
-    } else {
-      // Unknown currency, assume RON
-      amountInEUR = amount / exchangeRates.RON;
-    }
-    
-    // Step 2: Convert from EUR to target currency
-    if (toUpper === 'EUR') {
-      return amountInEUR;
-    } else if (toUpper === 'USD') {
-      return amountInEUR * exchangeRates.USD;
-    } else if (toUpper === 'RON') {
-      return amountInEUR * exchangeRates.RON;
-    } else {
-      // Unknown currency, assume RON
-      return amountInEUR * exchangeRates.RON;
-    }
-  }, [exchangeRates]);
 
   const summaryData = useMemo(() => {
     const today = new Date();
@@ -228,24 +177,24 @@ export default function SummaryView() {
       });
       const totalRentDue = rentBillsDue.reduce((sum, b) => {
         const billCurrencyValue = b.currency || 'RON';
-        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+        return sum + convertCurrency(b.amount, billCurrencyValue, billCurrency, exchangeRates);
       }, 0);
       const totalRentOverdue = rentBillsOverdue.reduce((sum, b) => {
         const billCurrencyValue = b.currency || 'RON';
-        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+        return sum + convertCurrency(b.amount, billCurrencyValue, billCurrency, exchangeRates);
       }, 0);
       const totalOtherBillsDue = billsDue.reduce((sum, b) => {
         const billCurrencyValue = b.currency || 'RON';
-        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+        return sum + convertCurrency(b.amount, billCurrencyValue, billCurrency, exchangeRates);
       }, 0);
       const totalBillsDue = totalRentDue + totalOtherBillsDue; // For property display
       const totalOverdue = overdueBills.reduce((sum, b) => {
         const billCurrencyValue = b.currency || 'RON';
-        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+        return sum + convertCurrency(b.amount, billCurrencyValue, billCurrency, exchangeRates);
       }, 0);
       const totalRentDueSoon = rentBillsDueSoon.reduce((sum, b) => {
         const billCurrencyValue = b.currency || 'RON';
-        return sum + convertBillAmount(b.amount, billCurrencyValue, billCurrency);
+        return sum + convertCurrency(b.amount, billCurrencyValue, billCurrency, exchangeRates);
       }, 0);
       
       const propertyData = {
@@ -320,7 +269,7 @@ export default function SummaryView() {
       overallRentOverdue: totalsWithRenters.totalRentOverdue + totalsWithoutRenters.totalRentOverdue,
       overallRentDueSoon: totalsWithRenters.totalRentDueSoon + totalsWithoutRenters.totalRentDueSoon,
     };
-  }, [properties, renters, bills, rentWarningDays, billCurrency, exchangeRates, convertBillAmount]);
+  }, [properties, renters, bills, rentWarningDays, billCurrency, exchangeRates]);
 
   const formatAmount = (amount: number, currency: string = billCurrency) => {
     return new Intl.NumberFormat('ro-RO', {
@@ -332,7 +281,7 @@ export default function SummaryView() {
   // Format bill amount in preferred bill currency
   const formatBillAmount = (bill: Bill) => {
     const billCurrencyValue = bill.currency || 'RON';
-    const convertedAmount = convertBillAmount(bill.amount, billCurrencyValue, billCurrency);
+    const convertedAmount = convertCurrency(bill.amount, billCurrencyValue, billCurrency, exchangeRates);
     
     // If bill is already in preferred currency, just show it
     if (billCurrencyValue.toUpperCase() === billCurrency.toUpperCase()) {
@@ -363,7 +312,7 @@ export default function SummaryView() {
     }
     
     // Convert bill amount to RON first (if needed)
-    const amountInRON = convertBillAmount(amount, billCurrencyValue, 'RON');
+    const amountInRON = convertCurrency(amount, billCurrencyValue, 'RON', exchangeRates);
     
     const rentCurrencyUpper = rentCurrency.toUpperCase();
     
