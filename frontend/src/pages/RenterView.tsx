@@ -1,27 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, RenterInfo, RenterBill, RenterBalance, PaymentResponse } from '../api';
+import { api, RenterInfo, RenterBill, RenterBalance } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Building2, Receipt, CreditCard, Banknote, Copy } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Building2, Receipt, CreditCard, Banknote } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 
 export default function RenterView() {
   const { token } = useParams<{ token: string }>();
-  const { t } = useI18n();
+  const { t, language, setLanguage } = useI18n();
   const [info, setInfo] = useState<RenterInfo | null>(null);
   const [bills, setBills] = useState<RenterBill[]>([]);
   const [balance, setBalance] = useState<RenterBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [payingBill, setPayingBill] = useState<RenterBill | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'payment_service'>('bank_transfer');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentResult, setPaymentResult] = useState<PaymentResponse | null>(null);
+
+  // Default to Romanian for renters
+  useEffect(() => {
+    const savedLang = localStorage.getItem('language');
+    if (!savedLang) {
+      setLanguage('ro');
+    }
+  }, [setLanguage]);
 
   useEffect(() => {
     if (token) {
@@ -47,30 +56,8 @@ export default function RenterView() {
     }
   };
 
-  const handlePay = async () => {
-    if (!token || !payingBill) return;
-    try {
-      const result = await api.renter.pay(token, {
-        bill_id: payingBill.bill.id,
-        amount: parseFloat(paymentAmount),
-        method: paymentMethod,
-      });
-      setPaymentResult(result);
-      loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'));
-    }
-  };
-
   const openPayDialog = (bill: RenterBill) => {
     setPayingBill(bill);
-    setPaymentAmount(bill.remaining.toString());
-    setPaymentMethod('bank_transfer');
-    setPaymentResult(null);
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
   };
 
   if (loading) {
@@ -99,12 +86,58 @@ export default function RenterView() {
   return (
     <div className="min-h-screen bg-slate-900">
       <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <Building2 className="w-6 h-6 text-emerald-500" />
-          <div>
-            <h1 className="text-xl font-semibold text-slate-100">{t('app.title')}</h1>
-            <p className="text-sm text-slate-400">{t('renter.portal')}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Building2 className="w-6 h-6 text-emerald-500" />
+            <div>
+              <h1 className="text-xl font-semibold text-slate-100">{t('app.title')}</h1>
+              <p className="text-sm text-slate-400">{t('renter.portal')}</p>
+            </div>
           </div>
+          
+          {/* Language Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+              >
+                <img 
+                  src={language === 'en' ? '/flags/uk-flag.gif' : '/flags/ro-flag.gif'} 
+                  alt={`${language} flag`}
+                  className="h-4 w-auto mr-2"
+                />
+                <span className="text-xs uppercase">{language}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
+              <DropdownMenuItem
+                onClick={() => setLanguage('en')}
+                className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
+              >
+                <img 
+                  src="/flags/uk-flag.gif" 
+                  alt="UK flag"
+                  className="h-5 w-8 object-cover mr-3 flex-shrink-0"
+                />
+                <span className="flex-1 text-left">English</span>
+                {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setLanguage('ro')}
+                className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
+              >
+                <img 
+                  src="/flags/ro-flag.gif" 
+                  alt="Romanian flag"
+                  className="h-5 w-8 object-cover mr-3 flex-shrink-0"
+                />
+                <span className="flex-1 text-left">Română</span>
+                {language === 'ro' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -135,54 +168,8 @@ export default function RenterView() {
           </Card>
         )}
 
-        {balance && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">{t('renter.totalDue')}</p>
-                <p className="text-2xl font-bold text-slate-100">
-                  {balance.total_due.toFixed(2)} {balance.currency || 'RON'}
-                </p>
-                {balance.currency === 'EUR' && balance.total_due_ron && balance.eur_to_ron_rate && (
-                  <p className="text-sm text-slate-400 mt-1">
-                    {balance.total_due_ron.toFixed(2)} RON
-                    <span className="text-xs ml-1">(1 EUR = {balance.eur_to_ron_rate.toFixed(4)} RON)</span>
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
-                <p className="text-2xl font-bold text-green-400">
-                  {balance.total_paid.toFixed(2)} {balance.currency || 'RON'}
-                </p>
-                {balance.currency === 'EUR' && balance.total_paid_ron && balance.eur_to_ron_rate && (
-                  <p className="text-sm text-slate-400 mt-1">
-                    {balance.total_paid_ron.toFixed(2)} RON
-                    <span className="text-xs ml-1">(1 EUR = {balance.eur_to_ron_rate.toFixed(4)} RON)</span>
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">{t('renter.balance')}</p>
-                <p className={`text-2xl font-bold ${balance.balance > 0 ? 'text-amber-400' : 'text-green-400'}`}>
-                  {balance.balance.toFixed(2)} {balance.currency || 'RON'}
-                </p>
-                {balance.currency === 'EUR' && balance.balance_ron && balance.eur_to_ron_rate && (
-                  <p className="text-sm text-slate-400 mt-1">
-                    {balance.balance_ron.toFixed(2)} RON
-                    <span className="text-xs ml-1">(1 EUR = {balance.eur_to_ron_rate.toFixed(4)} RON)</span>
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        <Card className="bg-slate-800 border-slate-700">
+        {/* Bills Table */}
+        <Card className="bg-slate-800 border-slate-700 mb-6">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2">
               <Receipt className="w-5 h-5" />
@@ -229,7 +216,7 @@ export default function RenterView() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {item.remaining > 0 && (
+                        {item.bill.status !== 'paid' && (
                           <Button
                             size="sm"
                             onClick={() => openPayDialog(item)}
@@ -247,6 +234,98 @@ export default function RenterView() {
           </CardContent>
         </Card>
 
+        {/* Balance Cards */}
+        {balance && (
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="pt-6">
+                <p className="text-slate-400 text-sm">{t('renter.totalThisMonth') || 'Total This Month'}</p>
+                <p className="text-2xl font-bold text-slate-100">
+                  {bills
+                    .reduce((sum, b) => {
+                      const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
+                        ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                        : b.bill.amount;
+                      return sum + ronValue;
+                    }, 0)
+                    .toFixed(2)} RON
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="pt-6">
+                <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {bills
+                    .filter(b => b.bill.status === 'paid')
+                    .reduce((sum, b) => {
+                      const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
+                        ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                        : b.bill.amount;
+                      return sum + ronValue;
+                    }, 0)
+                    .toFixed(2)} RON
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="pt-6">
+                <p className="text-slate-400 text-sm mb-3">{t('renter.balance')}</p>
+                
+                {/* Bills breakdown inside balance card - only unpaid bills */}
+                {bills.filter(b => b.bill.status !== 'paid').length > 0 && (
+                  <div className="mb-3 space-y-0.5 text-xs">
+                    {bills.filter(b => b.bill.status !== 'paid').map((item) => (
+                      <div key={item.bill.id} className="flex justify-between items-center text-slate-400">
+                        <span className="truncate mr-2">{item.bill.description}</span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {item.bill.currency && item.bill.currency !== 'RON' && (
+                            <span className="whitespace-nowrap">{item.bill.amount.toFixed(2)} {item.bill.currency} /</span>
+                          )}
+                          <span className="tabular-nums text-right min-w-[60px]">
+                            {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON' 
+                              ? (item.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
+                              : item.bill.amount.toFixed(2)
+                            }
+                          </span>
+                          <span className="w-8 text-left">RON</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="border-t border-slate-700 mt-1 pt-1"></div>
+                  </div>
+                )}
+                
+                <div className="flex justify-end items-baseline gap-1">
+                  <p className={`text-2xl font-bold tabular-nums ${
+                    bills.filter(b => b.bill.status !== 'paid').reduce((sum, b) => {
+                      const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
+                        ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                        : b.bill.amount;
+                      return sum + ronValue;
+                    }, 0) > 0 ? 'text-amber-400' : 'text-green-400'
+                  }`}>
+                    {bills
+                      .filter(b => b.bill.status !== 'paid')
+                      .reduce((sum, b) => {
+                        const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
+                          ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                          : b.bill.amount;
+                        return sum + ronValue;
+                      }, 0)
+                      .toFixed(2)}
+                  </p>
+                  <p className={`text-lg font-medium ${
+                    bills.filter(b => b.bill.status !== 'paid').reduce((sum, b) => sum + b.bill.amount, 0) > 0 ? 'text-amber-400' : 'text-green-400'
+                  }`}>
+                    RON
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         <Dialog open={!!payingBill} onOpenChange={(open) => !open && setPayingBill(null)}>
           <DialogContent className="bg-slate-800 border-slate-700">
             <DialogHeader>
@@ -255,128 +334,42 @@ export default function RenterView() {
                 {t('renter.payBill')}
               </DialogDescription>
             </DialogHeader>
-            {!paymentResult ? (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-slate-300">{payingBill?.bill.description}</p>
-                  <p className="text-slate-400 text-sm">
-                    {t('renter.remaining')}: {payingBill?.remaining.toFixed(2)} {payingBill?.bill.currency || 'RON'}
-                  </p>
-                </div>
-
-                <div>
-                  <Label className="text-slate-300">{t('renter.paymentAmount')}</Label>
-                  <Input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-slate-100"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-slate-300">{t('renter.paymentMethod')}</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <Button
-                      variant={paymentMethod === 'bank_transfer' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('bank_transfer')}
-                      className={paymentMethod === 'bank_transfer' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600'}
-                    >
-                      <Banknote className="w-4 h-4 mr-2" />
-                      {t('renter.bankTransfer')}
-                    </Button>
-                    <Button
-                      variant={paymentMethod === 'payment_service' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('payment_service')}
-                      className={paymentMethod === 'payment_service' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600'}
-                    >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      {t('renter.paymentService')}
-                    </Button>
-                  </div>
-                </div>
-
-                {paymentMethod === 'payment_service' && (
-                  <p className="text-amber-400 text-sm">
-                    {t('renter.commission')}: {(parseFloat(paymentAmount || '0') * 0.02).toFixed(2)} {payingBill?.bill.currency || 'RON'} {t('renter.totalWithCommission')}
-                  </p>
-                )}
-
-                <Button onClick={handlePay} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                  {paymentMethod === 'bank_transfer' ? t('renter.bankTransfer') : t('renter.pay')}
-                </Button>
+            <div className="space-y-4">
+              <div>
+                <p className="text-slate-300 font-medium">{payingBill?.bill.description}</p>
+                <p className="text-slate-400 text-sm mt-1">
+                  {t('common.amount')}: {payingBill?.bill.amount.toFixed(2)} {payingBill?.bill.currency || 'RON'}
+                </p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {paymentResult.bank_transfer_info ? (
-                  <>
-                    <p className="text-green-400">{t('renter.bankTransferDetails')}</p>
-                    <div className="bg-slate-700 p-4 rounded space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-slate-400 text-xs">{t('renter.iban')}</p>
-                          <p className="text-slate-100 font-mono">{paymentResult.bank_transfer_info.iban}</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => copyToClipboard(paymentResult.bank_transfer_info!.iban)}
-                          className="text-slate-400"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-slate-400 text-xs">{t('renter.reference')}</p>
-                          <p className="text-slate-100">{paymentResult.bank_transfer_info.reference}</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => copyToClipboard(paymentResult.bank_transfer_info!.reference)}
-                          className="text-slate-400"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-xs">{t('common.amount')}</p>
-                        <p className="text-slate-100 text-lg font-bold">
-                          {paymentResult.bank_transfer_info.amount.toFixed(2)} {payingBill?.bill.currency || 'RON'}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-slate-400 text-sm">
-                      {t('renter.pleaseMakeTransfer')}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-green-400">{t('renter.paymentInitiated')}</p>
-                    <div className="bg-slate-700 p-4 rounded">
-                      <p className="text-slate-300">
-                        {t('common.amount')}: {paymentResult.payment.amount.toFixed(2)} {payingBill?.bill.currency || 'RON'}
-                      </p>
-                      {paymentResult.commission > 0 && (
-                        <p className="text-slate-400 text-sm">
-                          {t('renter.commission')}: {paymentResult.commission.toFixed(2)} {payingBill?.bill.currency || 'RON'}
-                        </p>
-                      )}
-                      <p className="text-slate-100 font-bold mt-2">
-                        {t('renter.totalWithCommission')}: {paymentResult.total_with_commission.toFixed(2)} {payingBill?.bill.currency || 'RON'}
-                      </p>
-                    </div>
-                  </>
-                )}
+
+              <div className="space-y-2">
+                <p className="text-slate-300 text-sm">{t('renter.paymentMethod') || 'Payment Method'}:</p>
+                
+                {/* Supplier Payment Link - placeholder for future */}
                 <Button
-                  onClick={() => { setPayingBill(null); setPaymentResult(null); }}
-                  className="w-full bg-slate-700 hover:bg-slate-600"
+                  className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600"
+                  disabled
                 >
-                  {t('common.close')}
+                  <Banknote className="w-4 h-4 mr-2" />
+                  Pay via Supplier Portal
+                  <span className="ml-2 text-xs text-slate-500">(Coming soon)</span>
+                </Button>
+
+                {/* Stripe Payment */}
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                  disabled
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Pay with Stripe
+                  <span className="ml-2 text-xs text-emerald-200">(Coming soon)</span>
                 </Button>
               </div>
-            )}
+
+              <p className="text-xs text-slate-500 text-center">
+                Payment integration will be available soon
+              </p>
+            </div>
           </DialogContent>
         </Dialog>
       </main>

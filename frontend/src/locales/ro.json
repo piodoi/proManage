@@ -103,7 +103,7 @@
     "portal": "Portal Chiriaș",
     "welcome": "Bun venit, {name}",
     "property": "Proprietate:",
-    "totalDue": "Total Datorie",
+    "totalThisMonth": "Total Luna Aceasta",
     "totalPaid": "Total Plătit",
     "balance": "Sold",
     "bills": "Facturi",

@@ -103,7 +103,7 @@
     "portal": "Renter Portal",
     "welcome": "Welcome, {name}",
     "property": "Property:",
-    "totalDue": "Total Due",
+    "totalThisMonth": "Total This Month",
     "totalPaid": "Total Paid",
     "balance": "Balance",
     "bills": "Bills",

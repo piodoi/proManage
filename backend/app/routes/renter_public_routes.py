@@ -113,15 +113,17 @@ async def renter_balance(token: str):
     total_paid_original = 0.0
     
     for bill in bills:
+        bill_payments = payments_by_bill.get(bill.id, [])
+        paid_for_this_bill = sum(p.amount for p in bill_payments if p.status == PaymentStatus.COMPLETED)
+        
+        # Only include unpaid/pending bills in the balance
         if bill.status != BillStatus.PAID:
             bill_currency_original = bill.currency if bill.currency else "RON"
-            total_due_original += convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
-        
-        bill_payments = payments_by_bill.get(bill.id, [])
-        for payment in bill_payments:
-            if payment.status == PaymentStatus.COMPLETED:
-                payment_currency_original = bill.currency if bill.currency else "RON"
-                total_paid_original += convert_currency(payment.amount, payment_currency_original, bill_currency, exchange_rates)
+            bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
+            paid_amount_converted = convert_currency(paid_for_this_bill, bill_currency_original, bill_currency, exchange_rates)
+            
+            total_due_original += bill_amount_converted
+            total_paid_original += paid_amount_converted
     
     balance_original = total_due_original - total_paid_original
     
