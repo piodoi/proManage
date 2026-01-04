@@ -317,7 +317,6 @@ export default function Dashboard() {
                   handleDelete={handleDelete}
                   handleSubscription={handleSubscription}
                   openEdit={openEdit}
-                  loadUsers={loadUsers}
                   showSupplierCreate={showSupplierCreate}
                   setShowSupplierCreate={setShowSupplierCreate}
                   editSupplier={editSupplier}
@@ -373,7 +372,6 @@ function AdminTabsContent({
   handleDelete,
   handleSubscription,
   openEdit,
-  loadUsers,
   showSupplierCreate,
   setShowSupplierCreate,
   editSupplier,
@@ -1024,7 +1022,7 @@ function AdminTabsContent({
             ) : (
               <div className="space-y-2">
                 <p className="text-slate-200 font-medium">
-                  {t('admin.updatedPatterns', { count: refreshResults.filter(r => r.action === 'created' || r.action === 'updated').length })}
+                  {t('admin.updatedPatterns', { count: refreshResults.filter((r: { action: string }) => r.action === 'created' || r.action === 'updated').length })}
                 </p>
                 <div className="max-h-96 overflow-y-auto space-y-2">
                   {refreshResults.map((result: any, idx: number) => (

@@ -184,7 +184,7 @@ export default function PropertyBillsView({
       
       setShowBillForm(false);
       setEditingBill(null);
-      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0] });
+      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending' });
       if (onBillsChange) {
         onBillsChange();
       }

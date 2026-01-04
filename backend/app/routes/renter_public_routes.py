@@ -1,6 +1,8 @@
 """Public renter routes (token-based access)."""
 import os
 from datetime import datetime
+from typing import Optional
+import httpx
 from fastapi import APIRouter, HTTPException
 from app.models import Payment, PaymentCreate, PaymentMethod, PaymentStatus, BillStatus, TokenData, Bill
 from app.database import db
@@ -8,6 +10,54 @@ from app.database import db
 router = APIRouter(prefix="/renter", tags=["renter-public"])
 
 PAYMENT_SERVICE_COMMISSION = float(os.getenv("PAYMENT_SERVICE_COMMISSION", "0.02"))
+
+
+async def get_exchange_rates() -> dict[str, float]:
+    """Fetch current exchange rates from EUR to other currencies."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("https://api.exchangerate-api.com/v4/latest/EUR")
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "EUR": 1.0,
+                    "USD": data.get("rates", {}).get("USD", 1.1),
+                    "RON": data.get("rates", {}).get("RON", 4.97),
+                }
+    except Exception:
+        pass
+    # Fallback to default rates
+    return {"EUR": 1.0, "USD": 1.1, "RON": 4.97}
+
+
+def convert_amount(amount: float, from_currency: str, to_currency: str, exchange_rates: dict[str, float]) -> float:
+    """Convert amount from one currency to another using exchange rates."""
+    if from_currency == to_currency:
+        return amount
+    
+    from_upper = from_currency.upper()
+    to_upper = to_currency.upper()
+    
+    # Convert to EUR first
+    amount_in_eur = amount
+    if from_upper == "USD":
+        amount_in_eur = amount / exchange_rates.get("USD", 1.1)
+    elif from_upper == "RON":
+        amount_in_eur = amount / exchange_rates.get("RON", 4.97)
+    elif from_upper != "EUR":
+        # Unknown currency, assume RON
+        amount_in_eur = amount / exchange_rates.get("RON", 4.97)
+    
+    # Convert from EUR to target currency
+    if to_upper == "EUR":
+        return amount_in_eur
+    elif to_upper == "USD":
+        return amount_in_eur * exchange_rates.get("USD", 1.1)
+    elif to_upper == "RON":
+        return amount_in_eur * exchange_rates.get("RON", 4.97)
+    else:
+        # Unknown currency, assume RON
+        return amount_in_eur * exchange_rates.get("RON", 4.97)
 
 
 def calculate_bill_status(bill: Bill) -> Bill:
@@ -77,15 +127,59 @@ async def renter_balance(token: str):
     renter = db.get_renter_by_token(token)
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
+    
+    # Get property to access landlord_id
+    prop = db.get_property(renter.property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Get landlord's preferences to determine currency
+    preferences = db.get_user_preferences(prop.landlord_id)
+    bill_currency = preferences.bill_currency if preferences and preferences.bill_currency else "RON"
+    
+    # Get exchange rates
+    exchange_rates = await get_exchange_rates()
+    
     # Get bills for this property that either apply to all renters (renter_id is None) or to this specific renter
     all_bills = db.list_bills(property_id=renter.property_id)
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
-    total_due = sum(b.amount for b in bills if b.status != BillStatus.PAID)
-    total_paid = 0.0
+    
+    # Calculate totals in original currency (bills are stored in their original currency)
+    total_due_original = 0.0
+    total_paid_original = 0.0
+    
     for bill in bills:
+        if bill.status != BillStatus.PAID:
+            # Convert bill amount from bill currency to target currency
+            bill_currency_original = bill.currency if bill.currency else "RON"
+            total_due_original += convert_amount(bill.amount, bill_currency_original, bill_currency, exchange_rates)
+        
         payments = db.list_payments(bill_id=bill.id)
-        total_paid += sum(p.amount for p in payments if p.status == PaymentStatus.COMPLETED)
-    return {"total_due": total_due, "total_paid": total_paid, "balance": total_due - total_paid}
+        for payment in payments:
+            if payment.status == PaymentStatus.COMPLETED:
+                # Payments are stored in the same currency as the bill
+                payment_currency_original = bill.currency if bill.currency else "RON"
+                total_paid_original += convert_amount(payment.amount, payment_currency_original, bill_currency, exchange_rates)
+    
+    balance_original = total_due_original - total_paid_original
+    
+    # Build response
+    response = {
+        "total_due": total_due_original,
+        "total_paid": total_paid_original,
+        "balance": balance_original,
+        "currency": bill_currency,
+        "exchange_rates": exchange_rates,
+    }
+    
+    # If currency is EUR, also include RON conversion
+    if bill_currency == "EUR":
+        response["total_due_ron"] = convert_amount(total_due_original, "EUR", "RON", exchange_rates)
+        response["total_paid_ron"] = convert_amount(total_paid_original, "EUR", "RON", exchange_rates)
+        response["balance_ron"] = convert_amount(balance_original, "EUR", "RON", exchange_rates)
+        response["eur_to_ron_rate"] = exchange_rates.get("RON", 4.97)
+    
+    return response
 
 
 @router.post("/{token}/pay")

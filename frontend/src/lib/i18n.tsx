@@ -3,11 +3,10 @@ import enTranslations from '../locales/en.json';
 import roTranslations from '../locales/ro.json';
 
 type TranslationKey = string;
-type Translations = typeof enTranslations;
 
-const translations: Record<string, Translations> = {
+const translations: Record<string, any> = {
   en: enTranslations,
-  ro: roTranslations,
+  ro: roTranslations, // Allow for missing keys (fallback to English at runtime)
 };
 
 type Language = 'en' | 'ro';

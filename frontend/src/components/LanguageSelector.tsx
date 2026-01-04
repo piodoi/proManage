@@ -14,10 +14,6 @@ const FLAG_IMAGES: Record<string, string> = {
   ro: '/flags/ro-flag.gif',
 };
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: 'English',
-  ro: 'Română',
-};
 
 export function LanguageSelector() {
   const { language, setLanguage } = useI18n();

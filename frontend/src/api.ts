@@ -396,6 +396,16 @@ export type RenterBalance = {
   total_due: number;
   total_paid: number;
   balance: number;
+  currency: string; // Landlord's preferred currency
+  exchange_rates?: {
+    EUR: number;
+    USD: number;
+    RON: number;
+  };
+  total_due_ron?: number;
+  total_paid_ron?: number;
+  balance_ron?: number;
+  eur_to_ron_rate?: number;
 };
 
 export type PaymentResponse = {

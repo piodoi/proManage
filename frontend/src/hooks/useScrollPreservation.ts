@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 
 /**
  * Hook to preserve scroll position when dialogs open/close

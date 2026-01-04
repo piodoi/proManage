@@ -140,21 +140,43 @@ export default function RenterView() {
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm">{t('renter.totalDue')}</p>
-                <p className="text-2xl font-bold text-slate-100">{balance.total_due.toFixed(2)} RON</p>
+                <p className="text-2xl font-bold text-slate-100">
+                  {balance.total_due.toFixed(2)} {balance.currency || 'RON'}
+                </p>
+                {balance.currency === 'EUR' && balance.total_due_ron && balance.eur_to_ron_rate && (
+                  <p className="text-sm text-slate-400 mt-1">
+                    {balance.total_due_ron.toFixed(2)} RON
+                    <span className="text-xs ml-1">(1 EUR = {balance.eur_to_ron_rate.toFixed(4)} RON)</span>
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
-                <p className="text-2xl font-bold text-green-400">{balance.total_paid.toFixed(2)} RON</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {balance.total_paid.toFixed(2)} {balance.currency || 'RON'}
+                </p>
+                {balance.currency === 'EUR' && balance.total_paid_ron && balance.eur_to_ron_rate && (
+                  <p className="text-sm text-slate-400 mt-1">
+                    {balance.total_paid_ron.toFixed(2)} RON
+                    <span className="text-xs ml-1">(1 EUR = {balance.eur_to_ron_rate.toFixed(4)} RON)</span>
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm">{t('renter.balance')}</p>
                 <p className={`text-2xl font-bold ${balance.balance > 0 ? 'text-amber-400' : 'text-green-400'}`}>
-                  {balance.balance.toFixed(2)} RON
+                  {balance.balance.toFixed(2)} {balance.currency || 'RON'}
                 </p>
+                {balance.currency === 'EUR' && balance.balance_ron && balance.eur_to_ron_rate && (
+                  <p className="text-sm text-slate-400 mt-1">
+                    {balance.balance_ron.toFixed(2)} RON
+                    <span className="text-xs ml-1">(1 EUR = {balance.eur_to_ron_rate.toFixed(4)} RON)</span>
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -188,9 +210,11 @@ export default function RenterView() {
                     <TableRow key={item.bill.id} className="border-slate-700">
                       <TableCell className="text-slate-200">{item.bill.description}</TableCell>
                       <TableCell className="text-slate-300">{t(`bill.${item.bill.bill_type}`)}</TableCell>
-                      <TableCell className="text-slate-200">{item.bill.amount.toFixed(2)} RON</TableCell>
+                      <TableCell className="text-slate-200">
+                        {item.bill.amount.toFixed(2)} {item.bill.currency || 'RON'}
+                      </TableCell>
                       <TableCell className={item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
-                        {item.remaining.toFixed(2)} RON
+                        {item.remaining.toFixed(2)} {item.bill.currency || 'RON'}
                       </TableCell>
                       <TableCell className="text-slate-300">
                         {new Date(item.bill.due_date).toLocaleDateString()}
@@ -235,7 +259,9 @@ export default function RenterView() {
               <div className="space-y-4">
                 <div>
                   <p className="text-slate-300">{payingBill?.bill.description}</p>
-                  <p className="text-slate-400 text-sm">{t('renter.remaining')}: {payingBill?.remaining.toFixed(2)} RON</p>
+                  <p className="text-slate-400 text-sm">
+                    {t('renter.remaining')}: {payingBill?.remaining.toFixed(2)} {payingBill?.bill.currency || 'RON'}
+                  </p>
                 </div>
 
                 <div>
@@ -272,7 +298,7 @@ export default function RenterView() {
 
                 {paymentMethod === 'payment_service' && (
                   <p className="text-amber-400 text-sm">
-                    {t('renter.commission')}: {(parseFloat(paymentAmount || '0') * 0.02).toFixed(2)} RON {t('renter.totalWithCommission')}
+                    {t('renter.commission')}: {(parseFloat(paymentAmount || '0') * 0.02).toFixed(2)} {payingBill?.bill.currency || 'RON'} {t('renter.totalWithCommission')}
                   </p>
                 )}
 
@@ -316,7 +342,9 @@ export default function RenterView() {
                       </div>
                       <div>
                         <p className="text-slate-400 text-xs">{t('common.amount')}</p>
-                        <p className="text-slate-100 text-lg font-bold">{paymentResult.bank_transfer_info.amount.toFixed(2)} RON</p>
+                        <p className="text-slate-100 text-lg font-bold">
+                          {paymentResult.bank_transfer_info.amount.toFixed(2)} {payingBill?.bill.currency || 'RON'}
+                        </p>
                       </div>
                     </div>
                     <p className="text-slate-400 text-sm">
@@ -327,12 +355,16 @@ export default function RenterView() {
                   <>
                     <p className="text-green-400">{t('renter.paymentInitiated')}</p>
                     <div className="bg-slate-700 p-4 rounded">
-                      <p className="text-slate-300">{t('common.amount')}: {paymentResult.payment.amount.toFixed(2)} RON</p>
+                      <p className="text-slate-300">
+                        {t('common.amount')}: {paymentResult.payment.amount.toFixed(2)} {payingBill?.bill.currency || 'RON'}
+                      </p>
                       {paymentResult.commission > 0 && (
-                        <p className="text-slate-400 text-sm">{t('renter.commission')}: {paymentResult.commission.toFixed(2)} RON</p>
+                        <p className="text-slate-400 text-sm">
+                          {t('renter.commission')}: {paymentResult.commission.toFixed(2)} {payingBill?.bill.currency || 'RON'}
+                        </p>
                       )}
                       <p className="text-slate-100 font-bold mt-2">
-                        {t('renter.totalWithCommission')}: {paymentResult.total_with_commission.toFixed(2)} RON
+                        {t('renter.totalWithCommission')}: {paymentResult.total_with_commission.toFixed(2)} {payingBill?.bill.currency || 'RON'}
                       </p>
                     </div>
                   </>
