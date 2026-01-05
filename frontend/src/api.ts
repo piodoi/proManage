@@ -123,12 +123,6 @@ export const api = {
     pay: (token: string, data: PaymentCreate) => request<PaymentResponse>(`/renter/${token}/pay`, { method: 'POST', body: data }),
   },
 
-  email: {
-    configure: (token: string, data: EmailConfigCreate) => request<EmailConfig>('/email/configure', { method: 'POST', body: data, token }),
-    getConfig: (token: string) => request<EmailConfig>('/email/config', { token }),
-    process: (token: string, subject: string, body: string, sender: string) =>
-      request<EmailProcessResult>(`/email/process?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&sender=${encodeURIComponent(sender)}`, { method: 'POST', token }),
-  },
 
   ebloc: {
     discover: (token: string, data: { username: string; password: string }) => request<{ status: string; properties: Array<{ page_id: string; name: string; address: string; url: string }> }>('/ebloc/discover', { method: 'POST', body: data, token }),
@@ -420,18 +414,6 @@ export type PaymentResponse = {
   };
 };
 
-export type EmailConfig = {
-  id: string;
-  landlord_id: string;
-  config_type: 'direct' | 'forwarding';
-  forwarding_email?: string;
-  created_at: string;
-};
-
-export type EmailConfigCreate = {
-  config_type: 'direct' | 'forwarding';
-  forwarding_email?: string;
-};
 
 export type EmailProcessResult = {
   status: string;

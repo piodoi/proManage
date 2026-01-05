@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, SubscriptionStatus } from '../api';
+import { api, SubscriptionStatus, User as ApiUser } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, AlertCircle, User } from 'lucide-react';
+import { Mail, AlertCircle, User, Copy, Check } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import SupplierCredentialsSettings from './SupplierCredentialsSettings';
@@ -15,15 +15,15 @@ import { validateIban, formatIban } from '../utils/iban';
 
 type SettingsViewProps = {
   token: string | null;
+  user: ApiUser | null;
   onError?: (error: string) => void;
 };
 
-export default function SettingsView({ token, onError }: SettingsViewProps) {
+export default function SettingsView({ token, user, onError }: SettingsViewProps) {
   const { t } = useI18n();
   const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setPhoneNumber, setLandlordName, setPersonalEmail, setIban } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
-  const [showEmailConfig, setShowEmailConfig] = useState(false);
-  const [emailForm, setEmailForm] = useState({ config_type: 'forwarding' as 'direct' | 'forwarding', forwarding_email: '' });
+  const [emailCopied, setEmailCopied] = useState(false);
   const [rentWarningDaysInput, setRentWarningDaysInput] = useState<string>('');
   const [phoneNumberInput, setPhoneNumberInput] = useState<string>('');
   const [landlordNameInput, setLandlordNameInput] = useState<string>('');
@@ -119,6 +119,18 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
     }
   };
 
+  const handleCopyEmail = async () => {
+    if (!user) return;
+    const email = `proManage.bill+${user.id}@gmail.com`;
+    try {
+      await navigator.clipboard.writeText(email);
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy email:', err);
+    }
+  };
+
   const loadSubscription = async () => {
     if (!token) return;
     try {
@@ -127,21 +139,6 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
     } catch (err) {
       if (onError) {
         onError(err instanceof Error ? err.message : t('settings.loadSubscriptionError'));
-      }
-    }
-  };
-
-  const handleConfigureEmail = async () => {
-    if (!token) return;
-    try {
-      await api.email.configure(token, emailForm);
-      setShowEmailConfig(false);
-      if (onError) {
-        onError('');
-      }
-    } catch (err) {
-      if (onError) {
-        onError(err instanceof Error ? err.message : t('settings.configureEmailError'));
       }
     }
   };
@@ -372,57 +369,33 @@ export default function SettingsView({ token, onError }: SettingsViewProps) {
             <p className="text-slate-400 text-sm">
               {t('settings.emailConfigDesc')}
             </p>
-            <Dialog open={showEmailConfig} onOpenChange={setShowEmailConfig}>
-              <DialogTrigger asChild>
-                <Button className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
-                  {t('settings.configureEmail')}
+            <div>
+              <Label className="text-slate-300">{t('settings.emailAddressLabel')}</Label>
+              <div className="flex gap-2 mt-2">
+                <Input
+                  type="text"
+                  value={user ? `proManage.bill+${user.id}@gmail.com` : ''}
+                  readOnly
+                  className="bg-slate-700 border-slate-600 text-slate-100 font-mono"
+                />
+                <Button
+                  onClick={handleCopyEmail}
+                  className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2"
+                >
+                  {emailCopied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      {t('settings.emailCopied')}
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      {t('settings.copyEmail')}
+                    </>
+                  )}
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-slate-800 border-slate-700">
-                <DialogHeader>
-                  <DialogTitle className="text-slate-100">{t('settings.emailConfig')}</DialogTitle>
-                  <DialogDescription className="text-slate-400 sr-only">
-                    {t('settings.emailConfig')}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-slate-300">{t('settings.accessType')}</Label>
-                    <Select value={emailForm.config_type} onValueChange={(v) => setEmailForm({ ...emailForm, config_type: v as 'direct' | 'forwarding' })}>
-                      <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="direct">{t('settings.directGmailAccess')}</SelectItem>
-                        <SelectItem value="forwarding">{t('settings.emailForwarding')}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {emailForm.config_type === 'forwarding' && (
-                    <div>
-                      <Label className="text-slate-300">{t('settings.forwardingEmail')}</Label>
-                      <Input
-                        value={emailForm.forwarding_email}
-                        onChange={(e) => setEmailForm({ ...emailForm, forwarding_email: e.target.value })}
-                        className="bg-slate-700 border-slate-600 text-slate-100"
-                        placeholder={t('settings.forwardingEmailPlaceholder')}
-                      />
-                      <p className="text-xs text-slate-500 mt-1">
-                        {t('settings.forwardingEmailHelp')}
-                      </p>
-                    </div>
-                  )}
-                  {emailForm.config_type === 'direct' && (
-                    <p className="text-sm text-slate-400">
-                      {t('settings.directGmailDesc')}
-                    </p>
-                  )}
-                  <Button onClick={handleConfigureEmail} className="w-full bg-emerald-600 hover:bg-emerald-700">
-                    {t('settings.saveConfiguration')}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+              </div>
+            </div>
           </CardContent>
         </Card>
           </TabsContent>

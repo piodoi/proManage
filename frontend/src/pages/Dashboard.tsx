@@ -287,7 +287,7 @@ export default function Dashboard() {
             </TabsContent>
 
             <TabsContent value="settings" className="m-0 p-6 space-y-4">
-              <SettingsView token={token} onError={setError} />
+              <SettingsView token={token} user={user} onError={setError} />
             </TabsContent>
 
             <TabsContent value="tools" className="m-0 p-6 space-y-4">

@@ -1,39 +1,12 @@
-"""Email configuration and processing routes."""
+"""Email processing routes."""
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
-from app.models import EmailConfig, EmailConfigCreate, Bill, BillType, TokenData
+from fastapi import APIRouter, Depends
+from app.models import Bill, BillType, TokenData
 from app.auth import require_landlord
 from app.database import db
 from app.email_scraper import extract_bill_info, match_address_to_property
 
 router = APIRouter(prefix="/email", tags=["email"])
-
-
-@router.post("/configure")
-async def configure_email(
-    data: EmailConfigCreate, current_user: TokenData = Depends(require_landlord)
-):
-    existing = db.get_email_config(current_user.user_id)
-    if existing:
-        existing.config_type = data.config_type
-        existing.forwarding_email = data.forwarding_email
-        db.save_email_config(existing)
-        return existing
-    config = EmailConfig(
-        landlord_id=current_user.user_id,
-        config_type=data.config_type,
-        forwarding_email=data.forwarding_email,
-    )
-    db.save_email_config(config)
-    return config
-
-
-@router.get("/config")
-async def get_email_config(current_user: TokenData = Depends(require_landlord)):
-    config = db.get_email_config(current_user.user_id)
-    if not config:
-        raise HTTPException(status_code=404, detail="Email not configured")
-    return config
 
 
 @router.post("/process")

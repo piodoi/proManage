@@ -39,11 +39,6 @@ class PaymentStatus(str, Enum):
     FAILED = "failed"
 
 
-class EmailConfigType(str, Enum):
-    DIRECT = "direct"
-    FORWARDING = "forwarding"
-
-
 # Subscription is now an int: 0 = off, 1 = on (reserved for future tiers)
 # Keeping enum for backward compatibility but will be converted to int
 class SubscriptionStatus(str, Enum):
@@ -135,13 +130,6 @@ class Payment(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class EmailConfig(BaseModel):
-    id: str = Field(default_factory=gen_id)
-    landlord_id: str
-    config_type: EmailConfigType
-    forwarding_email: Optional[str] = None
-    gmail_credentials: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 
@@ -305,11 +293,6 @@ class PaymentCreate(BaseModel):
     bill_id: str
     amount: float
     method: PaymentMethod
-
-
-class EmailConfigCreate(BaseModel):
-    config_type: EmailConfigType
-    forwarding_email: Optional[str] = None
 
 
 class EblocConfigCreate(BaseModel):

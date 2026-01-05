@@ -5,7 +5,7 @@ from sqlalchemy.pool import QueuePool
 from pydantic import BaseModel
 
 from app.models import (
-    User, Property, Renter, Bill, Payment, EmailConfig,
+    User, Property, Renter, Bill, Payment,
     ExtractionPattern, UserRole, Supplier, PropertySupplier, UserSupplierCredential,
     UserPreferences
 )
@@ -91,14 +91,6 @@ payments_table = Table(
     Column("bill_id", String(36), index=True),
     Column("data", Text, nullable=False),
 )
-
-email_configs_table = Table(
-    "email_configs", metadata,
-    Column("id", String(36), primary_key=True),
-    Column("landlord_id", String(36), index=True),
-    Column("data", Text, nullable=False),
-)
-
 
 extraction_patterns_table = Table(
     "extraction_patterns", metadata,
@@ -404,53 +396,6 @@ class Database:
                 )
             conn.commit()
         return payment
-
-    def get_email_config(self, config_id: str) -> Optional[EmailConfig]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                email_configs_table.select().where(email_configs_table.c.id == config_id)
-            ).fetchone()
-            return _deserialize(EmailConfig, result.data) if result else None
-
-    def get_email_config_by_landlord(self, landlord_id: str) -> Optional[EmailConfig]:
-        with engine.connect() as conn:
-            result = conn.execute(
-                email_configs_table.select().where(email_configs_table.c.landlord_id == landlord_id)
-            ).fetchone()
-            return _deserialize(EmailConfig, result.data) if result else None
-
-    def list_email_configs(self) -> list[EmailConfig]:
-        with engine.connect() as conn:
-            results = conn.execute(email_configs_table.select()).fetchall()
-            return [_deserialize(EmailConfig, r.data) for r in results]
-
-    def save_email_config(self, config: EmailConfig) -> EmailConfig:
-        with engine.connect() as conn:
-            existing = conn.execute(
-                email_configs_table.select().where(email_configs_table.c.id == config.id)
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    email_configs_table.update().where(email_configs_table.c.id == config.id).values(
-                        landlord_id=config.landlord_id, data=_serialize(config)
-                    )
-                )
-            else:
-                conn.execute(
-                    email_configs_table.insert().values(
-                        id=config.id, landlord_id=config.landlord_id, data=_serialize(config)
-                    )
-                )
-            conn.commit()
-        return config
-
-    def delete_email_config(self, config_id: str) -> bool:
-        with engine.connect() as conn:
-            result = conn.execute(
-                email_configs_table.delete().where(email_configs_table.c.id == config_id)
-            )
-            conn.commit()
-            return result.rowcount > 0
 
     def get_extraction_pattern(self, pattern_id: str) -> Optional[ExtractionPattern]:
         with engine.connect() as conn:
