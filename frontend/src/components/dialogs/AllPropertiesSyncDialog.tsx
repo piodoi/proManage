@@ -255,16 +255,10 @@ export default function AllPropertiesSyncDialog({
       }
     }
 
-    // If no suppliers selected, check if we have email bills to show
+    // If no suppliers selected, always show bills stage (even if empty)
     if (selectedSupplierKeys.size === 0) {
-      // If we have discovered email bills, go to bills stage
-      if (syncEmailBills && discoveredBillsRef.current.length > 0) {
-        setStage('bills');
-      } else {
-        // Otherwise close the dialog and cleanup
-        handleCloseAndCleanup();
-        onSuccess();
-      }
+      // Always go to bills stage to show discovered bills or "no bills" message
+      setStage('bills');
       return;
     }
 
