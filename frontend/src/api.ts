@@ -124,6 +124,10 @@ export const api = {
   },
 
 
+  email: {
+    sync: (token: string) => request<{ status: string; message: string; emails_processed: number; bills_created: number; bills?: Array<{ id: string; amount: number; description: string }>; errors?: string[] }>('/email/sync', { method: 'POST', token }),
+  },
+
   ebloc: {
     discover: (token: string, data: { username: string; password: string }) => request<{ status: string; properties: Array<{ page_id: string; name: string; address: string; url: string }> }>('/ebloc/discover', { method: 'POST', body: data, token }),
     configure: (token: string, data: EblocConfigCreate) => request<{ status: string; message: string }>('/ebloc/configure', { method: 'POST', body: data, token }),

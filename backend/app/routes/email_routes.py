@@ -1,10 +1,11 @@
 """Email processing routes."""
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from app.models import Bill, BillType, TokenData
 from app.auth import require_landlord
 from app.database import db
 from app.email_scraper import extract_bill_info, match_address_to_property
+from app.email_monitor import email_monitor
 
 router = APIRouter(prefix="/email", tags=["email"])
 
@@ -31,4 +32,50 @@ async def process_email(
     )
     db.save_bill(bill)
     return {"status": "created", "bill": bill, "extracted": info}
+
+
+@router.post("/sync")
+async def sync_email_bills(current_user: TokenData = Depends(require_landlord)):
+    """
+    Sync bills from email inbox.
+    
+    Fetches unread emails sent to proManage.bill+{user_id}@gmail.com,
+    extracts PDF attachments, matches them against text patterns,
+    and creates bills automatically.
+    """
+    if not email_monitor.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Email monitoring not configured. Set EMAIL_MONITOR_* environment variables."
+        )
+    
+    # Process emails for the current user
+    result = email_monitor.process_email_bills(user_id=current_user.user_id)
+    
+    return result
+
+
+@router.post("/sync-all")
+async def sync_all_email_bills(current_user: TokenData = Depends(require_landlord)):
+    """
+    Sync bills from email inbox for all users.
+    
+    Admin endpoint - processes unread emails for all users.
+    """
+    from app.models import UserRole
+    
+    # Only admins can sync all
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if not email_monitor.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Email monitoring not configured. Set EMAIL_MONITOR_* environment variables."
+        )
+    
+    # Process all emails (no user filter)
+    result = email_monitor.process_email_bills(user_id=None)
+    
+    return result
 

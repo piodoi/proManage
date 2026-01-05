@@ -41,6 +41,7 @@ export default function AllPropertiesSyncDialog({
   const { preferences } = usePreferences();
   const [stage, setStage] = useState<Stage>('suppliers');
   const [refreshRentBills, setRefreshRentBills] = useState(true); // Default on
+  const [syncEmailBills, setSyncEmailBills] = useState(true); // Default on
   const [allPropertySuppliers, setAllPropertySuppliers] = useState<Map<string, PropertySupplier[]>>(new Map());
   const [supplierGroups, setSupplierGroups] = useState<SupplierGroup[]>([]);
   const [selectedSupplierKeys, setSelectedSupplierKeys] = useState<Set<string>>(new Set());
@@ -51,6 +52,7 @@ export default function AllPropertiesSyncDialog({
   const [syncId, setSyncId] = useState<string | null>(null);
   const [savingBills, setSavingBills] = useState(false);
   const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
+  const [totalEmailBillsSynced, setTotalEmailBillsSynced] = useState(0);
   const [propertiesWithRentersCount, setPropertiesWithRentersCount] = useState(0);
   const [totalRentersCount, setTotalRentersCount] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -68,12 +70,14 @@ export default function AllPropertiesSyncDialog({
       loadRenterCounts();
       setStage('suppliers');
       setRefreshRentBills(true); // Default on
+      setSyncEmailBills(true); // Default on
       setProgress([]);
       setDiscoveredBills([]);
       setSelectedBillIds(new Set());
       setSyncing(false);
       setSavingBills(false);
       setTotalRentBillsGenerated(0);
+      setTotalEmailBillsSynced(0);
       progressMapRef.current.clear();
       discoveredBillsRef.current = [];
     }
@@ -186,9 +190,9 @@ export default function AllPropertiesSyncDialog({
   };
 
   const handleStartSync = async () => {
-    // Allow sync if either suppliers are selected OR refresh rent bills is checked
-    if (selectedSupplierKeys.size === 0 && !refreshRentBills) {
-      onError('Please select at least one supplier or enable Refresh Rent Bills');
+    // Allow sync if either suppliers are selected OR refresh rent bills is checked OR sync email bills is checked
+    if (selectedSupplierKeys.size === 0 && !refreshRentBills && !syncEmailBills) {
+      onError('Please select at least one supplier, enable Refresh Rent Bills, or enable Sync Email Bills');
       return;
     }
 
@@ -203,7 +207,23 @@ export default function AllPropertiesSyncDialog({
       }
     }
 
-    // If no suppliers selected, just close the dialog after generating rent bills
+    // If sync email bills is checked, sync email bills
+    if (syncEmailBills) {
+      try {
+        const result = await api.email.sync(token!);
+        if (result.status === 'success') {
+          setTotalEmailBillsSynced(result.bills_created);
+        } else {
+          onError(result.message || 'Failed to sync email bills');
+          return;
+        }
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Failed to sync email bills');
+        return;
+      }
+    }
+
+    // If no suppliers selected, just close the dialog after generating rent bills and/or syncing email
     if (selectedSupplierKeys.size === 0) {
       onOpenChange(false);
       onSuccess();
@@ -806,6 +826,23 @@ export default function AllPropertiesSyncDialog({
                   </div>
                 </div>
 
+                {/* Sync email bills checkbox - same style as suppliers */}
+                <div className="flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
+                  <Checkbox
+                    id="sync-email-bills"
+                    checked={syncEmailBills}
+                    onCheckedChange={(checked) => setSyncEmailBills(checked === true)}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="sync-email-bills" className="text-sm font-medium text-slate-100 cursor-pointer">
+                      {t('settings.syncEmailBills')}
+                    </Label>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {t('settings.syncEmailBillsDesc')}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Eligible suppliers */}
                 {eligibleSupplierGroups.map((group) => {
                   const key = group.supplier_id || group.supplier_name;
@@ -863,16 +900,25 @@ export default function AllPropertiesSyncDialog({
                 )}
               </div>
 
-              {totalRentBillsGenerated > 0 && (
-                <div className="text-xs text-slate-400 text-center pt-2 border-t border-slate-700">
-                  {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
+              {(totalRentBillsGenerated > 0 || totalEmailBillsSynced > 0) && (
+                <div className="text-xs text-slate-400 text-center pt-2 border-t border-slate-700 space-y-1">
+                  {totalRentBillsGenerated > 0 && (
+                    <div>
+                      {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
+                    </div>
+                  )}
+                  {totalEmailBillsSynced > 0 && (
+                    <div>
+                      {t('settings.emailBillsSynced')}: {totalEmailBillsSynced}
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="flex justify-end pt-2 border-t border-slate-700">
                 <Button
                   onClick={handleStartSync}
-                  disabled={selectedSupplierKeys.size === 0 && !refreshRentBills}
+                  disabled={selectedSupplierKeys.size === 0 && !refreshRentBills && !syncEmailBills}
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
                   {t('supplier.syncBills')}
