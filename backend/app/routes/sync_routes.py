@@ -1592,18 +1592,45 @@ async def save_all_discovered_bills(
                 db.save_bill(bill)
                 bills_created.append(bill.id)
                 
-                # For E-bloc bills, save contract_id (association_id) to property_supplier if not already set
-                if bill_type == BillType.EBLOC and bill_data.get("contract_id"):
-                    contract_id = bill_data["contract_id"]
+                # Save contract_id to property_supplier if not already set
+                contract_id = bill_data.get("contract_id")
+                bill_source = bill_data.get("source")  # 'email' for email bills
+                supplier_name = bill_data.get("supplier")  # Supplier name from pattern
+                
+                if contract_id:
                     prop_suppliers = db.list_property_suppliers(property_id)
-                    # Find E-bloc supplier
-                    ebloc_supplier = next((s for s in db.list_suppliers() if s.name.lower() == "e-bloc"), None)
-                    if ebloc_supplier:
-                        prop_supplier = next((ps for ps in prop_suppliers if ps.supplier_id == ebloc_supplier.id), None)
-                        if prop_supplier and not prop_supplier.contract_id:
-                            prop_supplier.contract_id = contract_id
-                            db.save_property_supplier(prop_supplier)
-                            logger.info(f"[E-bloc] Saved contract_id {contract_id} to property supplier for property {property_id}")
+                    
+                    # For E-bloc bills
+                    if bill_type == BillType.EBLOC:
+                        ebloc_supplier = next((s for s in db.list_suppliers() if s.name.lower() == "e-bloc"), None)
+                        if ebloc_supplier:
+                            prop_supplier = next((ps for ps in prop_suppliers if ps.supplier_id == ebloc_supplier.id), None)
+                            if prop_supplier and not prop_supplier.contract_id:
+                                prop_supplier.contract_id = contract_id
+                                db.save_property_supplier(prop_supplier)
+                                logger.info(f"[E-bloc] Saved contract_id {contract_id} to property supplier for property {property_id}")
+                    
+                    # For email bills with supplier name
+                    elif bill_source == "email" and supplier_name:
+                        # Find matching supplier by name
+                        all_suppliers = db.list_suppliers()
+                        matching_supplier = None
+                        supplier_name_lower = supplier_name.lower()
+                        
+                        for supplier in all_suppliers:
+                            if supplier.name and (supplier.name.lower() in supplier_name_lower or supplier_name_lower in supplier.name.lower()):
+                                matching_supplier = supplier
+                                break
+                        
+                        if matching_supplier:
+                            # Find or create property_supplier for this supplier
+                            prop_supplier = next((ps for ps in prop_suppliers if ps.supplier_id == matching_supplier.id), None)
+                            if prop_supplier and not prop_supplier.contract_id:
+                                prop_supplier.contract_id = contract_id
+                                db.save_property_supplier(prop_supplier)
+                                logger.info(f"[Email Bill] Saved contract_id {contract_id} to property supplier '{matching_supplier.name}' for property {property_id}")
+                            elif not prop_supplier:
+                                logger.info(f"[Email Bill] No property_supplier found for supplier '{matching_supplier.name}' on property {property_id} - contract_id not saved")
         except Exception as e:
             logger.error(f"Error saving bill: {e}", exc_info=True)
             continue

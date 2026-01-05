@@ -50,6 +50,7 @@ export default function AllPropertiesSyncDialog({
   const [discoveredBills, setDiscoveredBills] = useState<DiscoveredBill[]>([]);
   const [selectedBillIds, setSelectedBillIds] = useState<Set<string>>(new Set());
   const [syncId, setSyncId] = useState<string | null>(null);
+  const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
   const [savingBills, setSavingBills] = useState(false);
   const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
   const [totalEmailBillsSynced, setTotalEmailBillsSynced] = useState(0);
@@ -172,10 +173,12 @@ export default function AllPropertiesSyncDialog({
   const handleSelectAllSuppliers = () => {
     if (selectedSupplierKeys.size === eligibleSupplierGroups.length) {
       setSelectedSupplierKeys(new Set());
-      setRefreshRentBills(false); // Deselect renter bills too
+      setRefreshRentBills(false); // Deselect rent bills too
+      setSyncEmailBills(false); // Deselect email bills too
     } else {
       setSelectedSupplierKeys(new Set(eligibleSupplierGroups.map(g => g.supplier_id || g.supplier_name)));
-      setRefreshRentBills(true); // Select renter bills too
+      setRefreshRentBills(true); // Select rent bills too
+      setSyncEmailBills(true); // Select email bills too
     }
   };
 
@@ -207,13 +210,40 @@ export default function AllPropertiesSyncDialog({
       }
     }
 
-    // If sync email bills is checked, sync email bills
+    // If sync email bills is checked, fetch email bills (don't create yet, just discover)
     if (syncEmailBills) {
       try {
         const result = await api.email.sync(token!);
-        if (result.status === 'success') {
-          setTotalEmailBillsSynced(result.bills_created);
-        } else {
+        if (result.status === 'success' && result.discovered_bills && result.discovered_bills.length > 0) {
+          // Add discovered email bills to the discovered bills list
+          const emailBills = result.discovered_bills!.map((bill: any) => ({
+            ...bill,
+            source: 'email',
+            selected: true, // Pre-select email bills
+          }));
+          
+          // Collect email_ids for marking as read later
+          const newEmailIds = new Set(processedEmailIds);
+          emailBills.forEach((bill: any) => {
+            if (bill.email_id) {
+              newEmailIds.add(bill.email_id);
+            }
+          });
+          setProcessedEmailIds(newEmailIds);
+          
+          // Add to discovered bills
+          setDiscoveredBills(prev => [...prev, ...emailBills]);
+          discoveredBillsRef.current = [...discoveredBillsRef.current, ...emailBills];
+          
+          // Pre-select all email bills
+          setSelectedBillIds(prev => {
+            const newSet = new Set(prev);
+            emailBills.forEach((bill: any) => newSet.add(bill.id));
+            return newSet;
+          });
+          
+          setTotalEmailBillsSynced(emailBills.length);
+        } else if (result.status !== 'success') {
           onError(result.message || 'Failed to sync email bills');
           return;
         }
@@ -223,10 +253,16 @@ export default function AllPropertiesSyncDialog({
       }
     }
 
-    // If no suppliers selected, just close the dialog after generating rent bills and/or syncing email
+    // If no suppliers selected, check if we have email bills to show
     if (selectedSupplierKeys.size === 0) {
-      onOpenChange(false);
-      onSuccess();
+      // If we have discovered email bills, go to bills stage
+      if (syncEmailBills && discoveredBillsRef.current.length > 0) {
+        setStage('bills');
+      } else {
+        // Otherwise close the dialog
+        onOpenChange(false);
+        onSuccess();
+      }
       return;
     }
 
@@ -723,6 +759,8 @@ export default function AllPropertiesSyncDialog({
             extraction_pattern_id: null,
             contract_id: b.contract_id || null,
             status: 'pending',
+            source: b.source || null, // 'email' for email bills
+            supplier: b.supplier || null, // Supplier name for matching
           };
         });
       
@@ -754,10 +792,22 @@ export default function AllPropertiesSyncDialog({
     }
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
     if (syncing) {
       handleCancel();
     }
+    
+    // Delete processed emails from inbox (regardless of whether bills were imported)
+    if (processedEmailIds.size > 0 && token) {
+      try {
+        await api.email.delete(token, Array.from(processedEmailIds));
+        console.log(`Deleted ${processedEmailIds.size} emails from inbox`);
+      } catch (err) {
+        console.error('Failed to delete emails:', err);
+        // Don't block closing the dialog if this fails
+      }
+    }
+    
     onOpenChange(false);
   };
 

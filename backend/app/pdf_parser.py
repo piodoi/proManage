@@ -5,6 +5,7 @@ import logging
 import sys
 
 from app.models import ExtractionPattern, ExtractionResult
+from app.utils.parsers import parse_amount as parse_amount_utility
 
 logger = logging.getLogger(__name__)
 # Ensure logger has a handler
@@ -202,18 +203,12 @@ def extract_iban(text: str, custom_pattern: Optional[str] = None) -> Optional[st
 
 
 def extract_amount(text: str, custom_pattern: Optional[str] = None) -> Optional[float]:
-    """Extract amount from text. Assumes amount is in bani (smallest unit), strips all commas/dots, then divides by 100 to get lei."""
+    """Extract amount from text using standard utility."""
     if custom_pattern:
         result = apply_pattern(text, custom_pattern)
         if result:
-            try:
-                # Strip all commas, dots, and spaces - assume value is in bani
-                cleaned = result.replace(',', '').replace('.', '').replace(' ', '')
-                # Convert to int (bani) then divide by 100 to get lei
-                amount_bani = int(cleaned)
-                return amount_bani / 100.0
-            except ValueError:
-                pass
+            return parse_amount_utility(result)
+    
     amount_patterns = [
         r'(?:total|suma|amount|de plata|plata)[\s:]*(\d+[.,]?\d*)\s*(?:lei|ron|eur)?',
         r'(\d+[.,]?\d*)\s*(?:lei|ron|eur)',
@@ -222,14 +217,9 @@ def extract_amount(text: str, custom_pattern: Optional[str] = None) -> Optional[
     for pattern in amount_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            try:
-                # Strip all commas, dots, and spaces - assume value is in bani
-                cleaned = match.group(1).replace(',', '').replace('.', '').replace(' ', '')
-                # Convert to int (bani) then divide by 100 to get lei
-                amount_bani = int(cleaned)
-                return amount_bani / 100.0
-            except ValueError:
-                continue
+            parsed = parse_amount_utility(match.group(1))
+            if parsed is not None:
+                return parsed
     return None
 
 

@@ -14,6 +14,8 @@ import re
 from pathlib import Path
 import json
 
+from app.utils.parsers import parse_amount as parse_amount_utility
+
 logger = logging.getLogger(__name__)
 
 
@@ -743,17 +745,8 @@ class WebScraper:
             logger.warning(f"[{self.config.supplier_name} Scraper] Failed to save PDF dump: {e}")
     
     def _parse_amount(self, text: str) -> Optional[float]:
-        """Parse amount from text. Assumes amount is in bani (smallest unit), strips all commas/dots, then divides by 100 to get lei."""
-        # Remove currency symbols and whitespace, keeping only digits, commas, and dots
-        text = re.sub(r'[^\d.,]', '', text)
-        # Strip all commas and dots - assume value is in bani
-        cleaned = text.replace(',', '').replace('.', '')
-        try:
-            # Convert to int (bani) then divide by 100 to get lei
-            amount_bani = int(cleaned)
-            return amount_bani / 100.0
-        except ValueError:
-            return None
+        """Parse amount from text using standard utility."""
+        return parse_amount_utility(text)
     
     def _parse_date(self, text: str) -> Optional[datetime]:
         """Parse date from text"""

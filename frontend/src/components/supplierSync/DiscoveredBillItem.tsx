@@ -14,6 +14,9 @@ export type DiscoveredBill = {
   property_id?: string;
   property_name?: string;
   bill_data?: any;
+  source?: string; // 'email' for email bills
+  supplier?: string; // Supplier name from pattern
+  email_id?: string; // Email ID for marking as read
 };
 
 type DiscoveredBillItemProps = {

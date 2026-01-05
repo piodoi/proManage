@@ -125,7 +125,27 @@ export const api = {
 
 
   email: {
-    sync: (token: string) => request<{ status: string; message: string; emails_processed: number; bills_created: number; bills?: Array<{ id: string; amount: number; description: string }>; errors?: string[] }>('/email/sync', { method: 'POST', token }),
+    sync: (token: string) => request<{ 
+      status: string; 
+      message: string; 
+      emails_processed: number; 
+      bills_discovered: number;
+      bills_created: number; 
+      discovered_bills?: Array<any>;
+      errors?: string[] 
+    }>('/email/sync', { method: 'POST', token }),
+    markRead: (token: string, emailIds: string[]) => 
+      request<{ status: string; message: string }>('/email/mark-read', { 
+        method: 'POST', 
+        body: { email_ids: emailIds }, 
+        token 
+      }),
+    delete: (token: string, emailIds: string[]) => 
+      request<{ status: string; message: string }>('/email/delete', { 
+        method: 'POST', 
+        body: { email_ids: emailIds }, 
+        token 
+      }),
   },
 
   ebloc: {
