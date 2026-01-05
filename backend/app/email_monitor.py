@@ -173,18 +173,73 @@ class EmailMonitor:
             mail.logout()
     
     def delete_email(self, email_id: str):
-        """Delete email from inbox (permanently removes it)."""
+        """
+        Delete email from inbox.
+        
+        For Gmail: moves to Trash folder (Gmail auto-deletes after 30 days).
+        For other providers: permanently deletes via IMAP.
+        
+        Note: IMAP message IDs are ephemeral. If email was moved manually,
+        the ID will be invalid and deletion will fail silently.
+        """
         mail = self.connect()
         try:
             mail.select('INBOX')
-            # Mark email for deletion
-            mail.store(email_id, '+FLAGS', '\\Deleted')
-            # Permanently remove all emails marked for deletion
-            mail.expunge()
-            logger.info(f"[Email Monitor] Deleted email {email_id}")
+            
+            # Ensure email_id is bytes if needed
+            if isinstance(email_id, str):
+                email_id_bytes = email_id.encode() if email_id else email_id
+            else:
+                email_id_bytes = email_id
+            
+            # Verify email exists before trying to delete
+            status, check_data = mail.fetch(email_id_bytes, '(FLAGS)')
+            if status != 'OK':
+                logger.warning(f"[Email Delete] Email {email_id} not found in INBOX (may have been moved/deleted manually)")
+                return  # Skip deletion if email doesn't exist
+            
+            # Gmail-specific: Move to Trash (Gmail auto-deletes from Trash after 30 days)
+            if 'gmail' in self.host.lower():
+                try:
+                    # Copy to Trash folder first - try Gmail folder names
+                    result = None
+                    trash_used = None
+                    for trash_folder in ['[Gmail]/Trash', '[Gmail]/Bin', 'Trash']:
+                        try:
+                            result = mail.copy(email_id_bytes, trash_folder)
+                            if result[0] == 'OK':
+                                trash_used = trash_folder
+                                break
+                        except Exception:
+                            continue
+                    
+                    # Only mark as deleted in INBOX (keeps copy in Trash)
+                    # This removes from INBOX but email stays in Trash for 30 days
+                    mail.store(email_id_bytes, '+FLAGS', '\\Deleted')
+                    mail.expunge()
+                    
+                    if trash_used:
+                        logger.info(f"[Email Delete] ✓ Moved email {email_id} to {trash_used}")
+                except Exception as gmail_err:
+                    logger.warning(f"[Email Delete] Gmail-specific deletion failed: {gmail_err}, trying standard method")
+                    # Fallback to standard deletion
+                    mail.store(email_id_bytes, '+FLAGS', '\\Deleted')
+                    mail.expunge()
+                    logger.info(f"[Email Delete] ✓ Deleted email {email_id} (standard method)")
+            else:
+                # Standard IMAP deletion for non-Gmail providers
+                mail.store(email_id_bytes, '+FLAGS', '\\Deleted')
+                mail.expunge()
+                logger.info(f"[Email Delete] ✓ Deleted email {email_id}")
+        except Exception as e:
+            # Don't raise - log and continue with other emails
+            logger.warning(f"[Email Delete] Failed to delete email {email_id}: {e}")
         finally:
-            mail.close()
-            mail.logout()
+            try:
+                mail.close()
+                mail.logout()
+            except:
+                pass
     
     def process_email_bills(self, user_id: Optional[str] = None, create_bills: bool = False) -> dict:
         """
@@ -255,13 +310,6 @@ class EmailMonitor:
                             # Use text pattern extraction (from text_patterns folder)
                             extracted_data, pattern_id, pattern_name = extract_bill_from_pdf_auto(pdf_data)
                             
-                            # Log all extracted fields for debugging
-                            logger.info(f"[Email Bill Extraction] File: {filename}")
-                            logger.info(f"[Email Bill Extraction] Pattern: {pattern_name} ({pattern_id})")
-                            logger.info(f"[Email Bill Extraction] Extracted fields:")
-                            for field_name, field_value in (extracted_data or {}).items():
-                                logger.info(f"  - {field_name}: {field_value}")
-                            
                             if not extracted_data:
                                 error_msg = f"No pattern matched for {filename}"
                                 logger.warning(error_msg)
@@ -282,10 +330,6 @@ class EmailMonitor:
                             extracted_contract_id = extracted_data.get('contract_id')
                             extracted_supplier = pattern_name  # Use pattern name as supplier
                             
-                            logger.info(f"[Email Bill Match] Extracted address: {extracted_address}")
-                            logger.info(f"[Email Bill Match] Extracted contract_id: {extracted_contract_id}")
-                            logger.info(f"[Email Bill Match] Supplier: {extracted_supplier}")
-                            
                             # Try to match property
                             matched_property = None
                             match_reason = None
@@ -293,7 +337,6 @@ class EmailMonitor:
                             
                             # Strategy 1: Match by contract_id if available
                             if extracted_contract_id:
-                                logger.info(f"[Email Bill Match] Trying contract_id matching...")
                                 for prop in properties:
                                     # Get suppliers for this property
                                     property_suppliers = db.list_property_suppliers(prop.id)
@@ -312,20 +355,15 @@ class EmailMonitor:
                                                 if prop_supplier.contract_id and prop_supplier.contract_id.lower() == extracted_contract_id.lower():
                                                     matched_property = prop
                                                     match_reason = f"contract_id match ({extracted_contract_id})"
-                                                    logger.info(f"[Email Bill Match] ✓ Matched by contract_id: {prop.name}")
                                                     break
                                     if matched_property:
                                         break
                             
                             # Strategy 2: Match by address scoring (always use best match, user decides in UI)
                             if not matched_property and extracted_address:
-                                logger.info(f"[Email Bill Match] Trying address scoring...")
                                 best_match_property = None
                                 for prop in properties:
                                     confidence, debug_info = calculate_address_confidence(extracted_address, prop.address)
-                                    logger.info(f"[Email Bill Match] Property '{prop.name}': {confidence}% confidence")
-                                    logger.info(f"[Email Bill Match]   - Common tokens: {debug_info.get('common_tokens', set())}")
-                                    logger.info(f"[Email Bill Match]   - Matching components: {debug_info.get('matching_components', 0)}/{debug_info.get('total_components', 0)}")
                                     
                                     if confidence > best_score:
                                         best_score = confidence
@@ -340,12 +378,6 @@ class EmailMonitor:
                             if not matched_property and len(properties) == 1:
                                 matched_property = properties[0]
                                 match_reason = "single property for user"
-                                logger.info(f"[Email Bill Match] Using single property: {matched_property.name}")
-                            
-                            if matched_property:
-                                logger.info(f"[Email Bill Match] ✓ Final match: {matched_property.name} ({match_reason})")
-                            else:
-                                logger.info(f"[Email Bill Match] No property match found - bill will be shown for user selection")
                             
                             # Parse due date if it's a string (dates come in YYYY-MM-DD format from utils)
                             from datetime import datetime
@@ -371,13 +403,11 @@ class EmailMonitor:
                                 # Amount should already be parsed by text_pattern_utils, but verify it's a float
                                 try:
                                     amount = float(extracted_data['amount'])
-                                    logger.info(f"[Email Bill] Amount: {amount} RON")
                                 except (ValueError, TypeError):
                                     # Fallback: try parsing with utility if it's still a string
                                     parsed = parse_amount(str(extracted_data['amount']))
                                     if parsed is not None:
                                         amount = parsed
-                                        logger.info(f"[Email Bill] Parsed amount: {extracted_data.get('amount')} -> {amount} RON")
                                     else:
                                         logger.warning(f"[Email Bill] Could not parse amount: {extracted_data.get('amount')}")
                             
@@ -389,8 +419,9 @@ class EmailMonitor:
                                 'property_id': matched_property.id if matched_property else None,
                                 'property_name': matched_property.name if matched_property else None,
                                 'property_address': matched_property.address if matched_property else None,
-                                'supplier': pattern_name,  # Supplier from pattern name
-                                'description': extracted_data.get('description', f"Bill from {pattern_name} - {filename}"),
+                                'supplier': pattern_name,  # Supplier from pattern name (for backend processing)
+                                'supplier_name': pattern_name,  # Supplier name for display
+                                'description': extracted_data.get('description') or pattern_name,  # Use description from pattern or supplier name
                                 'amount': amount,
                                 'currency': 'RON',
                                 'due_date': due_date.isoformat() if due_date else None,
@@ -409,13 +440,6 @@ class EmailMonitor:
                                 # Note: pdf_data not included in response as it's binary and can't be JSON serialized
                                 # If needed later, we can re-fetch from email or store separately
                             }
-                            
-                            logger.info(f"[Email Bill] Created discovered bill:")
-                            logger.info(f"  - Supplier: {pattern_name}")
-                            logger.info(f"  - Amount: {amount} RON")
-                            logger.info(f"  - Due date: {extracted_data.get('due_date')}")
-                            logger.info(f"  - Property: {matched_property.name if matched_property else 'No match'}")
-                            logger.info(f"  - Match reason: {match_reason if matched_property else 'No match'}")
                             
                             discovered_bills.append(discovered_bill)
                             
@@ -442,7 +466,6 @@ class EmailMonitor:
                                 
                                 db.save_bill(bill)
                                 bills_created += 1
-                                logger.info(f"Created bill {bill.id} for property {matched_property.name}")
                             
                         except Exception as e:
                             error_msg = f"Error processing PDF {filename}: {str(e)}"

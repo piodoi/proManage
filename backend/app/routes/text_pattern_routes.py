@@ -262,6 +262,32 @@ async def extract_with_text_pattern(
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     
     pdf_bytes = await file.read()
+    
+    # Load pattern
+    pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
+    if not os.path.exists(pattern_file):
+        raise HTTPException(status_code=404, detail="Pattern not found")
+    
+    with open(pattern_file, 'r', encoding='utf-8') as f:
+        pattern = json.load(f)
+    
+    # Use shared extraction utility (same as email extraction)
+    extracted_data = extract_with_pattern(pdf_bytes, pattern)
+    
+    return {"extracted_data": extracted_data}
+
+
+@router.post("/extract-with-pattern-OLD-INLINE")
+async def extract_with_text_pattern_old_inline(
+    file: UploadFile = File(...),
+    pattern_id: str = Form(...),
+    current_user: TokenData = Depends(require_landlord),
+):
+    """OLD INLINE EXTRACTION - KEPT FOR REFERENCE IF UTILITY DOESN'T WORK"""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    pdf_bytes = await file.read()
     pdf_text = extract_text_from_pdf(pdf_bytes)
     pdf_lines = pdf_text.splitlines()
     

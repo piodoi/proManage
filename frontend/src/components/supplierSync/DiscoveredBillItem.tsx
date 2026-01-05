@@ -39,7 +39,7 @@ export default function DiscoveredBillItem({ bill, selected, onToggle }: Discove
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-100">
-              <span className="font-bold">{bill.supplier_name}</span>
+              <span className="font-bold">{bill.description || bill.supplier_name}</span>
               {bill.property_name && (
                 <span className="text-slate-300 ml-2">- {bill.property_name}</span>
               )}
@@ -58,9 +58,6 @@ export default function DiscoveredBillItem({ bill, selected, onToggle }: Discove
             <span>{t('supplier.contractId')}: {bill.contract_id}</span>
           )}
         </div>
-        {bill.iban && (
-          <p className="text-xs text-slate-400 mt-1">IBAN: {bill.iban}</p>
-        )}
       </div>
     </div>
   );

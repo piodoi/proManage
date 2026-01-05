@@ -18,6 +18,18 @@
     "extraction_pattern_supplier": "E-Bloc"
   },
   {
+    "name": "Engie",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "engie"
+  },
+  {
+    "name": "Engie Gaze",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "engie.gaz"
+  },
+  {
     "name": "EonRomania",
     "bill_type": "utilities",
     "has_api": true,
@@ -46,11 +58,5 @@
     "bill_type": "utilities",
     "has_api": false,
     "extraction_pattern_supplier": "Vodafone"
-  },
-  {
-    "name": "ENGIE",
-    "bill_type": "utilities",
-    "has_api": false,
-    "extraction_pattern_supplier": "ENGIE"
   }
 ]

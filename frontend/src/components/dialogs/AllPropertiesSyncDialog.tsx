@@ -214,15 +214,15 @@ export default function AllPropertiesSyncDialog({
     if (syncEmailBills) {
       try {
         const result = await api.email.sync(token!);
-        if (result.status === 'success' && result.discovered_bills && result.discovered_bills.length > 0) {
-          // Add discovered email bills to the discovered bills list
-          const emailBills = result.discovered_bills!.map((bill: any) => ({
+        if (result.status === 'success') {
+          // Process email bills (even if empty array)
+          const emailBills = (result.discovered_bills || []).map((bill: any) => ({
             ...bill,
             source: 'email',
             selected: true, // Pre-select email bills
           }));
           
-          // Collect email_ids for marking as read later
+          // Collect email_ids for deletion later
           const newEmailIds = new Set(processedEmailIds);
           emailBills.forEach((bill: any) => {
             if (bill.email_id) {
@@ -231,19 +231,21 @@ export default function AllPropertiesSyncDialog({
           });
           setProcessedEmailIds(newEmailIds);
           
-          // Add to discovered bills
-          setDiscoveredBills(prev => [...prev, ...emailBills]);
-          discoveredBillsRef.current = [...discoveredBillsRef.current, ...emailBills];
-          
-          // Pre-select all email bills
-          setSelectedBillIds(prev => {
-            const newSet = new Set(prev);
-            emailBills.forEach((bill: any) => newSet.add(bill.id));
-            return newSet;
-          });
+          // Add to discovered bills (even if empty)
+          if (emailBills.length > 0) {
+            setDiscoveredBills(prev => [...prev, ...emailBills]);
+            discoveredBillsRef.current = [...discoveredBillsRef.current, ...emailBills];
+            
+            // Pre-select all email bills
+            setSelectedBillIds(prev => {
+              const newSet = new Set(prev);
+              emailBills.forEach((bill: any) => newSet.add(bill.id));
+              return newSet;
+            });
+          }
           
           setTotalEmailBillsSynced(emailBills.length);
-        } else if (result.status !== 'success') {
+        } else {
           onError(result.message || 'Failed to sync email bills');
           return;
         }
@@ -259,8 +261,8 @@ export default function AllPropertiesSyncDialog({
       if (syncEmailBills && discoveredBillsRef.current.length > 0) {
         setStage('bills');
       } else {
-        // Otherwise close the dialog
-        onOpenChange(false);
+        // Otherwise close the dialog and cleanup
+        handleCloseAndCleanup();
         onSuccess();
       }
       return;
@@ -644,16 +646,14 @@ export default function AllPropertiesSyncDialog({
         setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
       }
     } else if (eventType === 'complete') {
-      // Stop syncing, but if we have bills, switch to bills stage
+      // Stop syncing and always show bills stage (even if no bills found)
       setSyncing(false);
-      if (discoveredBillsRef.current.length > 0) {
-        setDiscoveredBills([...discoveredBillsRef.current]);
-        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
-        setStage('bills');
-      }
+      setDiscoveredBills([...discoveredBillsRef.current]);
+      setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+      setStage('bills');
     } else if (eventType === 'progress' && data.status === 'completed' && !syncing) {
-      // For single property sync, check if all suppliers are done
-      if (isSingleProperty && discoveredBillsRef.current.length > 0) {
+      // For single property sync, always show bills stage when done
+      if (isSingleProperty) {
         setDiscoveredBills([...discoveredBillsRef.current]);
         setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
         setStage('bills');
@@ -662,7 +662,7 @@ export default function AllPropertiesSyncDialog({
       setSyncing(false);
       onError(data.error || 'Sync failed');
     } else if (eventType === 'cancelled') {
-      // Stop syncing but keep discovered bills available
+      // Stop syncing and always show bills stage (even if empty)
       setSyncing(false);
       setProgress((prev) =>
         prev.map((p) =>
@@ -671,14 +671,10 @@ export default function AllPropertiesSyncDialog({
             : p
         )
       );
-      // If we have discovered bills, show them; otherwise close dialog
-      if (discoveredBillsRef.current.length > 0) {
-        setDiscoveredBills([...discoveredBillsRef.current]);
-        setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
-        setStage('bills');
-      } else {
-        onOpenChange(false);
-      }
+      // Always show bills stage - let user decide to close
+      setDiscoveredBills([...discoveredBillsRef.current]);
+      setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+      setStage('bills');
     }
   };
 
@@ -704,14 +700,10 @@ export default function AllPropertiesSyncDialog({
       abortControllerRef.current = null;
     }
     setSyncing(false);
-    // If we have discovered bills, show them instead of closing
-    if (discoveredBillsRef.current.length > 0) {
-      setDiscoveredBills([...discoveredBillsRef.current]);
-      setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
-      setStage('bills');
-    } else {
-      onOpenChange(false);
-    }
+    // Always show bills stage after cancellation (even if no bills)
+    setDiscoveredBills([...discoveredBillsRef.current]);
+    setSelectedBillIds(new Set(discoveredBillsRef.current.map(b => b.id)));
+    setStage('bills');
   };
 
   const handleSelectAllBills = () => {
@@ -784,7 +776,8 @@ export default function AllPropertiesSyncDialog({
         throw new Error(error.detail || 'Failed to save bills');
       }
 
-      onOpenChange(false);
+      // Close dialog and delete emails in background
+      handleCloseAndCleanup();
       onSuccess();
     } catch (err) {
       setSavingBills(false);
@@ -792,23 +785,33 @@ export default function AllPropertiesSyncDialog({
     }
   };
 
-  const handleClose = async () => {
+  const handleCloseAndCleanup = () => {
+    // Close dialog immediately (don't wait for email deletion)
+    onOpenChange(false);
+    
+    // Delete processed emails in background (fire-and-forget)
+    if (processedEmailIds.size > 0 && token) {
+      const emailIdsToDelete = Array.from(processedEmailIds);
+      console.log(`[Email Delete] Deleting ${emailIdsToDelete.length} emails in background:`, emailIdsToDelete);
+      
+      // Fire-and-forget: don't await, let it run in background
+      api.email.delete(token, emailIdsToDelete)
+        .then(() => {
+          console.log(`[Email Delete] ✓ Successfully deleted ${emailIdsToDelete.length} emails`);
+        })
+        .catch((err) => {
+          console.error('[Email Delete] ✗ Failed to delete emails:', err);
+        });
+    }
+  };
+
+  const handleClose = () => {
     if (syncing) {
       handleCancel();
+      return;
     }
     
-    // Delete processed emails from inbox (regardless of whether bills were imported)
-    if (processedEmailIds.size > 0 && token) {
-      try {
-        await api.email.delete(token, Array.from(processedEmailIds));
-        console.log(`Deleted ${processedEmailIds.size} emails from inbox`);
-      } catch (err) {
-        console.error('Failed to delete emails:', err);
-        // Don't block closing the dialog if this fails
-      }
-    }
-    
-    onOpenChange(false);
+    handleCloseAndCleanup();
   };
 
 
@@ -1083,13 +1086,22 @@ export default function AllPropertiesSyncDialog({
                 >
                   {t('common.back')}
                 </Button>
-                <Button
-                  onClick={handleSaveBills}
-                  disabled={selectedBillIds.size === 0 || savingBills}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {savingBills ? t('common.loading') : t('supplier.saveBills')}
-                </Button>
+                {discoveredBills.length === 0 ? (
+                  <Button
+                    onClick={handleClose}
+                    className="bg-slate-600 hover:bg-slate-700"
+                  >
+                    {t('common.close')}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSaveBills}
+                    disabled={selectedBillIds.size === 0 || savingBills}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {savingBills ? t('common.loading') : t('supplier.saveBills')}
+                  </Button>
+                )}
               </div>
             </div>
           )}

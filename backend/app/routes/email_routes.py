@@ -109,7 +109,6 @@ async def mark_emails_read(
     try:
         for email_id in request.email_ids:
             email_monitor.mark_as_read(email_id)
-            logger.info(f"[Email] Marked email {email_id} as read for user {current_user.user_id}")
         
         return {
             "status": "success",
@@ -141,7 +140,6 @@ async def delete_emails(
     try:
         for email_id in request.email_ids:
             email_monitor.delete_email(email_id)
-            logger.info(f"[Email] Deleted email {email_id} for user {current_user.user_id}")
         
         return {
             "status": "success",

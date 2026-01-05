@@ -100,8 +100,11 @@ def extract_iban(text: str) -> str:
     return cleaned
 
 
-def clean_bill_number(text: str) -> str:
+def clean_bill_number(text: str) -> Optional[str]:
     """Clean bill number - remove prefixes like 'NO.', 'NO ', 'nr.', etc."""
+    if not text:
+        return None
+    
     patterns = [
         r'^Seria\s+ENG\s+nr\.?\s+',
         r'^Seria\s+[A-Z]+\s+nr\.?\s+',
@@ -113,7 +116,8 @@ def clean_bill_number(text: str) -> str:
     for pattern in patterns:
         text = re.sub(pattern, '', text, flags=re.IGNORECASE)
     
-    return text.strip()
+    cleaned = text.strip()
+    return cleaned if cleaned else None
 
 
 def parse_date_with_month_names(date_str: str) -> Optional[str]:
@@ -195,6 +199,11 @@ def extract_field_value(pdf_lines: List[str], label_text: str, line_offset: int)
     """
     Extract field value from PDF lines using label and offset.
     
+    Uses the working Tool tab logic:
+    - Search in full PDF text (not line-by-line)
+    - Find line number where label appears  
+    - Extract value from line + offset
+    
     Args:
         pdf_lines: List of text lines from PDF
         label_text: Label text to search for
@@ -206,34 +215,58 @@ def extract_field_value(pdf_lines: List[str], label_text: str, line_offset: int)
     if not label_text:
         return None
     
-    # Create flexible regex pattern
-    label_pattern = create_flexible_label_regex(label_text)
+    # Reconstruct full PDF text
+    pdf_text = '\n'.join(pdf_lines)
     
-    # Search for label in all lines (case-sensitive for strict matching)
-    for line_idx, line in enumerate(pdf_lines):
-        match = re.search(label_pattern, line)
+    # Create flexible regex for label (same as old working code)
+    label_words = label_text.split()
+    if len(label_words) > 0:
+        # Allow flexible matching: words can have extra chars, flexible spacing
+        label_regex_parts = []
+        for word in label_words:
+            # Escape each character but allow extra chars after
+            word_pattern = r'\s*'.join(re.escape(char) + r'[^\s]*' for char in word)
+            label_regex_parts.append(word_pattern)
+        label_regex = r'\s+'.join(label_regex_parts)
+    else:
+        label_regex = re.escape(label_text)
+        label_regex = label_regex.replace(r'\ ', r'\s+')
+    
+    # Find label in text (case-sensitive)
+    label_match = re.search(label_regex, pdf_text)
+    
+    if label_match:
+        # Find the line where label appears
+        label_pos = label_match.start()
+        label_line_num = pdf_text[:label_pos].count('\n')
         
-        if match:
-            # Get value from the same line or offset line
-            if line_offset == 0:
-                # Value is on the same line, after the label
-                value_start_pos = match.end()
-                extracted_value = line[value_start_pos:].strip()
-            else:
-                # Value is on a different line
-                target_line_idx = line_idx + line_offset
-                if 0 <= target_line_idx < len(pdf_lines):
-                    extracted_value = pdf_lines[target_line_idx].strip()
+        # Look for value at label_line_num + line_offset
+        target_line_num = label_line_num + line_offset
+        
+        if 0 <= target_line_num < len(pdf_lines):
+            # Get the text from the target line
+            target_line = pdf_lines[target_line_num].strip()
+            if target_line:
+                extracted_value = None
+                # If offset is 0 (same line), remove label from extracted value
+                if line_offset == 0:
+                    # Find label position in the line
+                    label_in_line = target_line.find(label_text)
+                    if label_in_line >= 0:
+                        # Extract text after the label
+                        after_label = target_line[label_in_line + len(label_text):].strip()
+                        # Remove common separators (colon, dash, etc.)
+                        after_label = re.sub(r'^[:;\-\s]+', '', after_label).strip()
+                        extracted_value = after_label
+                    else:
+                        # Label not found in line, use whole line
+                        extracted_value = re.sub(r'\s+', ' ', target_line).strip()
                 else:
-                    extracted_value = None
-            
-            if extracted_value:
-                # Clean extracted value
-                extracted_value = extracted_value.strip()
-                extracted_value = re.sub(r'\s+', ' ', extracted_value)
-                return extracted_value
-            
-            break
+                    # Offset > 0, use whole line
+                    extracted_value = re.sub(r'\s+', ' ', target_line).strip()
+                
+                if extracted_value:
+                    return extracted_value
     
     return None
 
@@ -282,7 +315,9 @@ def extract_with_pattern(pdf_bytes: bytes, pattern: Dict[str, Any]) -> Dict[str,
                 else:
                     extracted_data[field_name] = extracted_value
             elif field_name == 'bill_number':
-                extracted_data[field_name] = clean_bill_number(extracted_value)
+                cleaned = clean_bill_number(extracted_value)
+                if cleaned:  # Only add if not None/empty
+                    extracted_data[field_name] = cleaned
             else:
                 extracted_data[field_name] = extracted_value
     
