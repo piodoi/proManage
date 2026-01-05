@@ -128,7 +128,7 @@ async def delete_emails(
     """
     Delete emails after user has processed them.
     
-    Permanently removes emails from the inbox after bills have been extracted.
+    Fire-and-forget: Returns immediately, deletion happens in background.
     Called when user closes the sync dialog.
     """
     if not email_monitor.is_configured():
@@ -137,16 +137,26 @@ async def delete_emails(
             detail="Email monitoring not configured."
         )
     
-    try:
-        for email_id in request.email_ids:
-            email_monitor.delete_email(email_id)
-        
-        return {
-            "status": "success",
-            "message": f"Deleted {len(request.email_ids)} emails",
-            "email_ids": request.email_ids
-        }
-    except Exception as e:
-        logger.error(f"[Email] Error deleting emails: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to delete emails: {e}")
+    # Schedule deletion as background task - don't wait for it
+    import asyncio
+    
+    async def delete_in_background():
+        """Delete emails in background thread (non-blocking)"""
+        try:
+            # Run blocking IMAP operations in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            for email_id in request.email_ids:
+                await loop.run_in_executor(None, email_monitor.delete_email, email_id)
+        except Exception as e:
+            logger.error(f"[Email] Background deletion failed: {e}", exc_info=True)
+    
+    # Fire and forget - create task but don't await
+    asyncio.create_task(delete_in_background())
+    
+    # Return immediately
+    return {
+        "status": "success",
+        "message": f"Deletion scheduled for {len(request.email_ids)} emails",
+        "email_ids": request.email_ids
+    }
 

@@ -41,6 +41,7 @@ class FieldPattern(BaseModel):
     field_name: str
     label_text: str  # Label text to search for
     line_offset: int  # Number of lines between label and value (0 if on same line)
+    size: Optional[int] = None  # Max length to truncate extracted value (0 or None = no truncation)
     value_text: Optional[str] = None  # Value text (optional, not used in extraction)
     value_regex: Optional[str] = None  # Value regex (optional, not used in extraction)
 
@@ -102,14 +103,18 @@ async def save_text_pattern(
     """Save a text-based extraction pattern to file."""
     pattern_id = f"text_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{pattern.name.replace(' ', '_')}"
     
-    # Save only field_name, label_text, and line_offset (no value_text, value_regex)
+    # Save field_name, label_text, line_offset, and optional size (no value_text, value_regex)
     processed_patterns = []
     for field_pattern in pattern.field_patterns:
-        processed_patterns.append({
+        field_dict = {
             "field_name": field_pattern.field_name,
             "label_text": field_pattern.label_text,
             "line_offset": field_pattern.line_offset,
-        })
+        }
+        # Only include size if > 0
+        if field_pattern.size and field_pattern.size > 0:
+            field_dict["size"] = field_pattern.size
+        processed_patterns.append(field_dict)
     
     # Build pattern dict manually to ensure no value_text/value_regex fields
     pattern_dict = {
@@ -117,7 +122,7 @@ async def save_text_pattern(
         "name": pattern.name,
         "bill_type": pattern.bill_type,
         "supplier": pattern.supplier,
-        "field_patterns": processed_patterns,  # Already cleaned, only has field_name, label_text, line_offset
+        "field_patterns": processed_patterns,  # Already cleaned: field_name, label_text, line_offset, optional size
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
@@ -484,35 +489,48 @@ async def update_text_pattern(
         existing_pattern = json.load(f)
     
     # Create a map of existing field patterns by field_name
-    # Clean up old fields (value_text, value_regex) from existing patterns
+    # Clean up old fields (value_text, value_regex) from existing patterns, preserve size
     existing_fields = {}
     for fp in existing_pattern.get('field_patterns', []):
-        existing_fields[fp['field_name']] = {
+        field_dict = {
             "field_name": fp['field_name'],
             "label_text": fp.get('label_text', ''),
             "line_offset": fp.get('line_offset', 0),
         }
+        # Preserve size if present and > 0
+        if fp.get('size') and fp.get('size') > 0:
+            field_dict['size'] = fp['size']
+        existing_fields[fp['field_name']] = field_dict
     
     # Merge: keep existing fields, add/update new ones from the request
     for field_pattern in pattern.field_patterns:
-        existing_fields[field_pattern.field_name] = {
+        field_dict = {
             "field_name": field_pattern.field_name,
             "label_text": field_pattern.label_text,
             "line_offset": field_pattern.line_offset,
         }
+        # Include size if present and > 0
+        size = getattr(field_pattern, 'size', None)
+        if size and size > 0:
+            field_dict['size'] = size
+        existing_fields[field_pattern.field_name] = field_dict
     
-    # Convert back to list (only field_name, label_text, line_offset)
+    # Convert back to list (field_name, label_text, line_offset, and optional size)
     merged_field_patterns = list(existing_fields.values())
     
     # Update pattern metadata
-    # Ensure field_patterns only contain field_name, label_text, line_offset (no value_text, value_regex)
+    # Ensure field_patterns only contain field_name, label_text, line_offset, size (no value_text, value_regex)
     cleaned_field_patterns = []
     for fp in merged_field_patterns:
-        cleaned_field_patterns.append({
+        field_dict = {
             "field_name": fp.get('field_name', ''),
             "label_text": fp.get('label_text', ''),
             "line_offset": fp.get('line_offset', 0),
-        })
+        }
+        # Preserve size if present and > 0
+        if fp.get('size') and fp.get('size') > 0:
+            field_dict['size'] = fp['size']
+        cleaned_field_patterns.append(field_dict)
     
     # Build pattern dict manually to ensure no value_text/value_regex fields
     pattern_dict = {
@@ -520,7 +538,7 @@ async def update_text_pattern(
         "name": pattern.name,
         "bill_type": pattern.bill_type,
         "supplier": pattern.supplier,
-        "field_patterns": cleaned_field_patterns,  # Already cleaned, only has field_name, label_text, line_offset
+        "field_patterns": cleaned_field_patterns,  # Already cleaned: field_name, label_text, line_offset, optional size
         "created_at": existing_pattern.get('created_at', datetime.utcnow().isoformat()),
         "updated_at": datetime.utcnow().isoformat(),
     }

@@ -13,6 +13,7 @@ type FieldPattern = {
   field_name: string;
   label_text: string;
   line_offset: number;
+  size?: number;  // Optional: truncate field to this length (0 = no truncation)
 };
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -37,6 +38,7 @@ export default function TextPatternView() {
   const [supplier, setSupplier] = useState('');
   const [billType, setBillType] = useState<'rent' | 'utilities' | 'ebloc' | 'other'>('utilities');
   const [lineOffsets, setLineOffsets] = useState<Map<string, number>>(new Map());
+  const [fieldSizes, setFieldSizes] = useState<Map<string, number>>(new Map());  // 0 = auto-size
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
@@ -143,18 +145,23 @@ export default function TextPatternView() {
     
     if (!selectedText) return;
     
-    // Save label and use current line offset
+    // Save label and use current line offset and size
     const currentOffset = lineOffsets.get(currentField) || 0;
+    const currentSize = fieldSizes.get(currentField) || 0;
     
     // Save label position for highlighting
     setSelectedLabelStart(start);
     
-    // Save pattern (only label_text and line_offset, no value_text)
+    // Save pattern (label_text, line_offset, and optional size)
     const pattern: FieldPattern = {
       field_name: currentField,
       label_text: selectedText,
       line_offset: currentOffset,
     };
+    // Only include size if > 0
+    if (currentSize > 0) {
+      pattern.size = currentSize;
+    }
     
     setFieldPatterns(prev => {
       const newMap = new Map(prev);
@@ -185,7 +192,7 @@ export default function TextPatternView() {
     }
   };
   
-  const predictExtractedValue = (fieldName: string, labelText: string, lineOffset: number): string => {
+  const predictExtractedValue = (fieldName: string, labelText: string, lineOffset: number, size?: number): string => {
     if (!pdfText || !labelText) return '';
     
     const lines = pdfText.split('\n');
@@ -210,6 +217,11 @@ export default function TextPatternView() {
         const afterLabel = targetLine.substring(labelInLine + labelText.length).trim();
         targetLine = afterLabel.replace(/^[:;\-\s]+/, '').trim();
       }
+    }
+    
+    // Apply truncation if size is specified (size > 0)
+    if (size && size > 0) {
+      targetLine = targetLine.substring(0, size);
     }
     
     // Apply field-specific processing
@@ -388,6 +400,37 @@ export default function TextPatternView() {
     }
   };
 
+  const adjustFieldSize = (field: string, delta: number) => {
+    const currentSize = fieldSizes.get(field) || 0;
+    const newSize = Math.max(0, currentSize + delta);
+    
+    setFieldSizes(prev => {
+      const newMap = new Map(prev);
+      if (newSize === 0) {
+        newMap.delete(field);  // Remove if 0 (auto-size)
+      } else {
+        newMap.set(field, newSize);
+      }
+      return newMap;
+    });
+    
+    // Update pattern if it exists
+    const existingPattern = fieldPatterns.get(field);
+    if (existingPattern) {
+      setFieldPatterns(prev => {
+        const newMap = new Map(prev);
+        const updatedPattern = { ...existingPattern };
+        if (newSize === 0) {
+          delete updatedPattern.size;  // Remove if 0
+        } else {
+          updatedPattern.size = newSize;
+        }
+        newMap.set(field, updatedPattern);
+        return newMap;
+      });
+    }
+  };
+
   const handleSavePattern = async () => {
     if (!token || !patternName || fieldPatterns.size === 0) {
       setError(t('tools.patternNameRequired'));
@@ -402,11 +445,18 @@ export default function TextPatternView() {
         name: patternName,
         bill_type: billType,
         supplier: supplier || undefined,
-        field_patterns: Array.from(fieldPatterns.values()).map(fp => ({
-          field_name: fp.field_name,
-          label_text: fp.label_text,
-          line_offset: fp.line_offset,
-        })),
+        field_patterns: Array.from(fieldPatterns.values()).map(fp => {
+          const fieldPattern: any = {
+            field_name: fp.field_name,
+            label_text: fp.label_text,
+            line_offset: fp.line_offset,
+          };
+          // Only include size if > 0 (non-zero truncation)
+          if (fp.size && fp.size > 0) {
+            fieldPattern.size = fp.size;
+          }
+          return fieldPattern;
+        }),
       };
       
       const response = await fetch(`${API_URL}/text-patterns/save-pattern`, {
@@ -430,6 +480,7 @@ export default function TextPatternView() {
       setSupplier('');
       setFieldPatterns(new Map());
       setLineOffsets(new Map());
+      setFieldSizes(new Map());
     } catch (err: any) {
       setError(err.message || 'Error saving pattern');
     } finally {
@@ -644,18 +695,26 @@ export default function TextPatternView() {
       // Load existing field patterns
       const existingPatterns = new Map<string, FieldPattern>();
       const existingOffsets = new Map<string, number>();
+      const existingSizes = new Map<string, number>();
       if (pattern.field_patterns) {
         for (const fp of pattern.field_patterns) {
-          existingPatterns.set(fp.field_name, {
+          const fieldPattern: FieldPattern = {
             field_name: fp.field_name,
             label_text: fp.label_text,
             line_offset: fp.line_offset,
-          });
+          };
+          // Load size if present (only if > 0)
+          if (fp.size && fp.size > 0) {
+            fieldPattern.size = fp.size;
+            existingSizes.set(fp.field_name, fp.size);
+          }
+          existingPatterns.set(fp.field_name, fieldPattern);
           existingOffsets.set(fp.field_name, fp.line_offset);
         }
       }
       setFieldPatterns(existingPatterns);
       setLineOffsets(existingOffsets);
+      setFieldSizes(existingSizes);
       
       // Keep PDF text - user already uploaded it
     } catch (err: any) {
@@ -750,18 +809,48 @@ export default function TextPatternView() {
             </Button>
           </div>
           
+          <div className="flex gap-2 items-center">
+            <Label className="text-slate-300">Max Length</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => adjustFieldSize(currentField, -5)}
+              className="h-8 w-8 bg-slate-700 border-slate-600 text-slate-100"
+            >
+              -
+            </Button>
+            <span className="w-12 text-center text-slate-300">
+              {fieldSizes.get(currentField) || 0}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => adjustFieldSize(currentField, 5)}
+              className="h-8 w-8 bg-slate-700 border-slate-600 text-slate-100"
+            >
+              +
+            </Button>
+            <span className="text-xs text-slate-400">(0 = auto)</span>
+          </div>
+          
           {fieldPatterns.get(currentField) && (
             <div className="flex gap-2 items-center text-sm text-slate-400">
               <span>
                 {t('tools.label')}: "{fieldPatterns.get(currentField)!.label_text}" 
-                ({t('tools.offset')}: {fieldPatterns.get(currentField)!.line_offset})
+                ({t('tools.offset')}: {fieldPatterns.get(currentField)!.line_offset}
+                {fieldPatterns.get(currentField)!.size && fieldPatterns.get(currentField)!.size! > 0 && (
+                  <>, max: {fieldPatterns.get(currentField)!.size}</>
+                )})
               </span>
               <span className="text-slate-500">|</span>
               <span className="text-slate-300">
                 {t('tools.value')}: "{predictExtractedValue(
                   currentField,
                   fieldPatterns.get(currentField)!.label_text,
-                  fieldPatterns.get(currentField)!.line_offset
+                  fieldPatterns.get(currentField)!.line_offset,
+                  fieldPatterns.get(currentField)!.size
                 )}"
               </span>
             </div>
@@ -848,23 +937,35 @@ export default function TextPatternView() {
     
     setLoading(true);
     setError('');
+    
     try {
+      const fieldPatternsArray = Array.from(fieldPatterns.values()).map(fp => {
+        const fieldPattern: any = {
+          field_name: fp.field_name,
+          label_text: fp.label_text,
+          line_offset: fp.line_offset,
+        };
+        // Only include size if > 0 (non-zero truncation)
+        if (fp.size && fp.size > 0) {
+          fieldPattern.size = fp.size;
+        }
+        return fieldPattern;
+      });
+      
+      const updatePayload = {
+        name: patternName,
+        bill_type: billType,
+        supplier: supplier,
+        field_patterns: fieldPatternsArray,
+      };
+      
       const response = await fetch(`${API_URL}/text-patterns/update-pattern/${editingPattern.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: patternName,
-          bill_type: billType,
-          supplier: supplier,
-          field_patterns: Array.from(fieldPatterns.values()).map(fp => ({
-            field_name: fp.field_name,
-            label_text: fp.label_text,
-            line_offset: fp.line_offset,
-          })),
-        }),
+        body: JSON.stringify(updatePayload),
       });
       
       if (!response.ok) {
@@ -899,6 +1000,7 @@ export default function TextPatternView() {
           if (value === 'create') {
             setFieldPatterns(new Map());
             setLineOffsets(new Map());
+            setFieldSizes(new Map());
             setPatternName('');
             setSupplier('');
             setBillType('utilities');
@@ -934,6 +1036,7 @@ export default function TextPatternView() {
             setEditMatches([]);
             setFieldPatterns(new Map());
             setLineOffsets(new Map());
+            setFieldSizes(new Map());
             setPatternName('');
             setSupplier('');
             setBillType('utilities');

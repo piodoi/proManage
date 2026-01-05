@@ -299,6 +299,11 @@ def extract_with_pattern(pdf_bytes: bytes, pattern: Dict[str, Any]) -> Dict[str,
         extracted_value = extract_field_value(pdf_lines, label_text, line_offset)
         
         if extracted_value:
+            # Apply truncation if size is specified (size > 0)
+            size = field_pattern.get('size', 0)
+            if size and size > 0:
+                extracted_value = extracted_value[:size]
+            
             # Apply field-specific processing
             if field_name == 'iban':
                 extracted_data[field_name] = extract_iban(extracted_value)
