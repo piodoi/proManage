@@ -51,26 +51,35 @@ def match_text_patterns(pdf_bytes: bytes) -> List[Dict[str, Any]]:
         List of dicts with 'pattern', 'pattern_id', and 'matched_fields' count
     """
     patterns = load_all_patterns()
+    logger.info(f"[Text Pattern] Checking {len(patterns)} patterns against PDF")
     
     matches = []
     for pattern_data in patterns:
         pattern = pattern_data['pattern']
+        pattern_name = pattern.get('name', pattern_data['pattern_id'])
         field_patterns = pattern.get('field_patterns', [])
         
         # Use shared utility to count matches
         matched_count = match_pattern_to_pdf(pdf_bytes, pattern)
         
+        logger.debug(f"[Text Pattern] Pattern '{pattern_name}': {matched_count}/{len(field_patterns)} fields matched")
+        
         if matched_count > 0:
+            match_percentage = (matched_count / len(field_patterns) * 100) if field_patterns else 0
+            logger.info(f"[Text Pattern] Pattern '{pattern_name}' matched: {match_percentage:.1f}% ({matched_count}/{len(field_patterns)} fields)")
             matches.append({
                 'pattern': pattern,
                 'pattern_id': pattern_data['pattern_id'],
                 'matched_fields': matched_count,
                 'total_fields': len(field_patterns),
-                'match_percentage': (matched_count / len(field_patterns) * 100) if field_patterns else 0
+                'match_percentage': match_percentage
             })
     
     # Sort by match percentage
     matches.sort(key=lambda x: x['match_percentage'], reverse=True)
+    
+    if not matches:
+        logger.warning(f"[Text Pattern] No patterns matched the PDF (checked {len(patterns)} patterns)")
     
     return matches
 

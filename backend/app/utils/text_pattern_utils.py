@@ -26,14 +26,24 @@ TEXT_PATTERNS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     """Extract plain text from PDF using PyMuPDF."""
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    text = ""
     try:
-        for page in doc:
-            text += page.get_text()
-    finally:
-        doc.close()
-    return text
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        text = ""
+        try:
+            for page in doc:
+                text += page.get_text()
+        finally:
+            doc.close()
+        
+        if not text or not text.strip():
+            logger.warning(f"[PDF Extract] PDF appears to be empty or contains no extractable text ({len(pdf_bytes)} bytes)")
+        else:
+            logger.debug(f"[PDF Extract] Extracted {len(text)} characters from PDF ({len(pdf_bytes)} bytes)")
+        
+        return text
+    except Exception as e:
+        logger.error(f"[PDF Extract] Failed to extract text from PDF: {e}", exc_info=True)
+        return ""
 
 
 def extract_iban(text: str) -> str:

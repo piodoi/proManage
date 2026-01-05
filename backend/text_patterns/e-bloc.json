@@ -36,8 +36,8 @@
     },
     {
       "field_name": "contract_id",
-      "label_text": "Cod fiscal:",
-      "line_offset": 1
+      "label_text": "Platforma E-BLOC.RO - Cod client:",
+      "line_offset": 0
     },
     {
       "field_name": "payment_details",
@@ -46,15 +46,15 @@
     },
     {
       "field_name": "address",
-      "label_text": "Asociatia de Proprietari Bloc M6",
-      "line_offset": 0
+      "label_text": "Data scadentă:",
+      "line_offset": 4
     },
     {
       "field_name": "legal_name",
-      "label_text": "Asociatia",
-      "line_offset": 0
+      "label_text": "Data scadentă",
+      "line_offset": 2
     }
   ],
   "created_at": "2026-01-03T11:39:35.264217",
-  "updated_at": "2026-01-03T13:23:06.062747"
+  "updated_at": "2026-01-05T21:17:12.086119"
 }

@@ -140,25 +140,71 @@ class EmailMonitor:
         Returns:
             List of tuples: (filename, pdf_bytes)
         """
+        from email.header import decode_header
+        import re
+        
         attachments = []
+        part_num = 0
         
         for part in msg.walk():
-            # Check if part is an attachment
-            if part.get_content_maintype() == 'multipart':
+            part_num += 1
+            content_type = part.get_content_type()
+            content_maintype = part.get_content_maintype()
+            content_disposition = part.get('Content-Disposition')
+            
+            logger.debug(f"[Email] Part {part_num}: type={content_type}, maintype={content_maintype}, disposition={content_disposition}")
+            
+            # Skip multipart containers
+            if content_maintype == 'multipart':
                 continue
             
-            if part.get('Content-Disposition') is None:
-                continue
-            
+            # Try to get filename (handles encoded filenames)
             filename = part.get_filename()
-            if not filename:
-                continue
             
-            # Check if it's a PDF
-            if filename.lower().endswith('.pdf'):
+            # Decode filename if it's encoded (RFC 2047)
+            if filename:
+                try:
+                    decoded_parts = decode_header(filename)
+                    decoded_filename = ''
+                    for part_text, encoding in decoded_parts:
+                        if isinstance(part_text, bytes):
+                            decoded_filename += part_text.decode(encoding or 'utf-8', errors='replace')
+                        else:
+                            decoded_filename += part_text
+                    filename = decoded_filename
+                    logger.debug(f"[Email] Decoded filename: {filename}")
+                except Exception as e:
+                    logger.warning(f"[Email] Failed to decode filename: {e}")
+            
+            # Check if it's a PDF by filename OR content type
+            is_pdf = False
+            
+            if filename and filename.lower().endswith('.pdf'):
+                is_pdf = True
+                logger.debug(f"[Email] Found PDF by filename: {filename}")
+            elif content_type == 'application/pdf':
+                is_pdf = True
+                if not filename:
+                    filename = f"attachment_{part_num}.pdf"
+                logger.debug(f"[Email] Found PDF by content type: {filename}")
+            elif content_disposition and 'attachment' in content_disposition.lower():
+                # Check payload for PDF magic bytes (%PDF)
+                payload = part.get_payload(decode=True)
+                if payload and payload[:4] == b'%PDF':
+                    is_pdf = True
+                    if not filename:
+                        filename = f"attachment_{part_num}.pdf"
+                    logger.info(f"[Email] Found PDF by magic bytes: {filename}")
+            
+            if is_pdf:
                 pdf_data = part.get_payload(decode=True)
-                if pdf_data:
+                if pdf_data and len(pdf_data) > 0:
+                    logger.info(f"[Email] Extracted PDF attachment: {filename} ({len(pdf_data)} bytes)")
                     attachments.append((filename, pdf_data))
+                else:
+                    logger.warning(f"[Email] PDF attachment {filename} has no data")
+            elif content_disposition and 'attachment' in content_disposition.lower():
+                logger.debug(f"[Email] Skipping non-PDF attachment: {filename or 'unnamed'} (type: {content_type})")
         
         return attachments
     
@@ -287,19 +333,22 @@ class EmailMonitor:
             for email_id, msg, extracted_user_id in unread_emails:
                 try:
                     emails_processed += 1
+                    logger.info(f"[Email Monitor] Processing email {email_id} for user {extracted_user_id}")
                     
                     # Verify user exists
                     user = db.get_user(extracted_user_id)
                     if not user:
                         error_msg = f"User {extracted_user_id} not found"
-                        logger.warning(error_msg)
+                        logger.warning(f"[Email Monitor] {error_msg}")
                         errors.append(error_msg)
                         continue
                     
                     # Extract PDF attachments
                     pdf_attachments = self.extract_pdf_attachments(msg)
+                    logger.info(f"[Email Monitor] Found {len(pdf_attachments)} PDF attachments in email {email_id}")
                     
                     if not pdf_attachments:
+                        logger.info(f"[Email Monitor] No PDF attachments in email {email_id}, marking as read")
                         # Mark as read anyway to avoid reprocessing
                         self.mark_as_read(email_id)
                         continue
@@ -307,14 +356,18 @@ class EmailMonitor:
                     # Process each PDF attachment
                     for filename, pdf_data in pdf_attachments:
                         try:
+                            logger.info(f"[Email Monitor] Processing PDF: {filename} ({len(pdf_data)} bytes)")
+                            
                             # Use text pattern extraction (from text_patterns folder)
                             extracted_data, pattern_id, pattern_name = extract_bill_from_pdf_auto(pdf_data)
                             
                             if not extracted_data:
                                 error_msg = f"No pattern matched for {filename}"
-                                logger.warning(error_msg)
+                                logger.warning(f"[Email Monitor] {error_msg}")
                                 errors.append(error_msg)
                                 continue
+                            
+                            logger.info(f"[Email Monitor] Matched pattern: {pattern_name} (ID: {pattern_id}) for {filename}")
                             
                             # Get user's properties to match address
                             properties = db.list_properties(landlord_id=extracted_user_id)
@@ -469,7 +522,7 @@ class EmailMonitor:
                             
                         except Exception as e:
                             error_msg = f"Error processing PDF {filename}: {str(e)}"
-                            logger.error(error_msg)
+                            logger.error(f"[Email Monitor] {error_msg}", exc_info=True)
                             errors.append(error_msg)
                     
                     # Mark email as read after processing (only if create_bills is True)
@@ -478,7 +531,7 @@ class EmailMonitor:
                     
                 except Exception as e:
                     error_msg = f"Error processing email {email_id}: {str(e)}"
-                    logger.error(error_msg)
+                    logger.error(f"[Email Monitor] {error_msg}", exc_info=True)
                     errors.append(error_msg)
             
             return {
@@ -492,7 +545,7 @@ class EmailMonitor:
             }
             
         except Exception as e:
-            logger.error(f"Error in process_email_bills: {e}")
+            logger.error(f"[Email Monitor] Critical error in monitor_emails_for_user: {e}", exc_info=True)
             return {
                 'status': 'error',
                 'message': str(e),
