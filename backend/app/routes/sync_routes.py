@@ -52,52 +52,48 @@ def resolve_supplier_id(
     Returns:
         supplier_id if found, None otherwise
     """
-    logger.info(f"[Supplier Resolver] Starting resolution - property_id: {property_id}, supplier_name: {supplier_name}, extraction_pattern_id: {extraction_pattern_id}, contract_id: {contract_id}")
-    
     # Get all property suppliers for this property
     property_suppliers = db.list_property_suppliers(property_id)
-    logger.info(f"[Supplier Resolver] Found {len(property_suppliers)} property suppliers")
     
     # Get all suppliers for matching
     all_suppliers = db.list_suppliers()
     
     # FIRST: Try to match by extraction_pattern_id (text pattern name like "engie")
     if extraction_pattern_id:
-        logger.info(f"[Supplier Resolver] Trying to match by extraction_pattern_id: {extraction_pattern_id}")
         for s in all_suppliers:
             if s.extraction_pattern_supplier and s.extraction_pattern_supplier == extraction_pattern_id:
-                logger.info(f"[Supplier Resolver] Found supplier by extraction_pattern match: {s.name} (pattern: {s.extraction_pattern_supplier})")
                 # Check if this supplier is linked to the property
                 ps_match = next((ps for ps in property_suppliers if ps.supplier_id == s.id), None)
                 if ps_match:
-                    logger.info(f"[Supplier Resolver] ✓ Matched supplier by extraction_pattern_id: {extraction_pattern_id} -> {s.id}")
                     return s.id
-                else:
-                    logger.warning(f"[Supplier Resolver] Supplier '{s.name}' found but not linked to property {property_id}")
     
     # SECOND: Try to match by contract_id
     if contract_id:
-        logger.info(f"[Supplier Resolver] Trying to match by contract_id: {contract_id}")
         for ps in property_suppliers:
             if ps.contract_id and ps.contract_id == contract_id:
-                logger.info(f"[Supplier Resolver] ✓ Matched supplier by contract_id: {contract_id} -> {ps.supplier_id}")
                 return ps.supplier_id
     
     # THIRD: Try to match by supplier name from extraction pattern
     if supplier_name:
-        logger.info(f"[Supplier Resolver] Trying to match by supplier name from pattern: {supplier_name}")
         for s in all_suppliers:
             if s.name.lower() == supplier_name.lower():
-                logger.info(f"[Supplier Resolver] Found supplier by name match: {s.name}")
                 # Check if this supplier is linked to the property
                 ps_match = next((ps for ps in property_suppliers if ps.supplier_id == s.id), None)
                 if ps_match:
-                    logger.info(f"[Supplier Resolver] ✓ Matched supplier by name: {supplier_name} -> {s.id}")
                     return s.id
-                else:
-                    logger.warning(f"[Supplier Resolver] Supplier '{s.name}' found but not linked to property {property_id}")
     
-    logger.warning(f"[Supplier Resolver] ✗ Could not resolve supplier_id for property {property_id}")
+    # Log detailed error only when no match is found
+    supplier_names = [s.name for s in all_suppliers]
+    extraction_patterns = [(s.name, s.extraction_pattern_supplier) for s in all_suppliers if s.extraction_pattern_supplier]
+    property_supplier_contracts = [(ps.supplier_id, ps.contract_id) for ps in property_suppliers if ps.contract_id]
+    
+    logger.warning(
+        f"[Supplier Resolver] Failed to match supplier for property {property_id}\n"
+        f"  Searched for: extraction_pattern_id='{extraction_pattern_id}', supplier_name='{supplier_name}', contract_id='{contract_id}'\n"
+        f"  Available suppliers: {supplier_names}\n"
+        f"  Extraction patterns: {extraction_patterns}\n"
+        f"  Property suppliers with contracts: {property_supplier_contracts}"
+    )
     return None
 
 

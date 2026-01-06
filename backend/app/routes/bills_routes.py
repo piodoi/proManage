@@ -413,15 +413,12 @@ async def create_bill_from_pdf(
     
     # Resolve supplier_id
     supplier_name = data.get("matched_pattern_supplier") or data.get("description")
-    logger.info(f"[Create Bill from PDF] Resolving supplier - supplier_name: {supplier_name}, pattern_id: {data.get('extraction_pattern_id')}, contract_id: {data.get('contract_id')}")
-    
     supplier_id = resolve_supplier_id(
         property_id=property_id,
         supplier_name=supplier_name,
         extraction_pattern_id=data.get("extraction_pattern_id"),
         contract_id=data.get("contract_id")
     )
-    logger.info(f"[Create Bill from PDF] Resolved supplier_id: {supplier_id}")
     
     # Get supplier display name if supplier_id was resolved
     bill_description = data.get("description", "Bill from PDF")
@@ -429,7 +426,6 @@ async def create_bill_from_pdf(
         supplier = db.get_supplier(supplier_id)
         if supplier:
             bill_description = supplier.name
-            logger.info(f"[Create Bill from PDF] Using supplier name as description: {bill_description}")
     
     # Handle renter_id - convert 'all' to None
     renter_id = data.get("renter_id")
@@ -462,7 +458,6 @@ async def create_bill_from_pdf(
         if property_supplier and not property_supplier.contract_id:
             property_supplier.contract_id = contract_id_from_data
             db.save_property_supplier(property_supplier)
-            logger.info(f"[Create Bill from PDF] Saved contract_id {contract_id_from_data} to PropertySupplier for supplier {supplier_id}")
     
     return bill
 
