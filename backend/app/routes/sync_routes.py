@@ -745,10 +745,15 @@ async def save_discovered_bills(
     for bill_data in bills:
         try:
             # Convert ISO string dates back to datetime
-            due_date_str = bill_data["due_date"].replace('Z', '+00:00')
-            due_date = datetime.fromisoformat(due_date_str)
-            if due_date.tzinfo:
-                due_date = due_date.replace(tzinfo=None)
+            # Handle due_date - it might not be present
+            if "due_date" in bill_data and bill_data["due_date"]:
+                due_date_str = bill_data["due_date"].replace('Z', '+00:00')
+                due_date = datetime.fromisoformat(due_date_str)
+                if due_date.tzinfo:
+                    due_date = due_date.replace(tzinfo=None)
+            else:
+                # Default to current date if due_date is missing
+                due_date = datetime.utcnow()
             
             # Convert string enums back to enum types
             bill_type = BillType(bill_data["bill_type"])
@@ -1350,10 +1355,15 @@ async def sync_all_properties_supplier_bills(
                                     bill_contract_id_to_save = None
                                 
                                 # Convert bill_data to Bill object and save
-                                due_date_str = bill_data["due_date"].replace('Z', '+00:00')
-                                due_date = datetime.fromisoformat(due_date_str)
-                                if due_date.tzinfo:
-                                    due_date = due_date.replace(tzinfo=None)
+                                # Handle due_date - it might not be present
+                                if "due_date" in bill_data and bill_data["due_date"]:
+                                    due_date_str = bill_data["due_date"].replace('Z', '+00:00')
+                                    due_date = datetime.fromisoformat(due_date_str)
+                                    if due_date.tzinfo:
+                                        due_date = due_date.replace(tzinfo=None)
+                                else:
+                                    # Default to current date if due_date is missing
+                                    due_date = datetime.utcnow()
                                 
                                 bill_type = BillType(bill_data["bill_type"])
                                 bill_status = BillStatus(bill_data.get("status", "pending"))
@@ -1518,10 +1528,15 @@ async def save_all_discovered_bills(
                 continue
             
             # Convert ISO string dates back to datetime
-            due_date_str = bill_data["due_date"].replace('Z', '+00:00')
-            due_date = datetime.fromisoformat(due_date_str)
-            if due_date.tzinfo:
-                due_date = due_date.replace(tzinfo=None)
+            # Handle due_date - it might not be present
+            if "due_date" in bill_data and bill_data["due_date"]:
+                due_date_str = bill_data["due_date"].replace('Z', '+00:00')
+                due_date = datetime.fromisoformat(due_date_str)
+                if due_date.tzinfo:
+                    due_date = due_date.replace(tzinfo=None)
+            else:
+                # Default to current date if due_date is missing
+                due_date = datetime.utcnow()
             
             # Convert string enums back to enum types
             bill_type = BillType(bill_data["bill_type"])

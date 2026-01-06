@@ -326,8 +326,10 @@ def extract_with_pattern(pdf_bytes: bytes, pattern: Dict[str, Any]) -> Dict[str,
             elif field_name in ['due_date', 'bill_date']:
                 parsed_date = parse_date_with_month_names(extracted_value)
                 if parsed_date:
+                    logger.info(f"[Date Parse] Successfully parsed {field_name}: '{extracted_value}' -> '{parsed_date}'")
                     extracted_data[field_name] = parsed_date
                 else:
+                    logger.warning(f"[Date Parse] Could not parse {field_name}: '{extracted_value}' - storing as-is")
                     extracted_data[field_name] = extracted_value
             elif field_name == 'bill_number':
                 cleaned = clean_bill_number(extracted_value)

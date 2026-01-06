@@ -441,6 +441,11 @@ class EmailMonitor:
                                     due_date = datetime.fromisoformat(extracted_data['due_date'])
                                 except (ValueError, AttributeError) as e:
                                     logger.warning(f"[Email Bill] Could not parse due_date: {extracted_data.get('due_date')} - {e}")
+                                    # Use current date as fallback
+                                    due_date = datetime.utcnow()
+                            else:
+                                # If no due_date extracted, use current date as fallback
+                                due_date = datetime.utcnow()
                             
                             # Parse bill date
                             bill_date = None
@@ -477,7 +482,7 @@ class EmailMonitor:
                                 'description': extracted_data.get('description') or pattern_name,  # Use description from pattern or supplier name
                                 'amount': amount,
                                 'currency': 'RON',
-                                'due_date': due_date.isoformat() if due_date else None,
+                                'due_date': due_date.isoformat(),
                                 'bill_date': bill_date.isoformat() if bill_date else datetime.utcnow().isoformat(),
                                 'legal_name': extracted_data.get('legal_name'),
                                 'iban': extracted_data.get('iban'),

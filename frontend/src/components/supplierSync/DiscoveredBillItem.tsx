@@ -57,14 +57,11 @@ export default function DiscoveredBillItem({ bill, selected, onToggle, propertie
           <div>
             <p className="text-sm font-medium text-slate-100">
               <span className="font-bold">{bill.description || bill.supplier_name}</span>
-              {bill.property_name && !needsPropertySelection && (
+              {bill.property_name && (
                 <span className="text-slate-300 ml-2">- {bill.property_name}</span>
               )}
               {needsPropertySelection && !bill.property_id && (
                 <span className="text-amber-400 ml-2">⚠️ {t('bill.selectProperty')}</span>
-              )}
-              {needsPropertySelection && bill.property_id && confidence < 100 && (
-                <span className="text-yellow-400 ml-2">({confidence}% {t('bill.confidence')})</span>
               )}
             </p>
           </div>
@@ -85,7 +82,9 @@ export default function DiscoveredBillItem({ bill, selected, onToggle, propertie
           <div className="pt-2">
             <Label className="text-xs text-slate-300 mb-1 block">
               {bill.property_id && confidence < 100 ? (
-                <span>{t('bill.confirmProperty')} ({confidence}% {t('bill.confidence').toLowerCase()}):</span>
+                <>
+                  {t('bill.confirmProperty')}: <span className="text-yellow-400">({confidence}% {t('bill.confidence').toLowerCase()})</span>
+                </>
               ) : (
                 <span>{t('property.selectProperty')}:</span>
               )}
