@@ -79,7 +79,8 @@
     "listView": "Vizualizare Listă",
     "gridView": "Vizualizare Grilă",
     "switchToList": "Treci la Vizualizare Listă",
-    "switchToGrid": "Treci la Vizualizare Grilă"
+    "switchToGrid": "Treci la Vizualizare Grilă",
+    "selectProperty": "Selectează Proprietate"
   },
   "renter": {
     "renters": "Chiriași",
@@ -169,7 +170,10 @@
       "overdue": "Restanță"
     },
     "allProperty": "Toți / Proprietate",
-    "amountRequired": "Te rog completează suma"
+    "amountRequired": "Te rog completează suma",
+    "selectProperty": "Selectează Proprietate",
+    "confidence": "Încredere",
+    "confirmProperty": "Confirmă sau schimbă proprietatea"
   },
   "summary": {
     "summary": "Rezumat",
@@ -204,8 +208,8 @@
     "syncProgress": "Sincronizare Facturi Furnizori",
     "supplierProgress": "Progres Furnizori:",
     "totalBillsCreated": "Total Facturi Create:",
-    "found": "Găsite:",
-    "created": "Create:",
+    "billsFound": "Găsite:",
+    "billsCreated": "Create:",
     "starting": "Se începe...",
     "processing": "Se procesează...",
     "completed": "Finalizat",
@@ -238,7 +242,7 @@
     "saveBills": "Salvează Facturi",
     "noBillsDiscovered": "Nu au fost găsite facturi",
     "discoveredBills": "Facturi descoperite",
-    "syncProgress": "Progres sincronizare"
+    "supplierSyncProgress": "Progres sincronizare"
   },
   "ebloc": {
     "syncEbloc": "Sincronizează E-Bloc",

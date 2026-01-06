@@ -719,6 +719,30 @@ export default function AllPropertiesSyncDialog({
     setSelectedBillIds(newSet);
   };
 
+  const handlePropertyChange = (billId: string, propertyId: string) => {
+    // Update the bill in both discoveredBills state and ref
+    const property = properties.find(p => p.id === propertyId);
+    if (!property) return;
+    
+    const updatedBills = discoveredBills.map(bill => {
+      if (bill.id === billId) {
+        return {
+          ...bill,
+          property_id: propertyId,
+          property_name: property.name,
+          bill_data: {
+            ...bill.bill_data,
+            property_id: propertyId,
+          }
+        };
+      }
+      return bill;
+    });
+    
+    setDiscoveredBills(updatedBills);
+    discoveredBillsRef.current = updatedBills;
+  };
+
   const handleSaveBills = async () => {
     if (!token || selectedBillIds.size === 0) {
       onError('Please select at least one bill to save');
@@ -1015,6 +1039,8 @@ export default function AllPropertiesSyncDialog({
                         bill={bill}
                         selected={selectedBillIds.has(bill.id)}
                         onToggle={handleBillToggle}
+                        properties={properties}
+                        onPropertyChange={handlePropertyChange}
                       />
                     ))}
                   </div>
@@ -1068,6 +1094,8 @@ export default function AllPropertiesSyncDialog({
                       bill={bill}
                       selected={selectedBillIds.has(bill.id)}
                       onToggle={handleBillToggle}
+                      properties={properties}
+                      onPropertyChange={handlePropertyChange}
                     />
                   ))}
                 </div>

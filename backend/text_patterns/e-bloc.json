@@ -36,7 +36,7 @@
     },
     {
       "field_name": "contract_id",
-      "label_text": "Platforma E-BLOC.RO - Cod client:",
+      "label_text": "Puteţi să vă creaţi cont pe platforma E-BLOC.RO, pe baza codului de client:",
       "line_offset": 0
     },
     {
@@ -46,15 +46,15 @@
     },
     {
       "field_name": "address",
-      "label_text": "Data scadentă:",
-      "line_offset": 4
+      "label_text": "Cod fiscal:",
+      "line_offset": 1
     },
     {
       "field_name": "legal_name",
-      "label_text": "Data scadentă",
-      "line_offset": 2
+      "label_text": "A",
+      "line_offset": 0
     }
   ],
   "created_at": "2026-01-03T11:39:35.264217",
-  "updated_at": "2026-01-05T21:17:12.086119"
+  "updated_at": "2026-01-06T14:43:05.197315"
 }

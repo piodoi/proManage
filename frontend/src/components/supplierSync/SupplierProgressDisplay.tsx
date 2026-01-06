@@ -71,12 +71,12 @@ export default function SupplierProgressDisplay({ progress }: SupplierProgressDi
                   </span>
                   {item.status === 'completed' && (
                     <span className="text-xs text-slate-400">
-                      {t('supplier.found')} {item.bills_found}
+                      {t('supplier.billsFound')} {item.bills_found}
                     </span>
                   )}
                   {item.status === 'processing' && item.bills_found > 0 && (
                     <span className="text-xs text-slate-400">
-                      {t('supplier.found')} {item.bills_found} {t('bill.bills')}
+                      {t('supplier.billsFound')} {item.bills_found} {t('bill.bills')}
                     </span>
                   )}
                 </div>

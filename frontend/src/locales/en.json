@@ -79,7 +79,8 @@
     "listView": "List View",
     "gridView": "Grid View",
     "switchToList": "Switch to List View",
-    "switchToGrid": "Switch to Grid View"
+    "switchToGrid": "Switch to Grid View",
+    "selectProperty": "Select Property"
   },
   "renter": {
     "renters": "Renters",
@@ -161,7 +162,10 @@
       "overdue": "Overdue"
     },
     "allProperty": "All / Property",
-    "amountRequired": "Please fill in amount"
+    "amountRequired": "Please fill in amount",
+    "selectProperty": "Select Property",
+    "confidence": "Confidence",
+    "confirmProperty": "Confirm or change property"
   },
   "summary": {
     "summary": "Summary",
@@ -187,8 +191,8 @@
     "syncProgress": "Syncing Supplier Bills",
     "supplierProgress": "Supplier Progress:",
     "totalBillsCreated": "Total Bills Created:",
-    "found": "Found:",
-    "created": "Created:",
+    "billsFound": "Found:",
+    "billsCreated": "Created:",
     "starting": "Starting...",
     "processing": "Processing...",
     "completed": "Completed",
@@ -245,7 +249,7 @@
     "saveBills": "Save Bills",
     "noBillsDiscovered": "No bills discovered",
     "discoveredBills": "Discovered Bills",
-    "syncProgress": "Sync Progress"
+    "supplierSyncProgress": "Sync Progress"
   },
   "ebloc": {
     "syncEbloc": "Sync E-Bloc",
