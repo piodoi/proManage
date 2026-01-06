@@ -9,13 +9,13 @@
     "name": "Digi",
     "bill_type": "utilities",
     "has_api": false,
-    "extraction_pattern_supplier": "Digi"
+    "extraction_pattern_supplier": null
   },
   {
     "name": "E-bloc",
     "bill_type": "ebloc",
     "has_api": false,
-    "extraction_pattern_supplier": "E-Bloc"
+    "extraction_pattern_supplier": "e-bloc"
   },
   {
     "name": "Engie",
@@ -39,7 +39,7 @@
     "name": "Hidroelectrica",
     "bill_type": "utilities",
     "has_api": false,
-    "extraction_pattern_supplier": "Hidroelectrica"
+    "extraction_pattern_supplier": null
   },
   {
     "name": "MyElectrica",
@@ -57,6 +57,6 @@
     "name": "Vodafone",
     "bill_type": "utilities",
     "has_api": false,
-    "extraction_pattern_supplier": "Vodafone"
+    "extraction_pattern_supplier": null
   }
 ]

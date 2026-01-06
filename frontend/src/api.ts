@@ -337,6 +337,7 @@ export type Bill = {
   due_date: string;
   iban?: string;
   bill_number?: string;
+  supplier_id?: string;  // Reference to Supplier.id (to check PropertySupplier.direct_debit)
   status: 'pending' | 'paid' | 'overdue';
   created_at: string;
 };
@@ -410,6 +411,7 @@ export type RenterBill = {
   bill: Bill;
   paid_amount: number;
   remaining: number;
+  is_direct_debit: boolean;  // Whether this bill's supplier has direct_debit enabled
 };
 
 export type RenterBalance = {

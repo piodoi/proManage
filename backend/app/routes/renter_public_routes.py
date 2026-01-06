@@ -69,7 +69,14 @@ async def renter_bills(token: str):
         raise HTTPException(status_code=404, detail="Invalid access token")
     
     all_bills = db.list_bills(property_id=renter.property_id)
-    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
+    
+    # Filter bills: include if renter_id is None, 'all', or matches this renter
+    # Only filter out bills with a specific renter_id that doesn't match
+    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
+    
+    # Get property suppliers to check direct_debit status
+    property_suppliers = db.list_property_suppliers(renter.property_id)
+    direct_debit_suppliers = {ps.supplier_id: ps.direct_debit for ps in property_suppliers}
     
     bill_ids = [bill.id for bill in bills]
     all_payments = db.list_payments_for_bills(bill_ids)
@@ -84,10 +91,17 @@ async def renter_bills(token: str):
         bill = calculate_bill_status(bill)
         payments = payments_by_bill.get(bill.id, [])
         paid_amount = sum(p.amount for p in payments if p.status == PaymentStatus.COMPLETED)
+        
+        # Check if this bill's supplier has direct_debit enabled
+        is_direct_debit = False
+        if bill.supplier_id and bill.supplier_id in direct_debit_suppliers:
+            is_direct_debit = direct_debit_suppliers[bill.supplier_id]
+        
         result.append({
             "bill": bill,
             "paid_amount": paid_amount,
             "remaining": bill.amount - paid_amount,
+            "is_direct_debit": is_direct_debit,
         })
     
     return result
@@ -109,7 +123,13 @@ async def renter_balance(token: str):
     exchange_rates = await get_exchange_rates()
     
     all_bills = db.list_bills(property_id=renter.property_id)
-    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == renter.id]
+    
+    # Filter bills: include if renter_id is None, 'all', or matches this renter
+    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
+    
+    # Get property suppliers to check direct_debit status
+    property_suppliers = db.list_property_suppliers(renter.property_id)
+    direct_debit_suppliers = {ps.supplier_id: ps.direct_debit for ps in property_suppliers}
     
     bill_ids = [bill.id for bill in bills]
     all_payments = db.list_payments_for_bills(bill_ids)
@@ -123,10 +143,18 @@ async def renter_balance(token: str):
     total_paid_original = 0.0
     
     for bill in bills:
+        # Skip direct debit bills from balance calculation
+        is_direct_debit = False
+        if bill.supplier_id and bill.supplier_id in direct_debit_suppliers:
+            is_direct_debit = direct_debit_suppliers[bill.supplier_id]
+        
+        if is_direct_debit:
+            continue
+        
         bill_payments = payments_by_bill.get(bill.id, [])
         paid_for_this_bill = sum(p.amount for p in bill_payments if p.status == PaymentStatus.COMPLETED)
         
-        # Only include unpaid/pending bills in the balance
+        # Only include unpaid/pending bills (and non-direct-debit) in the balance
         if bill.status != BillStatus.PAID:
             bill_currency_original = bill.currency if bill.currency else "RON"
             bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)

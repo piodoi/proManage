@@ -165,7 +165,8 @@
     "amountRequired": "Please fill in amount",
     "selectProperty": "Select Property",
     "confidence": "Confidence",
-    "confirmProperty": "Confirm or change property"
+    "confirmProperty": "Confirm or change property",
+    "directDebit": "Direct Debit"
   },
   "summary": {
     "summary": "Summary",

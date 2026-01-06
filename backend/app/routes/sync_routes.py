@@ -35,6 +35,62 @@ logger = logging.getLogger(__name__)
 _cancellation_flags: Dict[str, bool] = {}
 
 
+def resolve_supplier_id(
+    property_id: str,
+    supplier_name: Optional[str] = None,
+    extraction_pattern_id: Optional[str] = None,
+    contract_id: Optional[str] = None
+) -> Optional[str]:
+    """
+    Resolve the supplier_id for a bill based on available information.
+    
+    Tries in order:
+    1. Match by contract_id against PropertySupplier for this property
+    2. Match by supplier name against PropertySupplier for this property
+    3. Match by extraction_pattern_id -> pattern.supplier -> Supplier
+    
+    Returns:
+        supplier_id if found, None otherwise
+    """
+    # Get all property suppliers for this property
+    property_suppliers = db.list_property_suppliers(property_id)
+    
+    # Try to match by contract_id
+    if contract_id:
+        for ps in property_suppliers:
+            if ps.contract_id and ps.contract_id == contract_id:
+                logger.debug(f"[Supplier Resolver] Matched supplier by contract_id: {contract_id} -> {ps.supplier_id}")
+                return ps.supplier_id
+    
+    # Try to match by supplier name
+    if supplier_name:
+        # Get supplier by name
+        all_suppliers = db.list_suppliers()
+        supplier_by_name = next((s for s in all_suppliers if s.name.lower() == supplier_name.lower()), None)
+        if supplier_by_name:
+            # Check if this supplier is linked to the property
+            ps_match = next((ps for ps in property_suppliers if ps.supplier_id == supplier_by_name.id), None)
+            if ps_match:
+                logger.debug(f"[Supplier Resolver] Matched supplier by name: {supplier_name} -> {supplier_by_name.id}")
+                return supplier_by_name.id
+    
+    # Try to match by extraction_pattern_id
+    if extraction_pattern_id:
+        pattern = db.get_extraction_pattern(extraction_pattern_id)
+        if pattern and pattern.supplier:
+            # Get supplier by pattern.supplier name
+            all_suppliers = db.list_suppliers()
+            supplier_by_pattern = next((s for s in all_suppliers if s.name.lower() == pattern.supplier.lower()), None)
+            if supplier_by_pattern:
+                # Check if this supplier is linked to the property
+                ps_match = next((ps for ps in property_suppliers if ps.supplier_id == supplier_by_pattern.id), None)
+                if ps_match:
+                    logger.debug(f"[Supplier Resolver] Matched supplier by pattern: {pattern.supplier} -> {supplier_by_pattern.id}")
+                    return supplier_by_pattern.id
+    
+    return None
+
+
 async def _send_progress_update(supplier_name: str, status: str, bills_found: int = 0, bills_created: int = 0, error: Optional[str] = None):
     """Helper to format progress updates for SSE"""
     return {
@@ -233,6 +289,14 @@ async def _sync_supplier_scraper(
             default_currency = get_default_bill_currency(landlord_id) if landlord_id else "RON"
             
             # Prepare bill data
+            # Resolve supplier_id for this bill
+            supplier_id = resolve_supplier_id(
+                property_id=property_id,
+                supplier_name=supplier.name,
+                extraction_pattern_id=supplier_pattern.id if supplier_pattern else None,
+                contract_id=extracted_contract_id
+            )
+            
             bill_data = {
                 "property_id": property_id,
                 "renter_id": None,
@@ -244,6 +308,7 @@ async def _sync_supplier_scraper(
                 "iban": iban,
                 "bill_number": bill_number,
                 "extraction_pattern_id": supplier_pattern.id if supplier_pattern else None,
+                "supplier_id": supplier_id,
                 "contract_id": extracted_contract_id,
                 "status": bill_status.value if hasattr(bill_status, 'value') else str(bill_status)
             }
@@ -574,6 +639,14 @@ async def sync_supplier_bills(
                                 }
                                 discovered_bills_list.append(bill_data)
                             else:
+                                # Resolve supplier_id for E-bloc
+                                supplier_id = resolve_supplier_id(
+                                    property_id=property_id,
+                                    supplier_name="E-Bloc",
+                                    extraction_pattern_id=None,
+                                    contract_id=scraped_bill.contract_id
+                                )
+                                
                                 bill = Bill(
                                     property_id=property_id,
                                     renter_id=None,
@@ -584,6 +657,7 @@ async def sync_supplier_bills(
                                     due_date=due_date,
                                     status=bill_status,
                                     bill_number=scraped_bill.bill_number,
+                                    supplier_id=supplier_id,
                                     contract_id=scraped_bill.contract_id
                                 )
                                 db.save_bill(bill)
@@ -806,6 +880,14 @@ async def save_discovered_bills(
                 logger.info(f"Updated existing bill {existing.id} (bill_number: {bill_number}, new amount: {bill_data['amount']})")
             else:
                 # Create new bill
+                # Resolve supplier_id
+                supplier_id = resolve_supplier_id(
+                    property_id=bill_data["property_id"],
+                    supplier_name=bill_data.get("supplier_name"),
+                    extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                    contract_id=bill_data.get("contract_id")
+                )
+                
                 bill = Bill(
                     property_id=bill_data["property_id"],
                     renter_id=bill_data.get("renter_id"),
@@ -816,6 +898,7 @@ async def save_discovered_bills(
                     iban=bill_data.get("iban"),
                     bill_number=bill_number,
                     extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                    supplier_id=supplier_id,
                     contract_id=bill_data.get("contract_id"),
                     status=bill_status
                 )
@@ -927,6 +1010,14 @@ async def sync_ebloc(
             # Get default currency from user preferences
             default_currency = get_default_bill_currency(prop.landlord_id)
             
+            # Resolve supplier_id for E-bloc
+            supplier_id = resolve_supplier_id(
+                property_id=property_id,
+                supplier_name="E-Bloc",
+                extraction_pattern_id=None,
+                contract_id=scraped_bill.contract_id
+            )
+            
             bill = Bill(
                 property_id=property_id,
                 renter_id=None,
@@ -937,6 +1028,7 @@ async def sync_ebloc(
                 due_date=due_date,
                 status=bill_status,
                 bill_number=scraped_bill.bill_number,
+                supplier_id=supplier_id,
                 contract_id=scraped_bill.contract_id
             )
             db.save_bill(bill)
@@ -1591,6 +1683,14 @@ async def save_all_discovered_bills(
                 bills_updated.append(existing.id)
             else:
                 # Create new bill
+                # Resolve supplier_id
+                supplier_id = resolve_supplier_id(
+                    property_id=property_id,
+                    supplier_name=bill_data.get("supplier_name") or bill_data.get("supplier"),
+                    extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                    contract_id=bill_data.get("contract_id")
+                )
+                
                 bill = Bill(
                     property_id=property_id,
                     renter_id=bill_data.get("renter_id"),
@@ -1601,6 +1701,7 @@ async def save_all_discovered_bills(
                     iban=bill_data.get("iban"),
                     bill_number=bill_number,
                     extraction_pattern_id=bill_data.get("extraction_pattern_id"),
+                    supplier_id=supplier_id,
                     contract_id=bill_data.get("contract_id"),
                     status=bill_status
                 )

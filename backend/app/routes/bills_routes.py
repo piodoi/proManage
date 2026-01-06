@@ -6,12 +6,13 @@ import sys
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query
 from app.models import (
-    Bill, BillCreate, BillUpdate, TokenData, UserRole, BillType, BillStatus
+    Bill, BillCreate, BillUpdate, TokenData, UserRole, BillType, BillStatus, PropertySupplier
 )
 from app.auth import require_landlord
 from app.database import db
-from app.pdf_parser import parse_pdf_with_patterns
+from app.text_pattern_extractor import extract_bill_from_pdf_auto
 from app.utils.suppliers import initialize_suppliers
+from app.routes.sync_routes import resolve_supplier_id
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -163,7 +164,7 @@ async def parse_bill_pdf(
     property_id: str = Query(...),
     current_user: TokenData = Depends(require_landlord),
 ):
-    """Parse PDF bill and check if it matches any extraction patterns. Returns extraction result with address matching warning."""
+    """Parse PDF bill using text patterns. Returns extraction result with address matching warning."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     
@@ -176,31 +177,44 @@ async def parse_bill_pdf(
         raise HTTPException(status_code=403, detail="Access denied")
     
     pdf_bytes = await file.read()
-    patterns = db.list_extraction_patterns()
+    
     # Ensure logger has a handler and is set to INFO level
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(logging.INFO)
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)
-    logger.info(f"[PDF Parse] Starting parse for property {property_id}, {len(patterns)} patterns")
-    result, pattern_to_update = parse_pdf_with_patterns(pdf_bytes, patterns)
+    logger.info(f"[PDF Parse] Starting parse for property {property_id} using text patterns")
     
-    # Update pattern in database if bank accounts changed
-    if pattern_to_update:
-        pattern_to_update.bank_accounts = result.bank_accounts
-        db.save_extraction_pattern(pattern_to_update)
-        logger.info(f"[PDF Parse] Updated pattern '{pattern_to_update.name}' bank accounts: {len(result.bank_accounts)}")
+    # Use new text pattern extraction system
+    extracted_data, pattern_id, pattern_name = extract_bill_from_pdf_auto(pdf_bytes)
     
-    logger.info(f"[PDF Parse] Result: pattern={result.matched_pattern_supplier}, amount={result.amount}, due_date={result.due_date}, bill_number={result.bill_number}")
+    if not extracted_data:
+        raise HTTPException(status_code=400, detail="Could not extract bill data from PDF. Please ensure the PDF matches a known supplier format.")
+    
+    logger.info(f"[PDF Parse] Result: pattern={pattern_name}, amount={extracted_data.get('amount')}, due_date={extracted_data.get('due_date')}, bill_number={extracted_data.get('bill_number')}")
+    
+    # Convert extracted_data to match old format for compatibility
+    result = {
+        "iban": extracted_data.get("iban"),
+        "bill_number": extracted_data.get("bill_number"),
+        "amount": extracted_data.get("amount"),
+        "due_date": extracted_data.get("due_date"),  # Already in ISO format YYYY-MM-DD
+        "contract_id": extracted_data.get("contract_id"),
+        "address": extracted_data.get("address"),
+        "business_name": extracted_data.get("legal_name") or extracted_data.get("description"),
+        "matched_pattern_id": pattern_id,
+        "matched_pattern_name": pattern_name,
+        "matched_pattern_supplier": extracted_data.get("legal_name") or pattern_name,  # Supplier from pattern
+    }
     
     # Check if extracted address matches property address
     address_matches = True
     address_warning = None
     address_confidence = 100  # Default to 100% if no address to compare
-    if result.address and prop.address:
+    if result.get("address") and prop.address:
         # Simple address matching - check if key parts match
-        extracted_lower = result.address.lower()
+        extracted_lower = result.get("address", "").lower()
         property_lower = prop.address.lower()
         
         # Normalize addresses for comparison (remove common words, normalize whitespace)
@@ -300,7 +314,7 @@ async def parse_bill_pdf(
         
         # Log for debugging
         logger.debug(f"[Address Match] Property: '{prop.address}'")
-        logger.debug(f"[Address Match] Extracted: '{result.address}'")
+        logger.debug(f"[Address Match] Extracted: '{result.get('address')}'")
         logger.debug(f"[Address Match] Common tokens: {common_tokens}")
         logger.debug(f"[Address Match] Extracted components: {extracted_components}")
         logger.debug(f"[Address Match] Property components: {property_components}")
@@ -315,7 +329,7 @@ async def parse_bill_pdf(
     # Auto-add supplier to property if matched pattern has a supplier
     supplier_added = False
     supplier_message = None
-    if result.matched_pattern_supplier:
+    if result.get("matched_pattern_supplier"):
         # Initialize suppliers to ensure they exist in database
         initialize_suppliers()
         
@@ -324,14 +338,13 @@ async def parse_bill_pdf(
         matched_supplier = None
         for supplier in all_suppliers:
             # Match on supplier name or extraction_pattern_supplier field
-            if (supplier.name and supplier.name.lower() == result.matched_pattern_supplier.lower()) or \
-               (supplier.extraction_pattern_supplier and supplier.extraction_pattern_supplier.lower() == result.matched_pattern_supplier.lower()):
+            if (supplier.name and supplier.name.lower() == result.get("matched_pattern_supplier", "").lower()) or \
+               (supplier.extraction_pattern_supplier and supplier.extraction_pattern_supplier.lower() == result.get("matched_pattern_supplier", "").lower()):
                 matched_supplier = supplier
                 break
         
         if matched_supplier:
             # Check if supplier is already added to property
-            from app.models import PropertySupplier
             existing = db.get_property_supplier_by_supplier(property_id, matched_supplier.id)
             if not existing:
                 # Auto-add supplier to property
@@ -351,7 +364,7 @@ async def parse_bill_pdf(
                 supplier_message = f"Supplier '{matched_supplier.name}' has been added to this property."
     
     return {
-        **result.model_dump(),
+        **result,
         "address_matches": address_matches,
         "address_warning": address_warning,
         "address_confidence": address_confidence,
@@ -398,10 +411,24 @@ async def create_bill_from_pdf(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error parsing due_date: {str(e)}")
     
+    # Resolve supplier_id
+    supplier_name = data.get("matched_pattern_supplier") or data.get("description")
+    supplier_id = resolve_supplier_id(
+        property_id=property_id,
+        supplier_name=supplier_name,
+        extraction_pattern_id=data.get("extraction_pattern_id"),
+        contract_id=data.get("contract_id")
+    )
+    
+    # Handle renter_id - convert 'all' to None
+    renter_id = data.get("renter_id")
+    if renter_id == "all" or not renter_id:
+        renter_id = None
+    
     # Create bill
     bill = Bill(
         property_id=property_id,
-        renter_id=data.get("renter_id"),
+        renter_id=renter_id,
         bill_type=BillType(data.get("bill_type", "utilities")),
         description=data.get("description", "Bill from PDF"),
         amount=float(data.get("amount", 0)),
@@ -410,6 +437,7 @@ async def create_bill_from_pdf(
         iban=data.get("iban"),
         bill_number=data.get("bill_number"),
         extraction_pattern_id=data.get("extraction_pattern_id"),
+        supplier_id=supplier_id,
         contract_id=data.get("contract_id"),
         status=BillStatus.PENDING,
     )

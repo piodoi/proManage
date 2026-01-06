@@ -173,7 +173,8 @@
     "amountRequired": "Te rog completează suma",
     "selectProperty": "Selectează Proprietate",
     "confidence": "Încredere",
-    "confirmProperty": "Confirmă sau schimbă proprietatea"
+    "confirmProperty": "Confirmă sau schimbă proprietatea",
+    "directDebit": "Debit Direct"
   },
   "summary": {
     "summary": "Rezumat",

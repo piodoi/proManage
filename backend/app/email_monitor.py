@@ -503,6 +503,15 @@ class EmailMonitor:
                             
                             # If create_bills is True, create the bill immediately
                             if create_bills and matched_property:
+                                # Resolve supplier_id for this email bill
+                                from app.routes.sync_routes import resolve_supplier_id
+                                supplier_id = resolve_supplier_id(
+                                    property_id=matched_property.id,
+                                    supplier_name=pattern_name,
+                                    extraction_pattern_id=None,  # Text patterns don't have extraction_pattern_id
+                                    contract_id=extracted_contract_id
+                                )
+                                
                                 bill = Bill(
                                     property_id=matched_property.id,
                                     renter_id=None,  # Applies to all renters
@@ -516,6 +525,7 @@ class EmailMonitor:
                                     iban=discovered_bill['iban'],
                                     bill_number=discovered_bill['bill_number'],
                                     extraction_pattern_id=None,  # Text patterns don't have DB IDs
+                                    supplier_id=supplier_id,
                                     contract_id=extracted_data.get('contract_id'),
                                     payment_details=None,
                                     status=BillStatus.PENDING,
