@@ -13,6 +13,7 @@ import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
 import AllPropertiesSyncDialog from './dialogs/AllPropertiesSyncDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
+import { formatDateWithPreferences } from '../lib/utils';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -33,7 +34,7 @@ export default function PropertyBillsView({
   onError,
   onBillsChange 
 }: PropertyBillsViewProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { preferences } = usePreferences();
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
@@ -476,7 +477,7 @@ export default function PropertyBillsView({
                     <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
                     <TableCell className="text-slate-300">{bill.bill_number || '-'}</TableCell>
                     <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || 'RON'}</TableCell>
-                    <TableCell className="text-slate-300">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-slate-300">{formatDateWithPreferences(bill.due_date, preferences.date_format, language)}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded text-xs ${
                         bill.status === 'paid' ? 'bg-green-900 text-green-200' :

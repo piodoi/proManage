@@ -387,6 +387,7 @@ class UserPreferences(BaseModel):
     rent_warning_days: Optional[int] = 5  # Number of days before rent due date to show warning
     rent_currency: Optional[str] = "EUR"  # Preferred currency for rent: "EUR", "RON", or "USD"
     bill_currency: Optional[str] = "RON"  # Preferred currency for bills: "EUR", "RON", or "USD"
+    date_format: Optional[str] = "DD/MM/YYYY"  # Date format preference: "DD/MM/YYYY" or "DD/Month/YYYY"
     phone_number: Optional[str] = None  # User's phone number with country code for WhatsApp
     landlord_name: Optional[str] = None  # Landlord's name for rent bills and payments
     personal_email: Optional[str] = None  # Personal email for notifications

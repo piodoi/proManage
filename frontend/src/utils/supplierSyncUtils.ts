@@ -1,11 +1,10 @@
+import { formatDateWithPreferences } from '../lib/utils';
+
 export type SupplierProgressStatus = 'starting' | 'processing' | 'completed' | 'error';
 
-export const formatDate = (dateString: string) => {
-  try {
-    return new Date(dateString).toLocaleDateString();
-  } catch {
-    return dateString;
-  }
+// Re-export the main date formatting utility for backward compatibility
+export const formatDate = (dateString: string, dateFormat?: string, language?: string) => {
+  return formatDateWithPreferences(dateString, dateFormat, language);
 };
 
 export const formatAmount = (amount: number) => {

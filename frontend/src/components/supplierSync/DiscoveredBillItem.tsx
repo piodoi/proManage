@@ -1,6 +1,7 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDate, formatAmount } from '../../utils/supplierSyncUtils';
 import { useI18n } from '../../lib/i18n';
+import { usePreferences } from '../../hooks/usePreferences';
 
 export type DiscoveredBill = {
   id: string;
@@ -26,7 +27,8 @@ type DiscoveredBillItemProps = {
 };
 
 export default function DiscoveredBillItem({ bill, selected, onToggle }: DiscoveredBillItemProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { preferences } = usePreferences();
 
   return (
     <div className="flex items-start space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
@@ -53,7 +55,7 @@ export default function DiscoveredBillItem({ bill, selected, onToggle }: Discove
           {bill.bill_number && (
             <span>{t('bill.billNumber')}: {bill.bill_number}</span>
           )}
-          <span>{t('bill.dueDate')}: {formatDate(bill.due_date)}</span>
+          <span>{t('bill.dueDate')}: {formatDate(bill.due_date, preferences.date_format, language)}</span>
           {bill.contract_id && (
             <span>{t('supplier.contractId')}: {bill.contract_id}</span>
           )}

@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '../lib/i18n';
 import { useAuth } from '../App';
 import { usePreferences } from '../hooks/usePreferences';
+import { formatDateWithPreferences } from '../lib/utils';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { convertCurrency } from '../utils/currency';
 
 export default function SummaryView() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { token } = useAuth();
   const { preferences } = usePreferences();
   const rentWarningDays = preferences.rent_warning_days || 5;
@@ -556,7 +557,7 @@ export default function SummaryView() {
                         <div key={bill.id} className="flex justify-between items-center text-xs text-slate-400 mb-1">
                           <span className="truncate mr-2">
                             {renterName && `${renterName} - `}
-                            {new Date(bill.due_date).toLocaleDateString()}
+                            {formatDateWithPreferences(bill.due_date, preferences.date_format, language)}
                           </span>
                           <span className="text-slate-300 font-medium text-right flex-shrink-0">{formatRentAmount(bill)}</span>
                         </div>

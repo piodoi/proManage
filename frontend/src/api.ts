@@ -387,6 +387,7 @@ export type Preferences = {
   rent_warning_days: number;
   rent_currency: string;
   bill_currency: string;
+  date_format: string;
   phone_number?: string | null;
   landlord_name?: string | null;
   personal_email?: string | null;
@@ -402,6 +403,7 @@ export type AuthResponse = {
 export type RenterInfo = {
   renter: { id: string; name: string };
   property: { id: string; name: string; address: string } | null;
+  date_format?: string;
 };
 
 export type RenterBill = {

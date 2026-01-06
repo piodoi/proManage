@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Building2, Receipt, CreditCard, Banknote } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { formatDateWithPreferences } from '../lib/utils';
 
 export default function RenterView() {
   const { token } = useParams<{ token: string }>();
@@ -228,7 +229,7 @@ export default function RenterView() {
                         )}
                       </TableCell>
                       <TableCell className="text-slate-300">
-                        {new Date(item.bill.due_date).toLocaleDateString()}
+                        {formatDateWithPreferences(item.bill.due_date, info?.date_format || 'DD/MM/YYYY', language)}
                       </TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded text-xs ${

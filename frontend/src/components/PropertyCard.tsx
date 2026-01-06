@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, Property, Renter, Bill } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatDateWithPreferences } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ExternalLink, Trash2, Pencil, Copy, Settings, MessageCircle } from 'lucide-react';
@@ -34,7 +35,7 @@ export default function PropertyCard({
   onDataChange,
   onError,
 }: PropertyCardProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { preferences } = usePreferences();
   const { saveScroll, restoreScroll } = useScrollPreservation();
   const [showRenterDialog, setShowRenterDialog] = useState(false);
@@ -217,7 +218,7 @@ export default function PropertyCard({
                             <span className="ml-2">• {t('renter.dueDay')}: {renter.rent_day}</span>
                           )}
                           {renter.start_contract_date && (
-                            <span className="ml-2">• {t('renter.start')}: {new Date(renter.start_contract_date).toLocaleDateString()}</span>
+                            <span className="ml-2">• {t('renter.start')}: {formatDateWithPreferences(renter.start_contract_date, preferences.date_format, language)}</span>
                           )}
                         </span>
                       )}

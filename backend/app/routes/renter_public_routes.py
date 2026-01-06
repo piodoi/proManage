@@ -46,9 +46,19 @@ async def renter_info(token: str):
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
     prop = db.get_property(renter.property_id)
+    
+    # Get landlord preferences for date format
+    landlord_preferences = None
+    date_format = "DD/MM/YYYY"  # Default
+    if prop:
+        landlord_preferences = db.get_user_preferences(prop.landlord_id)
+        if landlord_preferences and landlord_preferences.date_format:
+            date_format = landlord_preferences.date_format
+    
     return {
         "renter": {"id": renter.id, "name": renter.name},
         "property": {"id": prop.id, "name": prop.name, "address": prop.address} if prop else None,
+        "date_format": date_format,
     }
 
 

@@ -12,6 +12,7 @@ import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import SupplierCredentialsSettings from './SupplierCredentialsSettings';
 import { validateIban, formatIban } from '../utils/iban';
+import { formatDateWithPreferences } from '../lib/utils';
 
 type SettingsViewProps = {
   token: string | null;
@@ -20,8 +21,8 @@ type SettingsViewProps = {
 };
 
 export default function SettingsView({ token, user, onError }: SettingsViewProps) {
-  const { t } = useI18n();
-  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setPhoneNumber, setLandlordName, setPersonalEmail, setIban } = usePreferences();
+  const { t, language } = useI18n();
+  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [emailCopied, setEmailCopied] = useState(false);
   const [rentWarningDaysInput, setRentWarningDaysInput] = useState<string>('');
@@ -180,7 +181,7 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
                 </p>
                 <p className="text-slate-300">{t('settings.properties')}: {subscription.property_count}</p>
                 {subscription.expires && (
-                  <p className="text-slate-300">{t('settings.expires')}: {new Date(subscription.expires).toLocaleDateString()}</p>
+                  <p className="text-slate-300">{t('settings.expires')}: {formatDateWithPreferences(subscription.expires, preferences.date_format, language)}</p>
                 )}
                 {!subscription.can_add_property && (
                   <p className="text-amber-400 text-sm mt-2">
@@ -346,6 +347,28 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
                 </Select>
                 <p className="text-xs text-slate-500 mt-1">
                   {t('settings.billCurrencyHelp')}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div>
+                <Label className="text-slate-300">{t('settings.dateFormat')}</Label>
+                <Select
+                  value={preferences.date_format || 'DD/MM/YYYY'}
+                  onValueChange={(value) => setDateFormat(value)}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem value="DD/MM/YYYY">{t('settings.dateFormatShort')}</SelectItem>
+                    <SelectItem value="DD/Month/YYYY">{t('settings.dateFormatLong')}</SelectItem>
+                    <SelectItem value="MM/DD/YYYY">{t('settings.dateFormatAmerican')}</SelectItem>
+                    <SelectItem value="DD/MM/YY">{t('settings.dateFormatShortYear')}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500 mt-1">
+                  {t('settings.dateFormatHelp')}
                 </p>
               </div>
             </div>
