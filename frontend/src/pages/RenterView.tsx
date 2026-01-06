@@ -212,8 +212,8 @@ export default function RenterView() {
                           <span>{item.bill.amount.toFixed(2)} RON</span>
                         )}
                       </TableCell>
-                      <TableCell className={item.bill.status === 'paid' || item.is_direct_debit ? 'text-green-400' : item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
-                        {item.bill.status === 'paid' || item.is_direct_debit ? (
+                      <TableCell className={item.bill.status === 'paid' ? 'text-green-400' : item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
+                        {item.bill.status === 'paid' ? (
                           '0.00'
                         ) : item.bill.currency && item.bill.currency !== 'RON' ? (
                           <div>
@@ -241,19 +241,22 @@ export default function RenterView() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {item.is_direct_debit ? (
-                          <span className="px-3 py-1 rounded text-xs bg-blue-900 text-blue-200">
-                            {t('bill.directDebit')}
-                          </span>
-                        ) : item.bill.status !== 'paid' ? (
-                          <Button
-                            size="sm"
-                            onClick={() => openPayDialog(item)}
-                            className="bg-emerald-600 hover:bg-emerald-700"
-                          >
-                            {t('renter.pay')}
-                          </Button>
-                        ) : null}
+                        {item.bill.status !== 'paid' && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => openPayDialog(item)}
+                              className="bg-emerald-600 hover:bg-emerald-700"
+                            >
+                              {t('renter.pay')}
+                            </Button>
+                            {item.is_direct_debit && (
+                              <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
+                                {t('bill.directDebit')}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -286,7 +289,7 @@ export default function RenterView() {
                 <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
                 <p className="text-2xl font-bold text-green-400">
                   {bills
-                    .filter(b => b.bill.status === 'paid' && !b.is_direct_debit)
+                    .filter(b => b.bill.status === 'paid')
                     .reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
                         ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
@@ -301,10 +304,10 @@ export default function RenterView() {
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm mb-3">{t('renter.balance')}</p>
                 
-                {/* Bills breakdown inside balance card - only unpaid bills (excluding direct debit) */}
-                {bills.filter(b => b.bill.status !== 'paid' && !b.is_direct_debit).length > 0 && (
+                {/* Bills breakdown inside balance card - all unpaid bills */}
+                {bills.filter(b => b.bill.status !== 'paid').length > 0 && (
                   <div className="mb-3 space-y-0.5 text-xs">
-                    {bills.filter(b => b.bill.status !== 'paid' && !b.is_direct_debit).map((item) => (
+                    {bills.filter(b => b.bill.status !== 'paid').map((item) => (
                       <div key={item.bill.id} className="flex justify-between items-center text-slate-400">
                         <span className="truncate mr-2">{item.bill.description}</span>
                         <div className="flex items-center gap-1 flex-shrink-0">

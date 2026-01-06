@@ -143,18 +143,10 @@ async def renter_balance(token: str):
     total_paid_original = 0.0
     
     for bill in bills:
-        # Skip direct debit bills from balance calculation
-        is_direct_debit = False
-        if bill.supplier_id and bill.supplier_id in direct_debit_suppliers:
-            is_direct_debit = direct_debit_suppliers[bill.supplier_id]
-        
-        if is_direct_debit:
-            continue
-        
         bill_payments = payments_by_bill.get(bill.id, [])
         paid_for_this_bill = sum(p.amount for p in bill_payments if p.status == PaymentStatus.COMPLETED)
         
-        # Only include unpaid/pending bills (and non-direct-debit) in the balance
+        # Include all unpaid/pending bills in the balance (including direct debit)
         if bill.status != BillStatus.PAID:
             bill_currency_original = bill.currency if bill.currency else "RON"
             bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
