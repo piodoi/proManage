@@ -80,7 +80,7 @@ export default function AllPropertiesSyncDialog({
       setTotalRentBillsGenerated(0);
       setTotalEmailBillsSynced(0);
       progressMapRef.current.clear();
-      discoveredBillsRef.current = [];
+      discoveredBillsRef.current = []; // This is OK - we're starting fresh on dialog open
     }
   }, [open, token, properties]);
 
@@ -381,7 +381,8 @@ export default function AllPropertiesSyncDialog({
     setSyncing(true);
     setProgress([]);
     progressMapRef.current.clear();
-    discoveredBillsRef.current = [];
+    // DON'T clear discoveredBillsRef - it may contain email bills already
+    // discoveredBillsRef.current = [];
     const newSyncId = crypto.randomUUID();
     setSyncId(newSyncId);
 
