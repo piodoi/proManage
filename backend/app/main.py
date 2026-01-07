@@ -27,6 +27,14 @@ from app.utils.suppliers import initialize_suppliers
 
 load_dotenv()
 
+# Log database configuration
+import os
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./promanage.db")
+DB_TYPE = "SQLite" if DATABASE_URL.startswith("sqlite") else \
+          "MySQL" if DATABASE_URL.startswith("mysql") else \
+          "PostgreSQL" if DATABASE_URL.startswith("postgresql") else "Unknown"
+print(f"[Database] Using {DB_TYPE} database")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -52,10 +60,14 @@ app = FastAPI(title="ProManage API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Dev
+        "https://ultramic.ro",  # Production
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=86400,  # ← Cache preflight for 24 hours (86400 seconds)
 )
 
 # Include all routers
