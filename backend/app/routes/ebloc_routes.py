@@ -46,7 +46,12 @@ async def discover_ebloc_properties(
         
         logger.info("[E-Bloc] Login successful, fetching properties...")
         # Get login page HTML and parse properties
-        login_html = await scraper.page.content()
+        login_html = scraper.login_response_html
+        if not login_html:
+            # Fallback: make another request if HTML not stored
+            logger.warning("[E-Bloc] Login response HTML not available, fetching current page...")
+            response = await scraper.client.get(config.base_url)
+            login_html = response.text
         properties = await parse_ebloc_properties(login_html)
         logger.info(f"[E-Bloc] Found {len(properties)} properties")
         
@@ -84,33 +89,10 @@ async def discover_ebloc_properties(
 async def configure_ebloc(
     data: EblocConfigCreate, current_user: TokenData = Depends(require_landlord)
 ):
-    from app.web_scraper import WebScraper, load_scraper_config
-    
     logger.info(f"[E-Bloc] Configure request from user {current_user.user_id}")
     
-    # Verify credentials by attempting login
-    config = load_scraper_config("e-bloc")
-    if not config:
-        raise HTTPException(status_code=500, detail="E-bloc scraper config not found")
-    
-    scraper = WebScraper(config, save_html_dumps=False)
-    try:
-        logged_in = await scraper.login(data.username, data.password)
-        if not logged_in:
-            raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
-    except HTTPException:
-        raise
-    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.NetworkError) as e:
-        logger.warning(f"[E-Bloc] Network error during credential verification: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Network connection error. Please check your internet connection and try again in a moment."
-        )
-    except Exception as e:
-        logger.error(f"[E-Bloc] Login error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error verifying credentials: {str(e)}")
-    finally:
-        await scraper.close()
+    # Note: We skip credential verification here because the frontend calls /discover first
+    # which already verifies the credentials work. This saves an unnecessary login request.
     
     # Get user and update ebloc credentials
     user = db.get_user(current_user.user_id)

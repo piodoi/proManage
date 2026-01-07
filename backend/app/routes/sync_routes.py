@@ -13,7 +13,7 @@ import httpx
 import uuid
 
 from app.models import (
-    Supplier, ExtractionPattern, Bill, BillType, BillStatus,
+    Supplier, Bill, BillType, BillStatus,
     Payment, PaymentMethod, PaymentStatus, TokenData, UserRole, Property, Renter
 )
 from app.auth import require_landlord
@@ -113,7 +113,6 @@ async def _sync_supplier_scraper(
     username: str,
     password: str,
     supplier: Supplier,
-    patterns: List[ExtractionPattern],
     logger: logging.Logger,
     property_supplier_id: str,
     save_html_dumps: bool = False,
@@ -124,7 +123,6 @@ async def _sync_supplier_scraper(
 ) -> tuple[int, int]:  # Returns (bills_found, bills_created)
     """Sync bills from supplier using web scraper"""
     from app.web_scraper import WebScraper, load_scraper_config
-    from app.pdf_parser import parse_pdf_with_patterns
     
     # If contract_ids_to_accept is provided, log accordingly; otherwise log single property
     if contract_ids_to_accept is not None:
@@ -142,13 +140,6 @@ async def _sync_supplier_scraper(
         if progress_callback:
             progress_callback(supplier.name, "error", 0, 0, "No scraper configuration found")
         return 0, 0
-    
-    # Find extraction pattern
-    supplier_pattern = None
-    for pattern in patterns:
-        if pattern.supplier and pattern.supplier.lower() == supplier.name.lower():
-            supplier_pattern = pattern
-            break
     
     scraper = WebScraper(config, save_html_dumps=save_html_dumps)
     bills_created = 0
@@ -168,12 +159,43 @@ async def _sync_supplier_scraper(
     contract_id_to_save = None
     
     try:
-        logged_in = await scraper.login(username, password)
+        # Try to login with retry logic
+        max_retries = 2
+        retry_delay = 2  # seconds
+        logged_in = False
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"[{supplier.name} Scraper] Login attempt {attempt + 1}/{max_retries}")
+                logged_in = await scraper.login(username, password)
+                if logged_in:
+                    break
+                else:
+                    last_error = "Invalid credentials or login page changed"
+                    if attempt < max_retries - 1:
+                        logger.warning(f"[{supplier.name} Scraper] Login failed, retrying in {retry_delay}s...")
+                        await asyncio.sleep(retry_delay)
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.TimeoutException) as e:
+                last_error = f"Network error: {str(e)}"
+                logger.warning(f"[{supplier.name} Scraper] Network error during login: {e}")
+                if attempt < max_retries - 1:
+                    logger.info(f"[{supplier.name} Scraper] Retrying in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"[{supplier.name} Scraper] Login error: {e}")
+                break  # Don't retry on unexpected errors
+        
         if not logged_in:
             error_msg = f"Failed to login to {supplier.name}"
+            if last_error:
+                error_msg += f": {last_error}"
+            logger.warning(f"[{supplier.name} Scraper] {error_msg}")
             if progress_callback:
                 progress_callback(supplier.name, "error", 0, 0, error_msg)
-            raise Exception(error_msg)
+            # Return gracefully instead of raising
+            return 0, 0
         
         # Get bills
         # For E-bloc with multiple contract_ids (association IDs), fetch bills for each association
@@ -217,43 +239,8 @@ async def _sync_supplier_scraper(
                 if not extracted_str or extracted_str != filter_str:
                     continue  # Skip early, no logging needed
             
-            # Only parse PDF if we're missing critical information that might be in the PDF
-            needs_pdf_parsing = (
-                scraped_bill.pdf_content and 
-                supplier_pattern and 
-                (not bill_number or not amount or not extracted_contract_id)
-            )
-            
-            if needs_pdf_parsing:
-                try:
-                    pdf_result, _ = parse_pdf_with_patterns(
-                        scraped_bill.pdf_content,
-                        patterns=[supplier_pattern]
-                    )
-                    
-                    # Only use PDF data if we're missing it from the page
-                    if pdf_result.iban and not iban:
-                        iban = pdf_result.iban
-                    if pdf_result.bill_number and not bill_number:
-                        bill_number = pdf_result.bill_number
-                    if pdf_result.amount and not amount:
-                        amount = pdf_result.amount
-                    if pdf_result.contract_id and not extracted_contract_id:
-                        extracted_contract_id = pdf_result.contract_id
-                    if pdf_result.due_date and not scraped_bill.due_date:
-                        try:
-                            if '/' in pdf_result.due_date:
-                                parts = pdf_result.due_date.split('/')
-                                if len(parts) == 3:
-                                    due_date = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
-                            elif '.' in pdf_result.due_date:
-                                parts = pdf_result.due_date.split('.')
-                                if len(parts) == 3:
-                                    due_date = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
-                        except:
-                            pass
-                except Exception as e:
-                    logger.warning(f"[{supplier.name} Scraper] Error parsing PDF: {e}")
+            # Note: Web scraper extracts all data directly from HTML
+            # PDF parsing is not needed since bill_number, amount, etc. come from the page
             
             # Check if bill already exists (only check after filtering by contract_id)
             existing = None
@@ -299,7 +286,7 @@ async def _sync_supplier_scraper(
             supplier_id = resolve_supplier_id(
                 property_id=property_id,
                 supplier_name=supplier.name,
-                extraction_pattern_id=supplier_pattern.id if supplier_pattern else None,
+                extraction_pattern_id=None,  # No extraction patterns - web scraper extracts directly from HTML
                 contract_id=extracted_contract_id
             )
             
@@ -313,7 +300,7 @@ async def _sync_supplier_scraper(
                 "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
                 "iban": iban,
                 "bill_number": bill_number,
-                "extraction_pattern_id": supplier_pattern.id if supplier_pattern else None,
+                "extraction_pattern_id": None,  # No extraction patterns - web scraper extracts directly from HTML
                 "supplier_id": supplier_id,
                 "contract_id": extracted_contract_id,
                 "status": bill_status.value if hasattr(bill_status, 'value') else str(bill_status)
@@ -340,12 +327,24 @@ async def _sync_supplier_scraper(
         
         return bills_found, bills_created
     
+    except httpx.ConnectError as e:
+        error_msg = f"Network connection error: {str(e)}"
+        logger.warning(f"[{supplier.name} Scraper] {error_msg}")
+        if progress_callback:
+            progress_callback(supplier.name, "error", bills_found, bills_created, "Network connection error. Please check your internet connection.")
+        return bills_found, bills_created  # Return gracefully instead of raising
+    except httpx.TimeoutException as e:
+        error_msg = f"Request timeout: {str(e)}"
+        logger.warning(f"[{supplier.name} Scraper] {error_msg}")
+        if progress_callback:
+            progress_callback(supplier.name, "error", bills_found, bills_created, "Request timeout. The supplier website may be slow or unavailable.")
+        return bills_found, bills_created  # Return gracefully instead of raising
     except Exception as e:
         error_msg = str(e)
         logger.error(f"[{supplier.name} Scraper] Error during sync: {error_msg}", exc_info=True)
         if progress_callback:
             progress_callback(supplier.name, "error", bills_found, bills_created, error_msg)
-        raise Exception(error_msg)
+        return bills_found, bills_created  # Return gracefully instead of raising
     finally:
         await scraper.close()
 
@@ -452,7 +451,8 @@ async def sync_supplier_bills(
                 })
                 return
             
-            all_patterns = db.list_extraction_patterns()
+            # Note: Text patterns are file-based and loaded on-demand, not from database
+            # Web scraper extracts data directly from HTML, so patterns aren't needed here
             bills_created_total = 0
             
             # Use a queue to receive progress updates from callbacks
@@ -584,7 +584,11 @@ async def sync_supplier_bills(
                             return
                         
                         # Get login page HTML for association matching
-                        login_html = await scraper.page.content()
+                        login_html = scraper.login_response_html
+                        if not login_html:
+                            # Fallback: make another request if HTML not stored
+                            response = await scraper.client.get(config.base_url)
+                            login_html = response.text
                         matches = await find_matching_associations(login_html, prop.name)
                         if not matches:
                             yield send_event("progress", {
@@ -731,7 +735,6 @@ async def sync_supplier_bills(
                                 username=username,
                                 password=password,
                                 supplier=supplier,
-                                patterns=all_patterns,
                                 logger=logger,
                                 property_supplier_id=property_supplier.id,
                                 save_html_dumps=False,
@@ -958,7 +961,11 @@ async def sync_ebloc(
             raise HTTPException(status_code=401, detail="Invalid e-bloc credentials")
         
         # Get login page HTML for association matching
-        login_html = await scraper.page.content()
+        login_html = scraper.login_response_html
+        if not login_html:
+            # Fallback: make another request if HTML not stored
+            response = await scraper.client.get(config.base_url)
+            login_html = response.text
         matches = await find_matching_associations(login_html, prop.name)
         
         if not matches:
@@ -1119,7 +1126,8 @@ async def sync_all_properties_supplier_bills(
                         yield send_event("error", {"error": "Access denied"})
                         return
             
-            all_patterns = db.list_extraction_patterns()
+            # Note: Text patterns are file-based and loaded on-demand, not from database
+            # Web scraper extracts data directly from HTML, so patterns aren't needed here
             bills_discovered = []
             
             # Sync each supplier group once (grouped by supplier_id only)
@@ -1306,7 +1314,6 @@ async def sync_all_properties_supplier_bills(
                             username=username,
                             password=password,
                             supplier=supplier,
-                            patterns=all_patterns,
                             logger=logger,
                             property_supplier_id=property_supplier.id,
                             save_html_dumps=False,

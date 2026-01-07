@@ -245,7 +245,11 @@ async def sync_ebloc_all_properties(
             raise Exception("Invalid E-bloc credentials")
         
         # Get login page HTML for association matching
-        login_html = await scraper.page.content()
+        login_html = scraper.login_response_html
+        if not login_html:
+            # Fallback: make another request if HTML not stored
+            response = await scraper.client.get(config.base_url)
+            login_html = response.text
         
         # First, parse and log ALL associations/apartments found in the login HTML
         await _log_all_ebloc_associations(login_html)
@@ -331,8 +335,7 @@ async def sync_ebloc_all_properties(
             # Set cookies for this association/apartment
             await scraper._set_cookies_from_config(assoc_id, apt_id)
             # Navigate to a page to ensure cookies are set
-            await scraper.page.goto(scraper.config.base_url, wait_until="networkidle")
-            await scraper.page.wait_for_timeout(250)
+            await scraper.client.get(scraper.config.base_url)
             
             # Get bills for this association
             assoc_bills = await scraper._fetch_bills_page()

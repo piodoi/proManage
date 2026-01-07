@@ -1,12 +1,12 @@
 """
 General-purpose web scraper for supplier websites.
 Data-driven configuration allows easy addition of new suppliers.
-Uses Playwright for JavaScript-enabled sites with reCAPTCHA.
+Uses httpx and BeautifulSoup for lightweight scraping without browser automation.
 """
 
-from playwright.async_api import async_playwright, Page, Browser, BrowserContext
+import httpx
 from bs4 import BeautifulSoup
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 import logging
@@ -75,7 +75,7 @@ class ScraperConfig:
     # Additional configuration
     requires_js: bool = False  # If True, would need Selenium/Playwright (not implemented yet)
     wait_after_login: float = 1.0  # Seconds to wait after login
-    timeout: float = 30.0
+    timeout: float = 45.0  # Increased timeout for slow supplier websites
     multiple_contracts_possible: bool = False  # If True, user may have multiple contracts/addresses
     
     # Cookie configuration (for sites that use cookies to switch between associations/apartments)
@@ -83,50 +83,52 @@ class ScraperConfig:
 
 
 class WebScraper:
-    """General-purpose web scraper for supplier websites using Playwright"""
+    """General-purpose web scraper for supplier websites using httpx + BeautifulSoup"""
     
     def __init__(self, config: ScraperConfig, save_html_dumps: bool = False):
         self.config = config
-        self.playwright = None
-        self.browser: Optional[Browser] = None
-        self.context: Optional[BrowserContext] = None
-        self.page: Optional[Page] = None
+        self.client: Optional[httpx.AsyncClient] = None
         self.logged_in = False
         self.save_html_dumps = save_html_dumps
         self.dump_counter = 0
+        self.last_response_url = None  # Track the final URL after redirects
+        self.current_url = None  # Track current page URL
+        self.login_response_html = None  # Store login response HTML for property discovery
     
-    async def _init_browser(self):
-        """Initialize Playwright browser"""
-        if not self.playwright:
-            try:
-                self.playwright = await async_playwright().start()
-            except NotImplementedError as e:
-                # On Windows with ProactorEventLoop, Playwright can't create subprocesses
-                # This happens when FastAPI/uvicorn uses ProactorEventLoop on Windows
-                # The test_scraper works because it uses asyncio.run() which creates SelectorEventLoop
-                import platform
-                if platform.system() == 'Windows':
-                    error_msg = (
-                        "Playwright cannot start on Windows with ProactorEventLoop. "
-                        "This is a known limitation. Please run the server with: "
-                        "`uvicorn app.main:app --loop asyncio` or use WindowsSelectorEventLoop policy."
-                    )
-                    logger.error(f"[{self.config.supplier_name} Scraper] {error_msg}")
-                    raise RuntimeError(error_msg) from e
-                raise
+    async def _init_client(self):
+        """Initialize httpx client"""
+        if not self.client:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
             
-            self.browser = await self.playwright.chromium.launch(headless=True)
-            self.context = await self.browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            # Add custom headers from config
+            if self.config.custom_headers:
+                headers.update(self.config.custom_headers)
+            
+            # Use granular timeout: longer read timeout for slow responses
+            timeout_config = httpx.Timeout(
+                connect=15.0,  # Time to establish connection
+                read=self.config.timeout,  # Time to read response
+                write=10.0,  # Time to write request
+                pool=5.0  # Time to get connection from pool
             )
-            self.page = await self.context.new_page()
-            # Note: Cookies with association_id/apartment_id will be set later in get_bills() when IDs are available
+            
+            self.client = httpx.AsyncClient(
+                follow_redirects=True, 
+                timeout=timeout_config,
+                headers=headers
+            )
     
     async def _set_cookies_from_config(self, association_id: Optional[str] = None, apartment_id: Optional[str] = None):
         """Set cookies from config, replacing placeholders with actual values.
         Only sets cookies when association_id is provided (required for cookie placeholders)."""
-        if not self.config.cookie_config or not self.page:
+        if not self.config.cookie_config or not self.client:
             return
         
         # Only set cookies if we have association_id (required for placeholders)
@@ -136,9 +138,8 @@ class WebScraper:
         try:
             from urllib.parse import urlparse
             parsed_url = urlparse(self.config.base_url)
-            domain = parsed_url.netloc
+            domain = parsed_url.netloc.replace("www.", "")  # Remove www. for cookie domain
             
-            cookies = []
             for cookie_name, cookie_template in self.config.cookie_config.items():
                 cookie_value = cookie_template
                 # Replace placeholders
@@ -149,46 +150,41 @@ class WebScraper:
                 if association_id and apartment_id:
                     cookie_value = cookie_value.replace("{association_id}_{apartment_id}", f"{association_id}_{apartment_id}")
                 
-                cookies.append({
-                    "name": cookie_name,
-                    "value": cookie_value,
-                    "domain": domain,
-                    "path": "/"
-                })
-            
-            if cookies:
-                await self.context.add_cookies(cookies)
-                logger.info(f"[{self.config.supplier_name} Scraper] Set cookies: {[c['name'] for c in cookies]}")
+                # Set cookie on the httpx client
+                self.client.cookies.set(cookie_name, cookie_value, domain=domain)
+                logger.info(f"[{self.config.supplier_name} Scraper] Set cookie: {cookie_name}={cookie_value}")
         except Exception as e:
             logger.warning(f"[{self.config.supplier_name} Scraper] Failed to set cookies: {e}")
     
     def set_association_cookies(self, association_id: str, apartment_id: Optional[str] = None):
-        """Set cookies for association/apartment selection (for e-bloc style sites)"""
-        if not self.page:
-            logger.warning(f"[{self.config.supplier_name} Scraper] Cannot set cookies - page not initialized")
+        """Set cookies for association/apartment selection (for e-bloc style sites) - synchronous wrapper"""
+        if not self.client:
+            logger.warning(f"[{self.config.supplier_name} Scraper] Cannot set cookies - client not initialized")
             return
         
-        # Update cookies asynchronously
+        # Call async method (will be called from async context)
         import asyncio
-        if asyncio.iscoroutinefunction(self._set_cookies_from_config):
-            # If we're in an async context, schedule it
-            asyncio.create_task(self._set_cookies_from_config(association_id, apartment_id))
-        else:
-            # Otherwise, we'll need to call it from an async method
-            pass
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create task if loop is running
+                asyncio.create_task(self._set_cookies_from_config(association_id, apartment_id))
+            else:
+                # Run directly if no loop
+                loop.run_until_complete(self._set_cookies_from_config(association_id, apartment_id))
+        except Exception as e:
+            logger.warning(f"[{self.config.supplier_name} Scraper] Error scheduling cookie set: {e}")
     
     async def login(self, username: str, password: str) -> bool:
         """Login to the supplier website"""
         try:
-            # Log credentials for debugging (only for Hidroelectrica)
             logger.info(f"[{self.config.supplier_name} Scraper] Starting login...")
             
-            await self._init_browser()
-            logger.info(f"[{self.config.supplier_name} Scraper] Browser initialized, proceeding with login...")
+            await self._init_client()
+            logger.info(f"[{self.config.supplier_name} Scraper] HTTP client initialized, proceeding with login...")
             
             if self.config.login_method == "form":
                 login_result = await self._login_form(username, password)
-                # Log immediately after login (login success is logged inside _login_form)
                 return login_result
             elif self.config.login_method == "api":
                 return await self._login_api(username, password)
@@ -225,121 +221,117 @@ class WebScraper:
             logger.error(f"[{self.config.supplier_name} Scraper] Failed to save HTML dump: {e}", exc_info=True)
     
     async def _login_form(self, username: str, password: str) -> bool:
-        """Login using form submission with Playwright"""
-        # Navigate to login page
-        await self.page.goto(self.config.login_url, wait_until="networkidle")
-        
-        # Save HTML dump of login page
-        login_html = await self.page.content()
-        self._save_html_dump(login_html, "login")
-        
-        # Find username and password fields
-        username_field = self.config.username_field or "txtLogin"
-        password_field = self.config.password_field or "txtpwd"
-        
-        # Fill in username and password
+        """Login using form submission with httpx"""
         try:
-            await self.page.fill(f'input[name="{username_field}"]', username)
-            await self.page.fill(f'input[name="{password_field}"]', password)
-        except Exception as e:
-            logger.error(f"[{self.config.supplier_name} Scraper] Failed to fill login fields: {e}")
-            return False
-        
-        # Wait a bit for any JavaScript to initialize (like reCAPTCHA)
-        await self.page.wait_for_timeout(1000)
-        
-        # Click the submit button
-        submit_button_selector = self.config.login_submit_button_selector or 'input[name="btnlogin"]'
-        try:
-            # Wait for the submit button to be ready
-            await self.page.wait_for_selector(submit_button_selector, state="visible", timeout=5000)
-            # Click the submit button and wait for navigation
-            await self.page.click(submit_button_selector)
-            # Wait for navigation to complete (either redirect or page change)
-            await self.page.wait_for_load_state("networkidle", timeout=int(self.config.timeout * 1000))
-        except Exception as e:
-            logger.warning(f"[{self.config.supplier_name} Scraper] Error clicking submit button with selector '{submit_button_selector}': {e}")
-            # Try alternative: press Enter on password field
-            try:
-                await self.page.press(f'input[name="{password_field}"]', "Enter")
-                await self.page.wait_for_load_state("networkidle", timeout=int(self.config.timeout * 1000))
-            except Exception as e2:
-                logger.warning(f"[{self.config.supplier_name} Scraper] Alternative submit (Enter key) also failed: {e2}")
-                # Form might submit automatically, just wait a bit
-                await self.page.wait_for_timeout(2000)
-        
-        # Reduced wait after login (50% of configured)
-        wait_time = int(self.config.wait_after_login * 500) if self.config.wait_after_login > 0 else 0
-        if wait_time > 0:
-            await self.page.wait_for_timeout(wait_time)
-        
-        # Wait for navigation to complete before accessing page content
-        try:
-            await self.page.wait_for_load_state("networkidle", timeout=10000)
-        except Exception:
-            # If networkidle times out, at least wait for load state
-            try:
-                await self.page.wait_for_load_state("load", timeout=5000)
-            except Exception:
-                pass  # Continue anyway
-        
-        # Get current URL and page content (with retry in case page is still navigating)
-        try:
-            current_url = self.page.url
-            page_html = await self.page.content()
-        except Exception as e:
-            # Page might still be navigating, wait a bit more and retry
-            await self.page.wait_for_timeout(1000)
-            await self.page.wait_for_load_state("load", timeout=5000)
-            current_url = self.page.url
-            page_html = await self.page.content()
-        
-        self._save_html_dump(page_html, "after_login")
-        
-        # Check if login was successful - successful login redirects to Dashboard.aspx
-        login_success = False
-        success_reason = ""
-        
-        # Check if we were redirected to Dashboard.aspx
-        if "dashboard.aspx" in current_url.lower() and "default.aspx" not in current_url.lower():
-            login_success = True
-            success_reason = f"redirected to {current_url}"
-        
-        # Also check configured success indicator
-        if not login_success and self.config.login_success_indicator:
-            if self.config.login_success_indicator.startswith("selector:"):
-                selector = self.config.login_success_indicator.replace("selector:", "").strip()
-                try:
-                    element = await self.page.query_selector(selector)
+            # Get login page
+            logger.info(f"[{self.config.supplier_name} Scraper] Getting login page...")
+            login_page = await self.client.get(self.config.login_url)
+            self.current_url = str(login_page.url)
+            logger.info(f"[{self.config.supplier_name} Scraper] Login page status: {login_page.status_code}, URL: {login_page.url}")
+            
+            # Save HTML dump of login page
+            self._save_html_dump(login_page.text, "login")
+            
+            # Parse form to extract fields
+            soup = BeautifulSoup(login_page.text, "html.parser")
+            form = soup.find("form")
+            form_data = {}
+            
+            if form:
+                logger.info(f"[{self.config.supplier_name} Scraper] Found form with action: {form.get('action', 'N/A')}")
+                # Extract all form fields (including hidden fields, CSRF tokens, etc.)
+                for inp in form.find_all("input"):
+                    name = inp.get("name")
+                    if name:
+                        form_data[name] = inp.get("value", "")
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Form input: {name} = {inp.get('value', '')[:20]}")
+            
+            # Set username and password fields
+            username_field = self.config.username_field or "txtLogin"
+            password_field = self.config.password_field or "txtpwd"
+            
+            form_data[username_field] = username
+            form_data[password_field] = password
+            
+            # Try common field name variations
+            if "user" in form_data:
+                form_data["user"] = username
+            if "pass" in form_data:
+                form_data["pass"] = password
+            if "email" in form_data:
+                form_data["email"] = username
+            if "password" in form_data:
+                form_data["password"] = password
+            
+            logger.info(f"[{self.config.supplier_name} Scraper] Submitting login form with data keys: {list(form_data.keys())}")
+            
+            # Submit the form
+            response = await self.client.post(self.config.login_url, data=form_data)
+            self.current_url = str(response.url)
+            self.last_response_url = str(response.url)
+            logger.info(f"[{self.config.supplier_name} Scraper] Login response status: {response.status_code}, final URL: {response.url}")
+            
+            # Save HTML dump after login
+            self._save_html_dump(response.text, "after_login")
+            
+            # Check if login was successful
+            login_success = False
+            success_reason = ""
+            page_html = response.text
+            page_html_lower = page_html.lower()
+            
+            # Check if we were redirected to Dashboard.aspx
+            if "dashboard.aspx" in self.current_url.lower() and "default.aspx" not in self.current_url.lower():
+                login_success = True
+                success_reason = f"redirected to {self.current_url}"
+            
+            # Check configured success indicator
+            if not login_success and self.config.login_success_indicator:
+                if self.config.login_success_indicator.startswith("selector:"):
+                    selector = self.config.login_success_indicator.replace("selector:", "").strip()
+                    # Use BeautifulSoup to check for selector
+                    soup = BeautifulSoup(page_html, "html.parser")
+                    element = soup.select_one(selector)
                     if element:
                         login_success = True
                         success_reason = f"found selector: {selector}"
-                except:
-                    pass
-            elif self.config.login_success_indicator.startswith("url:"):
-                url_pattern = self.config.login_success_indicator.replace("url:", "").strip()
-                if url_pattern in current_url:
+                elif self.config.login_success_indicator.startswith("url:"):
+                    url_pattern = self.config.login_success_indicator.replace("url:", "").strip()
+                    if url_pattern in self.current_url:
+                        login_success = True
+                        success_reason = f"URL contains: {url_pattern}"
+                elif self.config.login_success_indicator.lower() in page_html_lower:
                     login_success = True
-                    success_reason = f"URL contains: {url_pattern}"
-            elif self.config.login_success_indicator in page_html:
-                login_success = True
-                success_reason = "found text indicator"
+                    success_reason = "found text indicator"
+            
+            # Look for logout link or similar indicators
+            if not login_success:
+                has_logout = "logout" in page_html_lower or "deconectare" in page_html_lower or "iesire" in page_html_lower or "sign out" in page_html_lower
+                still_has_login = username_field.lower() in page_html_lower and password_field.lower() in page_html_lower
+                
+                if has_logout and not still_has_login:
+                    login_success = True
+                    success_reason = "found logout link"
+            
+            # Final check: if we're on Dashboard (not default), it's success
+            if not login_success:
+                if "dashboard" in self.current_url.lower() and "default.aspx" not in self.current_url.lower():
+                    login_success = True
+                    success_reason = "on Dashboard page"
+            
+            if login_success:
+                self.logged_in = True
+                self.login_response_html = page_html  # Store for property discovery
+                logger.info(f"[{self.config.supplier_name} Scraper] Login successful ({success_reason})")
+                return True
+            
+            logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - URL: {self.current_url}")
+            logger.info(f"[{self.config.supplier_name} Scraper] Check HTML dump file to see what the page contains after login")
+            return False
         
-        # Final check: if we're on Dashboard (not default), it's success
-        if not login_success:
-            if "dashboard" in current_url.lower() and "default.aspx" not in current_url.lower():
-                login_success = True
-                success_reason = "on Dashboard page"
-        
-        if login_success:
-            self.logged_in = True
-            logger.info(f"[{self.config.supplier_name} Scraper] Login successful ({success_reason})")
-            # Note: Cookies with association_id/apartment_id will be set in get_bills() when IDs are available
-            return True
-        
-        logger.warning(f"[{self.config.supplier_name} Scraper] Login may have failed - URL: {current_url}")
-        logger.info(f"[{self.config.supplier_name} Scraper] Check HTML dump file to see what the page contains after login")
-        return False
+        except Exception as e:
+            logger.error(f"[{self.config.supplier_name} Scraper] Login error: {e}", exc_info=True)
+            return False
     
     async def _login_api(self, username: str, password: str) -> bool:
         """Login using API endpoint (for future use)"""
@@ -364,8 +356,8 @@ class WebScraper:
         if not self.logged_in:
             raise Exception("Not logged in. Call login() first.")
         
-        if not self.page:
-            await self._init_browser()
+        if not self.client:
+            await self._init_client()
         
         bills = []
         
@@ -376,9 +368,8 @@ class WebScraper:
                 # Set cookies for this association/apartment
                 await self._set_cookies_from_config(assoc_id, apt_id)
                 
-                # Navigate to a page to ensure cookies are set
-                await self.page.goto(self.config.base_url, wait_until="networkidle")
-                await self.page.wait_for_timeout(250)
+                # Navigate to base URL to ensure cookies are set
+                await self.client.get(self.config.base_url)
                 
                 # Get bills for this association
                 assoc_bills = await self._fetch_bills_page()
@@ -397,9 +388,8 @@ class WebScraper:
         # Single association (existing behavior)
         if association_id and self.config.cookie_config:
             await self._set_cookies_from_config(association_id, apartment_id)
-            # Navigate to a page to ensure cookies are set
-            await self.page.goto(self.config.base_url, wait_until="networkidle")
-            await self.page.wait_for_timeout(500)
+            # Navigate to base URL to ensure cookies are set
+            await self.client.get(self.config.base_url)
         
         bills = await self._fetch_bills_page()
         return bills
@@ -416,16 +406,18 @@ class WebScraper:
                 return bills
             
             logger.info(f"[{self.config.supplier_name} Scraper] Fetching bills page: {bills_url}")
-            await self.page.goto(bills_url, wait_until="networkidle")
-            logger.info(f"[{self.config.supplier_name} Scraper] Bills page received, waiting for dynamic content...")
+            response = await self.client.get(bills_url)
+            self.current_url = str(response.url)
+            logger.info(f"[{self.config.supplier_name} Scraper] Bills page received, status: {response.status_code}")
             
-            # Wait a bit for dynamic content to load (reduced from 2000ms to 1000ms)
-            await self.page.wait_for_timeout(1000)
-            logger.info(f"[{self.config.supplier_name} Scraper] Starting bill extraction...")
+            if response.status_code != 200:
+                logger.warning(f"[{self.config.supplier_name} Scraper] Bills page returned non-200 status: {response.status_code}")
+                return bills
             
-            page_html = await self.page.content()
+            page_html = response.text
             self._save_html_dump(page_html, "bills_page")
             
+            logger.info(f"[{self.config.supplier_name} Scraper] Starting bill extraction...")
             soup = BeautifulSoup(page_html, "html.parser")
             
             # Find bills list
@@ -476,8 +468,8 @@ class WebScraper:
             logger.info(f"[{self.config.supplier_name} Scraper] Found {len(bill_items)} bill items")
             
             for idx, item in enumerate(bill_items):
-                # Use Playwright page for extraction if available (for JavaScript links)
-                bill = await self._extract_bill_from_item(item, self.page.url if self.page else None, soup)
+                # Extract bill from item
+                bill = await self._extract_bill_from_item(item, self.current_url, soup)
                 if bill:
                     # Use bill number from header if available and bill doesn't have one
                     if bill_number_from_header and not bill.bill_number:
@@ -574,7 +566,7 @@ class WebScraper:
                     date_text = match.group(1) if match.groups() else match.group(0)
                     bill.due_date = self._parse_date(date_text)
             
-            # Extract PDF link - handle JavaScript onclick links
+            # Extract PDF link
             pdf_link_elem = None
             if self.config.bill_pdf_link_selector:
                 pdf_link_elem = item.select_one(self.config.bill_pdf_link_selector)
@@ -591,18 +583,24 @@ class WebScraper:
                     match = re.search(r"BillClick\('([^']+)'\)", onclick)
                     if match:
                         bill_params = match.group(1)
-                        # Store the params for later use - we'll call BillClick via Playwright
+                        # Store the params for later use
                         bill.pdf_url = f"javascript:BillClick('{bill_params}')"
-                        # Download PDF by calling the JavaScript function
-                        await self._download_pdf_via_javascript(bill, bill_params)
+                        # Try to download PDF by reconstructing the URL
+                        # This might not work for all sites - some require JavaScript execution
+                        logger.debug(f"[{self.config.supplier_name} Scraper] Found JavaScript PDF link: {bill_params}")
+                        # Note: Without browser automation, we can't execute JavaScript
+                        # The PDF URL will need to be constructed based on the site's pattern
+                        # Or the bill will be marked as having a PDF but we can't download it here
                 else:
                     # Regular href link
                     href = pdf_link_elem.get("href", "")
-                    if href and href != "javascript:":
+                    if href and href != "javascript:" and href != "#":
                         if href.startswith("http"):
                             bill.pdf_url = href
-                        else:
+                        elif href.startswith("/"):
                             bill.pdf_url = f"{self.config.base_url}{href}"
+                        else:
+                            bill.pdf_url = f"{self.config.base_url}/{href}"
                         # Download PDF
                         await self._download_pdf_from_url(bill)
             
@@ -637,104 +635,36 @@ class WebScraper:
             logger.warning(f"[{self.config.supplier_name} Scraper] Error extracting bill: {e}", exc_info=True)
             return None
     
-    async def _download_pdf_via_javascript(self, bill: ScrapedBill, bill_params: str):
-        """Download PDF by calling JavaScript BillClick function"""
-        try:
-            # BillClick makes an AJAX call that returns JSON with the PDF URL
-            # Intercept the AJAX response
-            pdf_url_from_json = None
-            
-            # Set up response listener to catch the AJAX response (JSON with PDF URL)
-            async with self.page.expect_response(lambda response: 
-                "BillDashboard.aspx" in response.url or 
-                "GetBill" in response.url or
-                "ViewBill" in response.url or
-                response.headers.get("content-type", "").startswith("application/json")
-            ) as response_info:
-                # Call the BillClick function
-                await self.page.evaluate(f"BillClick('{bill_params}')")
-            
-            response = await response_info.value
-            if response.status == 200:
-                response_text = await response.text()
-                logger.debug(f"[{self.config.supplier_name} Scraper] BillClick response: {response_text[:200]}")
-                
-                # Parse JSON response to get PDF URL
-                try:
-                    import json
-                    response_json = json.loads(response_text)
-                    # The response is like: {"d":"\"Upload.ashx?q=...&EncType=I,Bill...pdf\""}
-                    if "d" in response_json:
-                        pdf_path = response_json["d"]
-                        # Remove outer quotes if present
-                        if isinstance(pdf_path, str):
-                            if pdf_path.startswith('"') and pdf_path.endswith('"'):
-                                pdf_path = pdf_path[1:-1]
-                            # Remove escape sequences
-                            pdf_path = pdf_path.replace("\\u0026", "&")
-                            pdf_path = pdf_path.replace("\\", "")
-                        # Build full URL
-                        if pdf_path.startswith("Upload.ashx"):
-                            bill.pdf_url = f"{self.config.base_url}/portal/{pdf_path}"
-                        elif pdf_path.startswith("/"):
-                            bill.pdf_url = f"{self.config.base_url}{pdf_path}"
-                        elif pdf_path.startswith("http"):
-                            bill.pdf_url = pdf_path
-                        else:
-                            bill.pdf_url = f"{self.config.base_url}/portal/{pdf_path}"
-                        
-                        logger.debug(f"[{self.config.supplier_name} Scraper] Extracted PDF URL from JSON: {bill.pdf_url}")
-                        
-                        # Now download the actual PDF
-                        await self._download_pdf_from_url(bill)
-                except json.JSONDecodeError:
-                    # Maybe it's already a PDF?
-                    content_type = response.headers.get("content-type", "")
-                    if "pdf" in content_type.lower():
-                        bill.pdf_content = await response.body()
-                        bill.pdf_url = response.url
-                        logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF directly: {len(bill.pdf_content)} bytes")
-                        if self.save_html_dumps and bill.pdf_content:
-                            await self._save_pdf_dump(bill)
-                    else:
-                        raise Exception(f"Unexpected response format: {response_text[:200]}")
-        except Exception as e:
-            logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF via JavaScript: {e}", exc_info=True)
-            # Try alternative: look for PDF in modal or iframe
-            try:
-                # Wait for modal to appear
-                await self.page.wait_for_selector("#pdfpopupmodal", timeout=5000)
-                # Look for PDF embed or iframe
-                pdf_iframe = await self.page.query_selector("#pdfpopupmodal embed, #pdfpopupmodal iframe")
-                if pdf_iframe:
-                    pdf_src = await pdf_iframe.get_attribute("src")
-                    if pdf_src:
-                        bill.pdf_url = pdf_src
-                        await self._download_pdf_from_url(bill)
-            except Exception as e2:
-                logger.debug(f"[{self.config.supplier_name} Scraper] Alternative PDF download also failed: {e2}")
-    
     async def _download_pdf_from_url(self, bill: ScrapedBill):
-        """Download PDF from a direct URL"""
+        """Download PDF from a direct URL using httpx"""
         try:
-            pdf_response = await self.page.request.get(bill.pdf_url)
-            if pdf_response.status == 200:
-                bill.pdf_content = await pdf_response.body()
+            if not bill.pdf_url or bill.pdf_url.startswith("javascript:"):
+                logger.debug(f"[{self.config.supplier_name} Scraper] Cannot download PDF - URL is JavaScript or missing")
+                return
+            
+            pdf_response = await self.client.get(bill.pdf_url)
+            if pdf_response.status_code == 200:
+                bill.pdf_content = pdf_response.content
                 logger.debug(f"[{self.config.supplier_name} Scraper] Downloaded PDF: {len(bill.pdf_content)} bytes")
                 
                 # Save PDF temporarily for debugging
                 if self.save_html_dumps and bill.pdf_content:
-                    await self._save_pdf_dump(bill)
+                    self._save_pdf_dump(bill)
         except Exception as e:
             logger.warning(f"[{self.config.supplier_name} Scraper] Failed to download PDF from {bill.pdf_url}: {e}")
     
-    async def _save_pdf_dump(self, bill: ScrapedBill):
+    def _save_pdf_dump(self, bill: ScrapedBill):
         """Save PDF to file for debugging"""
         try:
             dump_dir = Path(__file__).parent.parent / "scraper_dumps"
             dump_dir.mkdir(exist_ok=True)
             self.dump_counter += 1
-            filename = f"{self.config.supplier_name.lower()}_{self.dump_counter:02d}_bill_{bill.bill_number or 'unknown'}.pdf"
+            # Sanitize bill number for filename
+            bill_num = bill.bill_number or 'unknown'
+            # Remove special characters
+            bill_num = re.sub(r'[^\w\s-]', '', bill_num).strip()
+            bill_num = re.sub(r'[-\s]+', '-', bill_num)
+            filename = f"{self.config.supplier_name.lower()}_{self.dump_counter:02d}_bill_{bill_num}.pdf"
             dump_file = dump_dir / filename
             with open(dump_file, 'wb') as f:
                 f.write(bill.pdf_content)
@@ -768,15 +698,10 @@ class WebScraper:
         return None
     
     async def close(self):
-        """Close the browser and cleanup"""
-        if self.page:
-            await self.page.close()
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
+        """Close the HTTP client and cleanup"""
+        if self.client:
+            await self.client.aclose()
+            self.client = None
 
 
 def load_scraper_config(supplier_name: str) -> Optional[ScraperConfig]:
