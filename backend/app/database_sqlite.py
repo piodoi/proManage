@@ -1,14 +1,14 @@
 """
-MySQL Database Layer with Typed Columns
+SQLite Database Layer with Typed Columns
 
-This module provides a MySQL-specific database interface that uses typed columns
-instead of the document model (JSON data fields) used by SQLite.
+This module provides a SQLite-specific database interface that uses typed columns
+instead of the document model (JSON data fields).
 
-Key differences from database.py:
+Key features:
 - Uses typed columns (name, address, amount, etc.) instead of JSON 'data' field
+- Compatible with the same interface as MySQLDatabase
 - Optimized indexes for relational queries
-- Foreign key constraints
-- ENUM types for status fields
+- Simpler data types (no ENUM, uses TEXT with CHECK constraints)
 """
 
 import os
@@ -16,7 +16,7 @@ import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy import create_engine, text
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import StaticPool
 
 from app.models import (
     User, Property, Renter, Bill, Payment,
@@ -25,24 +25,30 @@ from app.models import (
 )
 
 
-class MySQLDatabase:
-    """MySQL database operations using typed columns"""
+class SQLiteDatabase:
+    """SQLite database operations using typed columns"""
     
     def __init__(self, database_url: str):
-        # Ensure pymysql driver is used
-        if '+pymysql' not in database_url:
-            database_url = database_url.replace('mysql://', 'mysql+pymysql://', 1)
-        
+        # SQLite specific configuration
         self.engine = create_engine(
             database_url,
-            poolclass=QueuePool,
-            pool_size=10,
-            max_overflow=20,
-            pool_pre_ping=True,
-            pool_recycle=3600,  # Recycle connections after 1 hour
-            echo=False,  # Set to True for SQL debugging
+            connect_args={
+                "check_same_thread": False,
+                "timeout": 30.0,
+            },
+            poolclass=StaticPool,  # Single connection pool for SQLite
+            echo=False,
         )
-        print(f"[Database] MySQL engine initialized: {database_url.split('@')[1] if '@' in database_url else 'localhost'}")
+        
+        # Enable WAL mode and optimizations
+        with self.engine.connect() as conn:
+            conn.execute(text("PRAGMA journal_mode=WAL"))
+            conn.execute(text("PRAGMA synchronous=NORMAL"))
+            conn.execute(text("PRAGMA busy_timeout=30000"))
+            conn.execute(text("PRAGMA foreign_keys=ON"))
+            conn.commit()
+        
+        print(f"[Database] SQLite typed-column engine initialized")
     
     # ==================== USER OPERATIONS ====================
     
@@ -64,10 +70,10 @@ class MySQLDatabase:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
-                    subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires else None,
+                    subscription_expires=row.subscription_expires,
                     ebloc_username=row.ebloc_username,
                     ebloc_password_hash=row.ebloc_password_hash,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 )
             return None
     
@@ -89,10 +95,10 @@ class MySQLDatabase:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
-                    subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires else None,
+                    subscription_expires=row.subscription_expires,
                     ebloc_username=row.ebloc_username,
                     ebloc_password_hash=row.ebloc_password_hash,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 )
             return None
     
@@ -157,7 +163,7 @@ class MySQLDatabase:
                     landlord_id=row.landlord_id,
                     address=row.address,
                     name=row.name,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 ))
             return properties
     
@@ -175,7 +181,7 @@ class MySQLDatabase:
                     landlord_id=row.landlord_id,
                     address=row.address,
                     name=row.name,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 )
             return None
     
@@ -241,10 +247,10 @@ class MySQLDatabase:
                     email=row.email,
                     phone=row.phone,
                     rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
+                    start_contract_date=row.start_contract_date,
                     rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
                     access_token=row.access_token,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 ))
             return renters
     
@@ -264,10 +270,10 @@ class MySQLDatabase:
                     email=row.email,
                     phone=row.phone,
                     rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
+                    start_contract_date=row.start_contract_date,
                     rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
                     access_token=row.access_token,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 )
             return None
     
@@ -287,10 +293,10 @@ class MySQLDatabase:
                     email=row.email,
                     phone=row.phone,
                     rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
+                    start_contract_date=row.start_contract_date,
                     rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
                     access_token=row.access_token,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 )
             return None
     
@@ -353,7 +359,6 @@ class MySQLDatabase:
         """Get bills for a property, optionally filtered by renter"""
         with self.engine.connect() as conn:
             if renter_id:
-                # Get bills for specific renter or bills assigned to all renters
                 result = conn.execute(
                     text("""
                         SELECT * FROM bills 
@@ -479,8 +484,8 @@ class MySQLDatabase:
             description=row.description,
             amount=float(row.amount) if row.amount else 0,
             currency=row.currency,
-            due_date=row.due_date.isoformat() if row.due_date else None,
-            bill_date=row.bill_date.isoformat() if row.bill_date else None,
+            due_date=row.due_date,
+            bill_date=row.bill_date,
             legal_name=row.legal_name,
             iban=row.iban,
             bill_number=row.bill_number,
@@ -489,7 +494,7 @@ class MySQLDatabase:
             payment_details=payment_details,
             status=row.status,
             source_email_id=row.source_email_id,
-            created_at=row.created_at.isoformat() if row.created_at else None
+            created_at=row.created_at
         )
     
     # ==================== PAYMENT OPERATIONS ====================
@@ -510,7 +515,7 @@ class MySQLDatabase:
                     method=row.method,
                     status=row.status,
                     commission=float(row.commission) if row.commission else 0,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 ))
             return payments
     
@@ -549,7 +554,7 @@ class MySQLDatabase:
                     has_api=bool(row.has_api),
                     bill_type=row.bill_type,
                     extraction_pattern_supplier=row.extraction_pattern_supplier,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 ))
             return suppliers
     
@@ -568,7 +573,7 @@ class MySQLDatabase:
                     has_api=bool(row.has_api),
                     bill_type=row.bill_type,
                     extraction_pattern_supplier=row.extraction_pattern_supplier,
-                    created_at=row.created_at.isoformat() if row.created_at else None
+                    created_at=row.created_at
                 )
             return None
     
@@ -645,37 +650,50 @@ class MySQLDatabase:
                     supplier_id=row.supplier_id,
                     username=row.username,
                     password_hash=row.password_hash,
-                    created_at=row.created_at.isoformat() if row.created_at else None,
-                    updated_at=row.updated_at.isoformat() if row.updated_at else None
+                    created_at=row.created_at,
+                    updated_at=row.updated_at
                 )
             return None
     
     def create_user_supplier_credential(self, cred: UserSupplierCredential) -> UserSupplierCredential:
         """Create or update user supplier credential"""
         with self.engine.connect() as conn:
-            # Upsert
-            conn.execute(
-                text("""
-                    INSERT INTO user_supplier_credentials (
-                        id, user_id, supplier_id, username, password_hash, created_at, updated_at
-                    ) VALUES (
-                        :id, :user_id, :supplier_id, :username, :password_hash, :created_at, :updated_at
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        username = VALUES(username),
-                        password_hash = VALUES(password_hash),
-                        updated_at = VALUES(updated_at)
-                """),
-                {
-                    "id": cred.id,
-                    "user_id": cred.user_id,
-                    "supplier_id": cred.supplier_id,
-                    "username": cred.username,
-                    "password_hash": cred.password_hash,
-                    "created_at": cred.created_at or datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat()
-                }
-            )
+            # Try insert first
+            try:
+                conn.execute(
+                    text("""
+                        INSERT INTO user_supplier_credentials (
+                            id, user_id, supplier_id, username, password_hash, created_at, updated_at
+                        ) VALUES (
+                            :id, :user_id, :supplier_id, :username, :password_hash, :created_at, :updated_at
+                        )
+                    """),
+                    {
+                        "id": cred.id,
+                        "user_id": cred.user_id,
+                        "supplier_id": cred.supplier_id,
+                        "username": cred.username,
+                        "password_hash": cred.password_hash,
+                        "created_at": cred.created_at or datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                )
+            except:
+                # Update if exists
+                conn.execute(
+                    text("""
+                        UPDATE user_supplier_credentials 
+                        SET username = :username, password_hash = :password_hash, updated_at = :updated_at
+                        WHERE user_id = :user_id AND supplier_id = :supplier_id
+                    """),
+                    {
+                        "user_id": cred.user_id,
+                        "supplier_id": cred.supplier_id,
+                        "username": cred.username,
+                        "password_hash": cred.password_hash,
+                        "updated_at": datetime.now().isoformat()
+                    }
+                )
             conn.commit()
         return cred
     
@@ -707,8 +725,8 @@ class MySQLDatabase:
                     credential_id=row.credential_id,
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
-                    created_at=row.created_at.isoformat() if row.created_at else None,
-                    updated_at=row.updated_at.isoformat() if row.updated_at else None
+                    created_at=row.created_at,
+                    updated_at=row.updated_at
                 ))
             return suppliers
     
@@ -731,38 +749,52 @@ class MySQLDatabase:
                     credential_id=row.credential_id,
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
-                    created_at=row.created_at.isoformat() if row.created_at else None,
-                    updated_at=row.updated_at.isoformat() if row.updated_at else None
+                    created_at=row.created_at,
+                    updated_at=row.updated_at
                 )
             return None
     
     def create_property_supplier(self, ps: PropertySupplier) -> PropertySupplier:
         """Create property-supplier relationship"""
         with self.engine.connect() as conn:
-            conn.execute(
-                text("""
-                    INSERT INTO property_suppliers (
-                        id, property_id, supplier_id, credential_id, contract_id, direct_debit, created_at, updated_at
-                    ) VALUES (
-                        :id, :property_id, :supplier_id, :credential_id, :contract_id, :direct_debit, :created_at, :updated_at
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        credential_id = VALUES(credential_id),
-                        contract_id = VALUES(contract_id),
-                        direct_debit = VALUES(direct_debit),
-                        updated_at = VALUES(updated_at)
-                """),
-                {
-                    "id": ps.id,
-                    "property_id": ps.property_id,
-                    "supplier_id": ps.supplier_id,
-                    "credential_id": ps.credential_id,
-                    "contract_id": ps.contract_id,
-                    "direct_debit": 1 if ps.direct_debit else 0,
-                    "created_at": ps.created_at or datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat()
-                }
-            )
+            try:
+                conn.execute(
+                    text("""
+                        INSERT INTO property_suppliers (
+                            id, property_id, supplier_id, credential_id, contract_id, direct_debit, created_at, updated_at
+                        ) VALUES (
+                            :id, :property_id, :supplier_id, :credential_id, :contract_id, :direct_debit, :created_at, :updated_at
+                        )
+                    """),
+                    {
+                        "id": ps.id,
+                        "property_id": ps.property_id,
+                        "supplier_id": ps.supplier_id,
+                        "credential_id": ps.credential_id,
+                        "contract_id": ps.contract_id,
+                        "direct_debit": 1 if ps.direct_debit else 0,
+                        "created_at": ps.created_at or datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                )
+            except:
+                # Update if exists
+                conn.execute(
+                    text("""
+                        UPDATE property_suppliers
+                        SET credential_id = :credential_id, contract_id = :contract_id, 
+                            direct_debit = :direct_debit, updated_at = :updated_at
+                        WHERE property_id = :property_id AND supplier_id = :supplier_id
+                    """),
+                    {
+                        "property_id": ps.property_id,
+                        "supplier_id": ps.supplier_id,
+                        "credential_id": ps.credential_id,
+                        "contract_id": ps.contract_id,
+                        "direct_debit": 1 if ps.direct_debit else 0,
+                        "updated_at": datetime.now().isoformat()
+                    }
+                )
             conn.commit()
         return ps
     
@@ -800,8 +832,8 @@ class MySQLDatabase:
                     credential_id=row.credential_id,
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
-                    created_at=row.created_at.isoformat() if row.created_at else None,
-                    updated_at=row.updated_at.isoformat() if row.updated_at else None
+                    created_at=row.created_at,
+                    updated_at=row.updated_at
                 )
             return None
     
@@ -829,50 +861,65 @@ class MySQLDatabase:
                     landlord_name=row.landlord_name,
                     personal_email=row.personal_email,
                     iban=row.iban,
-                    updated_at=row.updated_at.isoformat() if row.updated_at else None
+                    updated_at=row.updated_at
                 )
             return None
     
     def create_user_preferences(self, prefs: UserPreferences) -> UserPreferences:
         """Create or update user preferences"""
         with self.engine.connect() as conn:
-            conn.execute(
-                text("""
-                    INSERT INTO user_preferences (
-                        id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
-                        date_format, phone_number, landlord_name, personal_email, iban, updated_at
-                    ) VALUES (
-                        :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
-                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :updated_at
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        language = VALUES(language),
-                        view_mode = VALUES(view_mode),
-                        rent_warning_days = VALUES(rent_warning_days),
-                        rent_currency = VALUES(rent_currency),
-                        bill_currency = VALUES(bill_currency),
-                        date_format = VALUES(date_format),
-                        phone_number = VALUES(phone_number),
-                        landlord_name = VALUES(landlord_name),
-                        personal_email = VALUES(personal_email),
-                        iban = VALUES(iban),
-                        updated_at = VALUES(updated_at)
-                """),
-                {
-                    "id": prefs.id,
-                    "user_id": prefs.user_id,
-                    "language": prefs.language or "en",
-                    "view_mode": prefs.view_mode or "list",
-                    "rent_warning_days": prefs.rent_warning_days or 5,
-                    "rent_currency": prefs.rent_currency or "EUR",
-                    "bill_currency": prefs.bill_currency or "RON",
-                    "date_format": prefs.date_format or "DD/MM/YYYY",
-                    "phone_number": prefs.phone_number,
-                    "landlord_name": prefs.landlord_name,
-                    "personal_email": prefs.personal_email,
-                    "iban": prefs.iban,
-                    "updated_at": datetime.now().isoformat()
-                }
-            )
+            try:
+                conn.execute(
+                    text("""
+                        INSERT INTO user_preferences (
+                            id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
+                            date_format, phone_number, landlord_name, personal_email, iban, updated_at
+                        ) VALUES (
+                            :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
+                            :date_format, :phone_number, :landlord_name, :personal_email, :iban, :updated_at
+                        )
+                    """),
+                    {
+                        "id": prefs.id,
+                        "user_id": prefs.user_id,
+                        "language": prefs.language or "en",
+                        "view_mode": prefs.view_mode or "list",
+                        "rent_warning_days": prefs.rent_warning_days or 5,
+                        "rent_currency": prefs.rent_currency or "EUR",
+                        "bill_currency": prefs.bill_currency or "RON",
+                        "date_format": prefs.date_format or "DD/MM/YYYY",
+                        "phone_number": prefs.phone_number,
+                        "landlord_name": prefs.landlord_name,
+                        "personal_email": prefs.personal_email,
+                        "iban": prefs.iban,
+                        "updated_at": datetime.now().isoformat()
+                    }
+                )
+            except:
+                # Update if exists
+                conn.execute(
+                    text("""
+                        UPDATE user_preferences
+                        SET language = :language, view_mode = :view_mode, rent_warning_days = :rent_warning_days,
+                            rent_currency = :rent_currency, bill_currency = :bill_currency, date_format = :date_format,
+                            phone_number = :phone_number, landlord_name = :landlord_name, personal_email = :personal_email,
+                            iban = :iban, updated_at = :updated_at
+                        WHERE user_id = :user_id
+                    """),
+                    {
+                        "user_id": prefs.user_id,
+                        "language": prefs.language or "en",
+                        "view_mode": prefs.view_mode or "list",
+                        "rent_warning_days": prefs.rent_warning_days or 5,
+                        "rent_currency": prefs.rent_currency or "EUR",
+                        "bill_currency": prefs.bill_currency or "RON",
+                        "date_format": prefs.date_format or "DD/MM/YYYY",
+                        "phone_number": prefs.phone_number,
+                        "landlord_name": prefs.landlord_name,
+                        "personal_email": prefs.personal_email,
+                        "iban": prefs.iban,
+                        "updated_at": datetime.now().isoformat()
+                    }
+                )
             conn.commit()
         return prefs

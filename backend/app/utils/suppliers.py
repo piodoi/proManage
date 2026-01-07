@@ -76,35 +76,11 @@ def load_suppliers_from_json():
 
 def initialize_suppliers():
     """Initialize suppliers from suppliers.json file."""
-    # Load suppliers from JSON file
+    # Load suppliers from JSON file (source of truth)
     suppliers_data = load_suppliers_from_json()
     
-    # Also get suppliers from extraction patterns to ensure they're created if not in JSON
-    patterns = db.list_extraction_patterns()
-    pattern_suppliers = {}
-    for pattern in patterns:
-        if pattern.supplier:
-            supplier_name = pattern.supplier
-            # Check if supplier already exists in JSON data
-            exists_in_json = any(
-                s.get("name", "").lower() == supplier_name.lower() 
-                or (s.get("extraction_pattern_supplier") and s.get("extraction_pattern_supplier").lower() == supplier_name.lower())
-                for s in suppliers_data
-            )
-            
-            if not exists_in_json and supplier_name not in pattern_suppliers:
-                pattern_suppliers[supplier_name] = {
-                    "name": supplier_name,
-                    "has_api": False,
-                    "bill_type": pattern.bill_type,
-                    "extraction_pattern_supplier": supplier_name,
-                }
-    
-    # Merge pattern suppliers into main list
-    all_suppliers = suppliers_data + list(pattern_suppliers.values())
-    
     # Create or update suppliers in database
-    for supplier_data in all_suppliers:
+    for supplier_data in suppliers_data:
         # Convert bill_type string to enum if needed
         if isinstance(supplier_data.get("bill_type"), str):
             supplier_data["bill_type"] = BillType(supplier_data["bill_type"])
