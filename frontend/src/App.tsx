@@ -6,6 +6,7 @@ import RenterView from './pages/RenterView';
 import Login from './pages/Login';
 import ConfirmEmail from './pages/ConfirmEmail';
 import { I18nProvider, useI18n } from './lib/i18n';
+import { PreferencesProvider } from './hooks/usePreferences.tsx';
 import './App.css';
 
 type AuthContextType = {
@@ -74,23 +75,25 @@ function App() {
   return (
     <I18nProvider>
       <AuthContext.Provider value={{ user, token, login, logout }}>
-        <BrowserRouter>
-          <Routes>
-                      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-                      <Route path="/confirm-email" element={<ConfirmEmail />} />
-                      <Route path="/renter/:token" element={<RenterView />} />
-            <Route
-              path="/*"
-              element={
-                user ? (
-                  <Dashboard />
-                ) : (
-                  <Navigate to="/login" />
-                )
-              }
-            />
-          </Routes>
-        </BrowserRouter>
+        <PreferencesProvider>
+          <BrowserRouter>
+            <Routes>
+                        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+                        <Route path="/confirm-email" element={<ConfirmEmail />} />
+                        <Route path="/renter/:token" element={<RenterView />} />
+              <Route
+                path="/*"
+                element={
+                  user ? (
+                    <Dashboard />
+                  ) : (
+                    <Navigate to="/login" />
+                  )
+                }
+              />
+            </Routes>
+          </BrowserRouter>
+        </PreferencesProvider>
       </AuthContext.Provider>
     </I18nProvider>
   );

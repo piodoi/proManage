@@ -1,28 +1,48 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { api, Preferences } from '../api';
 import { useAuth } from '../App';
 
 const DEBOUNCE_DELAY = 500; // 500ms debounce delay
 
-export function usePreferences() {
+const defaultPreferences: Preferences = {
+  language: 'en',
+  view_mode: 'list',
+  rent_warning_days: 5,
+  rent_currency: 'EUR',
+  bill_currency: 'RON',
+  date_format: 'DD/MM/YYYY',
+  phone_number: null,
+  landlord_name: null,
+  personal_email: null,
+  iban: null
+};
+
+type PreferencesContextType = {
+  preferences: Preferences;
+  loading: boolean;
+  setLanguage: (language: string) => void;
+  setViewMode: (view_mode: string) => void;
+  setRentWarningDays: (rent_warning_days: number) => void;
+  setRentCurrency: (rent_currency: string) => void;
+  setBillCurrency: (bill_currency: string) => void;
+  setDateFormat: (date_format: string) => void;
+  setPhoneNumber: (phone_number: string | null) => void;
+  setLandlordName: (landlord_name: string | null) => void;
+  setPersonalEmail: (personal_email: string | null) => void;
+  setIban: (iban: string | null) => void;
+  savePreferences: (updates: Partial<Preferences>) => void;
+};
+
+const PreferencesContext = createContext<PreferencesContextType | null>(null);
+
+export function PreferencesProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
-  const [preferences, setPreferences] = useState<Preferences>({
-    language: 'en',
-    view_mode: 'list',
-    rent_warning_days: 5,
-    rent_currency: 'EUR',
-    bill_currency: 'RON',
-    date_format: 'DD/MM/YYYY',
-    phone_number: null,
-    landlord_name: null,
-    personal_email: null,
-    iban: null
-  });
+  const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pendingSaveRef = useRef<Partial<Preferences> | null>(null);
 
-  // Load preferences on mount
+  // Load preferences on mount or token change
   useEffect(() => {
     if (!token) {
       setLoading(false);
@@ -86,7 +106,7 @@ export function usePreferences() {
     };
   }, []);
 
-  return {
+  const value: PreferencesContextType = {
     preferences,
     loading,
     setLanguage: (language: string) => savePreferences({ language }),
@@ -101,5 +121,19 @@ export function usePreferences() {
     setIban: (iban: string | null) => savePreferences({ iban }),
     savePreferences,
   };
+
+  return (
+    <PreferencesContext.Provider value={value}>
+      {children}
+    </PreferencesContext.Provider>
+  );
+}
+
+export function usePreferences() {
+  const context = useContext(PreferencesContext);
+  if (!context) {
+    throw new Error('usePreferences must be used within a PreferencesProvider');
+  }
+  return context;
 }
 
