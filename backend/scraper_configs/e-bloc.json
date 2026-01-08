@@ -23,6 +23,6 @@
   "timeout": 15.0,
   "wait_after_login": 2.0,
   "multiple_contracts_possible": true,
-  "requires_js": true
+  "requires_js": false
 }
 
