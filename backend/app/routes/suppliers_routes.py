@@ -169,16 +169,6 @@ async def admin_delete_supplier(
         for ps in property_suppliers:
             db.delete_property_supplier(ps.id)
     
-    # Delete all user supplier credentials for this supplier
-    # Get all users and delete their credentials for this supplier
-    all_users = db.list_users()
-    for user in all_users:
-        user_credentials = db.list_user_supplier_credentials(user.id)
-        for cred in user_credentials:
-            if cred.supplier_id == supplier_id:
-                db.delete_user_supplier_credential(cred.id)
-                logger.info(f"[Suppliers] Deleted credential {cred.id} for supplier {supplier_id}")
-    
     # Delete the supplier
     deleted = db.delete_supplier(supplier_id)
     if not deleted:
@@ -208,20 +198,13 @@ async def list_property_suppliers(
     for ps in property_suppliers:
         supplier = db.get_supplier(ps.supplier_id)
         if supplier:
-            # Check if credentials are available - source of truth is user_supplier_credentials table
-            # Check directly by user_id and supplier_id, not just by credential_id link
-            credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, ps.supplier_id)
-            has_credentials = bool(credential and credential.username and credential.password_hash)
-            
             result.append({
                 "id": ps.id,
                 "supplier": supplier,
                 "property_id": ps.property_id,
                 "supplier_id": ps.supplier_id,
-                "credential_id": ps.credential_id,
                 "contract_id": ps.contract_id,
                 "direct_debit": ps.direct_debit,
-                "has_credentials": has_credentials,
                 "created_at": ps.created_at,
                 "updated_at": ps.updated_at,
             })
@@ -232,7 +215,7 @@ async def list_property_suppliers(
 async def create_property_supplier(
     property_id: str, data: PropertySupplierCreate, current_user: TokenData = Depends(require_landlord)
 ):
-    """Add a supplier to a property (links to user-supplier credentials if available)"""
+    """Add a supplier to a property"""
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -253,17 +236,13 @@ async def create_property_supplier(
         if existing.direct_debit == requested_direct_debit:
             # Same configuration, nothing to do
             supplier = db.get_supplier(existing.supplier_id)
-            credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, existing.supplier_id)
-            has_credentials = bool(credential and credential.username and credential.password_hash)
             return {
                 "id": existing.id,
                 "supplier": supplier,
                 "property_id": existing.property_id,
                 "supplier_id": existing.supplier_id,
-                "credential_id": existing.credential_id,
                 "contract_id": existing.contract_id,
                 "direct_debit": existing.direct_debit,
-                "has_credentials": has_credentials,
                 "created_at": existing.created_at,
                 "updated_at": existing.updated_at,
                 "message": "Supplier with this contract ID already configured with the same settings. No changes made."
@@ -275,61 +254,33 @@ async def create_property_supplier(
             db.save_property_supplier(existing)
             
             supplier = db.get_supplier(existing.supplier_id)
-            credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, existing.supplier_id)
-            has_credentials = bool(credential and credential.username and credential.password_hash)
             
             return {
                 "id": existing.id,
                 "supplier": supplier,
                 "property_id": existing.property_id,
                 "supplier_id": existing.supplier_id,
-                "credential_id": existing.credential_id,
                 "contract_id": existing.contract_id,
                 "direct_debit": existing.direct_debit,
-                "has_credentials": has_credentials,
                 "created_at": existing.created_at,
                 "updated_at": existing.updated_at,
             }
     
-    # If credential_id provided, verify it belongs to the user
-    credential_id = data.credential_id
-    if credential_id:
-        credential = db.get_user_supplier_credential(credential_id)
-        if not credential:
-            raise HTTPException(status_code=404, detail="Credential not found")
-        if credential.user_id != current_user.user_id:
-            raise HTTPException(status_code=403, detail="Access denied")
-        if credential.supplier_id != data.supplier_id:
-            raise HTTPException(status_code=400, detail="Credential does not match supplier")
-    else:
-        # Try to find existing user-supplier credential
-        user_credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, data.supplier_id)
-        if user_credential:
-            credential_id = user_credential.id
-    
     property_supplier = PropertySupplier(
         property_id=property_id,
         supplier_id=data.supplier_id,
-        credential_id=credential_id,
         contract_id=data.contract_id if data.contract_id else None,
         direct_debit=data.direct_debit if data.direct_debit is not None else False,
     )
     db.save_property_supplier(property_supplier)
-    
-    # Determine if credentials are available - source of truth is user_supplier_credentials table
-    # Check directly by user_id and supplier_id
-    credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, data.supplier_id)
-    has_credentials = bool(credential and credential.username and credential.password_hash)
     
     return {
         "id": property_supplier.id,
         "supplier": supplier,
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
-        "credential_id": property_supplier.credential_id,
         "contract_id": property_supplier.contract_id,
         "direct_debit": property_supplier.direct_debit,
-        "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,
     }
@@ -342,7 +293,7 @@ async def update_property_supplier(
     data: PropertySupplierUpdate,
     current_user: TokenData = Depends(require_landlord),
 ):
-    """Update property supplier (link to different credential)"""
+    """Update property supplier settings"""
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -355,19 +306,6 @@ async def update_property_supplier(
         raise HTTPException(status_code=404, detail="Property supplier not found")
     if property_supplier.property_id != property_id:
         raise HTTPException(status_code=400, detail="Property supplier does not belong to this property")
-    
-    # Update credential_id if provided
-    if data.credential_id is not None:
-        if data.credential_id:
-            # Verify credential exists and belongs to user
-            credential = db.get_user_supplier_credential(data.credential_id)
-            if not credential:
-                raise HTTPException(status_code=404, detail="Credential not found")
-            if credential.user_id != current_user.user_id:
-                raise HTTPException(status_code=403, detail="Access denied")
-            if credential.supplier_id != property_supplier.supplier_id:
-                raise HTTPException(status_code=400, detail="Credential does not match supplier")
-        property_supplier.credential_id = data.credential_id
     
     # Update contract_id if provided
     if data.contract_id is not None:
@@ -382,20 +320,13 @@ async def update_property_supplier(
     
     supplier = db.get_supplier(property_supplier.supplier_id)
     
-    # Determine if credentials are available - source of truth is user_supplier_credentials table
-    # Check directly by user_id and supplier_id
-    credential = db.get_user_supplier_credential_by_user_supplier(current_user.user_id, property_supplier.supplier_id)
-    has_credentials = bool(credential and credential.username and credential.password_hash)
-    
     return {
         "id": property_supplier.id,
         "supplier": supplier,
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
-        "credential_id": property_supplier.credential_id,
         "contract_id": property_supplier.contract_id,
         "direct_debit": property_supplier.direct_debit,
-        "has_credentials": has_credentials,
         "created_at": property_supplier.created_at,
         "updated_at": property_supplier.updated_at,
     }

@@ -40,10 +40,12 @@ export default function PropertyBillsView({
   const [billForm, setBillForm] = useState({
     renter_id: 'all',  // 'all' means "all/property", specific renter ID otherwise
     bill_type: 'other' as 'rent' | 'utilities' | 'ebloc' | 'other',
+    description: '',
     amount: '',
     currency: preferences.bill_currency || 'RON',
     due_date: new Date().toISOString().split('T')[0], // Default to today
     status: 'pending' as 'pending' | 'paid' | 'overdue',
+    bill_number: '',
   });
 
   // Update currency when preferences change
@@ -73,6 +75,36 @@ export default function PropertyBillsView({
       setBillForm(prev => ({ ...prev, status: calculatedStatus }));
     }
   }, [billForm.due_date, editingBill]);
+
+  // Helper to get month name based on current language
+  const getMonthName = (monthIndex: number): string => {
+    const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthNamesRo = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
+                          'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
+    return language === 'ro' ? monthNamesRo[monthIndex] : monthNamesEn[monthIndex];
+  };
+
+  // Update description when bill type changes to rent (prefill with month and year)
+  useEffect(() => {
+    if (!editingBill && billForm.bill_type === 'rent') {
+      const today = new Date();
+      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      const monthName = getMonthName(nextMonth.getMonth());
+      const year = nextMonth.getFullYear();
+      setBillForm(prev => ({ ...prev, description: `${monthName} ${year}` }));
+    } else if (!editingBill && billForm.bill_type !== 'rent' && !billForm.description) {
+      // For non-rent bills, clear description if it was auto-filled
+      setBillForm(prev => ({ ...prev, description: '' }));
+    }
+  }, [billForm.bill_type, editingBill, language]);
+
+  // Prefill renter if only one renter exists
+  useEffect(() => {
+    if (!editingBill && renters.length === 1 && billForm.renter_id === 'all') {
+      setBillForm(prev => ({ ...prev, renter_id: renters[0].id }));
+    }
+  }, [renters, editingBill, billForm.renter_id]);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [showAddressWarning, setShowAddressWarning] = useState(false);
@@ -161,11 +193,12 @@ export default function PropertyBillsView({
     try {
       const billData: any = {
         bill_type: billForm.bill_type,
-        description: t(`bill.${billForm.bill_type}`),
+        description: billForm.description || t(`bill.${billForm.bill_type}`),
         amount: parseFloat(billForm.amount),
         currency: billForm.currency || preferences.bill_currency || 'RON',
         due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
         status: billForm.status,
+        bill_number: billForm.bill_number || undefined,
       };
 
       // For create, include property_id and renter_id
@@ -183,7 +216,8 @@ export default function PropertyBillsView({
       
       setShowBillForm(false);
       setEditingBill(null);
-      setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending' });
+      const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
+      setBillForm({ renter_id: defaultRenterId, bill_type: 'other', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
       if (onBillsChange) {
         onBillsChange();
       }
@@ -209,10 +243,12 @@ export default function PropertyBillsView({
     setBillForm({
       renter_id: bill.renter_id || 'all',
       bill_type: bill.bill_type,
+      description: bill.description || '',
       amount: bill.amount.toString(),
       currency: bill.currency || preferences.bill_currency || 'RON',
       due_date: formattedDueDate || new Date().toISOString().split('T')[0],
       status: bill.status || 'pending',
+      bill_number: bill.bill_number || '',
     });
     setShowBillForm(true);
   };
@@ -300,7 +336,8 @@ export default function PropertyBillsView({
               setShowBillForm(open);
               if (!open) {
                 setEditingBill(null);
-                setBillForm({ renter_id: 'all', bill_type: 'other', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending' });
+                const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
+                setBillForm({ renter_id: defaultRenterId, bill_type: 'other', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
               }
             }}>
               <DialogTrigger asChild>
@@ -345,32 +382,54 @@ export default function PropertyBillsView({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label className="text-slate-300">{t('common.amount')} *</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={billForm.amount}
-                        onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
-                        className="bg-slate-700 border-slate-600 text-slate-100 flex-1"
-                        placeholder="0.00"
-                        required
-                      />
-                      <Select
-                        value={billForm.currency || 'RON'}
-                        onValueChange={(value) => setBillForm({ ...billForm, currency: value })}
-                      >
-                        <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-700 border-slate-600">
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="RON">RON</SelectItem>
-                          <SelectItem value="USD">USD</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-slate-300">{t('common.amount')} *</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={billForm.amount}
+                          onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
+                          className="bg-slate-700 border-slate-600 text-slate-100 flex-1"
+                          placeholder="0.00"
+                          required
+                        />
+                        <Select
+                          value={billForm.currency || 'RON'}
+                          onValueChange={(value) => setBillForm({ ...billForm, currency: value })}
+                        >
+                          <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-700 border-slate-600">
+                            <SelectItem value="EUR">EUR</SelectItem>
+                            <SelectItem value="RON">RON</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+                    <div>
+                      <Label className="text-slate-300">{t('bill.billNumber')}</Label>
+                      <Input
+                        type="text"
+                        value={billForm.bill_number}
+                        onChange={(e) => setBillForm({ ...billForm, bill_number: e.target.value })}
+                        className="bg-slate-700 border-slate-600 text-slate-100"
+                        placeholder={billForm.bill_type === 'rent' ? '01' : ''}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">{t('common.description')}</Label>
+                    <Input
+                      type="text"
+                      value={billForm.description}
+                      onChange={(e) => setBillForm({ ...billForm, description: e.target.value })}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                      placeholder={billForm.bill_type === 'rent' ? 'January 2026' : t('common.description')}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
