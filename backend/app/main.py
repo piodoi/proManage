@@ -11,7 +11,6 @@ from app.routes import (
     admin_router,
     properties_router,
     suppliers_router,
-    supplier_credentials_router,
     renters_router,
     bills_router,
     renter_public_router,
@@ -75,7 +74,6 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(properties_router)
 app.include_router(suppliers_router)
-app.include_router(supplier_credentials_router)
 app.include_router(renters_router)
 app.include_router(bills_router)
 app.include_router(renter_public_router)

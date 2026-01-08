@@ -203,8 +203,11 @@ export default function EblocImportDialog({
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('ebloc.importPropertiesFromEbloc')}</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            {t('ebloc.importDesc')}
+          <DialogDescription className="text-slate-400 space-y-2">
+            <p>{t('ebloc.importDesc')}</p>
+            <p className="text-sm text-emerald-400 border border-emerald-700 bg-emerald-950/30 p-3 rounded">
+              🔒 {t('ebloc.privacyNote')}
+            </p>
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

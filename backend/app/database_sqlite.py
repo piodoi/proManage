@@ -20,7 +20,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.models import (
     User, Property, Renter, Bill, Payment,
-    Supplier, PropertySupplier, UserSupplierCredential,
+    Supplier, PropertySupplier,
     UserPreferences
 )
 
@@ -71,8 +71,6 @@ class SQLiteDatabase:
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
                     subscription_expires=row.subscription_expires,
-                    ebloc_username=row.ebloc_username,
-                    ebloc_password_hash=row.ebloc_password_hash,
                     created_at=row.created_at
                 )
             return None
@@ -96,8 +94,6 @@ class SQLiteDatabase:
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
                     subscription_expires=row.subscription_expires,
-                    ebloc_username=row.ebloc_username,
-                    ebloc_password_hash=row.ebloc_password_hash,
                     created_at=row.created_at
                 )
             return None
@@ -109,10 +105,10 @@ class SQLiteDatabase:
                 text("""
                     INSERT INTO users (
                         id, email, name, role, password_hash, oauth_provider, oauth_id,
-                        subscription_tier, subscription_expires, ebloc_username, ebloc_password_hash, created_at
+                        subscription_tier, subscription_expires, created_at
                     ) VALUES (
                         :id, :email, :name, :role, :password_hash, :oauth_provider, :oauth_id,
-                        :subscription_tier, :subscription_expires, :ebloc_username, :ebloc_password_hash, :created_at
+                        :subscription_tier, :subscription_expires, :created_at
                     )
                 """),
                 {
@@ -125,8 +121,6 @@ class SQLiteDatabase:
                     "oauth_id": user.oauth_id,
                     "subscription_tier": user.subscription_tier or 0,
                     "subscription_expires": user.subscription_expires,
-                    "ebloc_username": user.ebloc_username,
-                    "ebloc_password_hash": user.ebloc_password_hash,
                     "created_at": user.created_at or datetime.now().isoformat()
                 }
             )
@@ -630,83 +624,6 @@ class SQLiteDatabase:
             conn.commit()
         return True
     
-    # ==================== USER SUPPLIER CREDENTIALS ====================
-    
-    def get_user_supplier_credentials(self, user_id: str, supplier_id: str) -> Optional[UserSupplierCredential]:
-        """Get user's credentials for a supplier"""
-        with self.engine.connect() as conn:
-            result = conn.execute(
-                text("""
-                    SELECT * FROM user_supplier_credentials 
-                    WHERE user_id = :user_id AND supplier_id = :supplier_id
-                """),
-                {"user_id": user_id, "supplier_id": supplier_id}
-            )
-            row = result.fetchone()
-            if row:
-                return UserSupplierCredential(
-                    id=row.id,
-                    user_id=row.user_id,
-                    supplier_id=row.supplier_id,
-                    username=row.username,
-                    password_hash=row.password_hash,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at
-                )
-            return None
-    
-    def create_user_supplier_credential(self, cred: UserSupplierCredential) -> UserSupplierCredential:
-        """Create or update user supplier credential"""
-        with self.engine.connect() as conn:
-            # Try insert first
-            try:
-                conn.execute(
-                    text("""
-                        INSERT INTO user_supplier_credentials (
-                            id, user_id, supplier_id, username, password_hash, created_at, updated_at
-                        ) VALUES (
-                            :id, :user_id, :supplier_id, :username, :password_hash, :created_at, :updated_at
-                        )
-                    """),
-                    {
-                        "id": cred.id,
-                        "user_id": cred.user_id,
-                        "supplier_id": cred.supplier_id,
-                        "username": cred.username,
-                        "password_hash": cred.password_hash,
-                        "created_at": cred.created_at or datetime.now().isoformat(),
-                        "updated_at": datetime.now().isoformat()
-                    }
-                )
-            except:
-                # Update if exists
-                conn.execute(
-                    text("""
-                        UPDATE user_supplier_credentials 
-                        SET username = :username, password_hash = :password_hash, updated_at = :updated_at
-                        WHERE user_id = :user_id AND supplier_id = :supplier_id
-                    """),
-                    {
-                        "user_id": cred.user_id,
-                        "supplier_id": cred.supplier_id,
-                        "username": cred.username,
-                        "password_hash": cred.password_hash,
-                        "updated_at": datetime.now().isoformat()
-                    }
-                )
-            conn.commit()
-        return cred
-    
-    def delete_user_supplier_credential(self, credential_id: str) -> bool:
-        """Delete user supplier credential"""
-        with self.engine.connect() as conn:
-            conn.execute(
-                text("DELETE FROM user_supplier_credentials WHERE id = :id"),
-                {"id": credential_id}
-            )
-            conn.commit()
-        return True
-    
     # ==================== PROPERTY SUPPLIERS ====================
     
     def get_property_suppliers(self, property_id: str) -> List[PropertySupplier]:
@@ -722,7 +639,6 @@ class SQLiteDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
-                    credential_id=row.credential_id,
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at,
@@ -746,7 +662,6 @@ class SQLiteDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
-                    credential_id=row.credential_id,
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at,
@@ -761,16 +676,15 @@ class SQLiteDatabase:
                 conn.execute(
                     text("""
                         INSERT INTO property_suppliers (
-                            id, property_id, supplier_id, credential_id, contract_id, direct_debit, created_at, updated_at
+                            id, property_id, supplier_id, contract_id, direct_debit, created_at, updated_at
                         ) VALUES (
-                            :id, :property_id, :supplier_id, :credential_id, :contract_id, :direct_debit, :created_at, :updated_at
+                            :id, :property_id, :supplier_id, :contract_id, :direct_debit, :created_at, :updated_at
                         )
                     """),
                     {
                         "id": ps.id,
                         "property_id": ps.property_id,
                         "supplier_id": ps.supplier_id,
-                        "credential_id": ps.credential_id,
                         "contract_id": ps.contract_id,
                         "direct_debit": 1 if ps.direct_debit else 0,
                         "created_at": ps.created_at or datetime.now().isoformat(),
@@ -782,14 +696,13 @@ class SQLiteDatabase:
                 conn.execute(
                     text("""
                         UPDATE property_suppliers
-                        SET credential_id = :credential_id, contract_id = :contract_id, 
+                        SET contract_id = :contract_id, 
                             direct_debit = :direct_debit, updated_at = :updated_at
                         WHERE property_id = :property_id AND supplier_id = :supplier_id
                     """),
                     {
                         "property_id": ps.property_id,
                         "supplier_id": ps.supplier_id,
-                        "credential_id": ps.credential_id,
                         "contract_id": ps.contract_id,
                         "direct_debit": 1 if ps.direct_debit else 0,
                         "updated_at": datetime.now().isoformat()
@@ -829,7 +742,6 @@ class SQLiteDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
-                    credential_id=row.credential_id,
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at,

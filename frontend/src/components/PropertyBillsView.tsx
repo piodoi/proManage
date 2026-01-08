@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 import AddressWarningDialog from './dialogs/AddressWarningDialog';
 import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
-import AllPropertiesSyncDialog from './dialogs/AllPropertiesSyncDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -81,7 +80,6 @@ export default function PropertyBillsView({
   const [showContractSelector, setShowContractSelector] = useState(false);
   const [multipleContracts, setMultipleContracts] = useState<Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }>>({});
   const [selectedContracts, setSelectedContracts] = useState<Record<string, string>>({});
-  const [showSyncDialog, setShowSyncDialog] = useState(false);
 
   const handleError = (err: unknown) => {
     console.error('[PropertyBillsView] Error:', err);
@@ -297,41 +295,6 @@ export default function PropertyBillsView({
             >
               <Receipt className="w-4 h-4 mr-1" />
               {parsingPdf ? t('common.loading') : t('bill.uploadPdf')}
-            </Button>
-            {property && (
-              <AllPropertiesSyncDialog
-                token={token}
-                properties={[property]}
-                open={showSyncDialog}
-                onOpenChange={setShowSyncDialog}
-                onSuccess={() => {
-                  if (onBillsChange) {
-                    onBillsChange();
-                  }
-                }}
-                onError={(error) => {
-                  if (onError) {
-                    onError(error);
-                  }
-                }}
-              />
-            )}
-            <Button
-              size="sm"
-              onClick={() => {
-                if (property) {
-                  setShowSyncDialog(true);
-                } else {
-                  // Fallback: if property not provided, show error
-                  if (onError) {
-                    onError(t('errors.generic'));
-                  }
-                }
-              }}
-              className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
-            >
-              <Settings className="w-4 h-4 mr-1" />
-              {t('bill.syncBills')}
             </Button>
             <Dialog open={showBillForm} onOpenChange={(open) => {
               setShowBillForm(open);

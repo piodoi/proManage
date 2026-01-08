@@ -26,8 +26,6 @@ CREATE TABLE users (
     oauth_id TEXT,
     subscription_tier INTEGER DEFAULT 0,
     subscription_expires TEXT,
-    ebloc_username TEXT,
-    ebloc_password_hash TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -131,36 +129,17 @@ CREATE INDEX idx_payments_bill ON payments(bill_id);
 CREATE INDEX idx_payments_status ON payments(status);
 CREATE INDEX idx_payments_created ON payments(created_at);
 
--- USER SUPPLIER CREDENTIALS TABLE
-CREATE TABLE user_supplier_credentials (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    supplier_id TEXT NOT NULL,
-    username TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-    UNIQUE(user_id, supplier_id)
-);
-
-CREATE INDEX idx_user_creds_user ON user_supplier_credentials(user_id);
-CREATE INDEX idx_user_creds_supplier ON user_supplier_credentials(supplier_id);
-
 -- PROPERTY SUPPLIERS TABLE
 CREATE TABLE property_suppliers (
     id TEXT PRIMARY KEY,
     property_id TEXT NOT NULL,
     supplier_id TEXT NOT NULL,
-    credential_id TEXT,
     contract_id TEXT,
     direct_debit INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-    FOREIGN KEY (credential_id) REFERENCES user_supplier_credentials(id) ON DELETE SET NULL,
     UNIQUE(property_id, supplier_id, contract_id)
 );
 

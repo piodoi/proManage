@@ -26,8 +26,6 @@ CREATE TABLE users (
     oauth_id VARCHAR(255) NULL,
     subscription_tier INT DEFAULT 0,
     subscription_expires DATETIME NULL,
-    ebloc_username VARCHAR(255) NULL,
-    ebloc_password_hash TEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_users_email (email),
     INDEX idx_users_role (role),
@@ -125,38 +123,19 @@ CREATE TABLE payments (
     INDEX idx_payments_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- USER_SUPPLIER_CREDENTIALS TABLE
-CREATE TABLE user_supplier_credentials (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
-    supplier_id VARCHAR(36) NOT NULL,
-    username TEXT NULL,
-    password_hash TEXT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-    INDEX idx_usc_user (user_id),
-    INDEX idx_usc_supplier (supplier_id),
-    UNIQUE INDEX idx_usc_user_supplier (user_id, supplier_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- PROPERTY_SUPPLIERS TABLE
 CREATE TABLE property_suppliers (
     id VARCHAR(36) PRIMARY KEY,
     property_id VARCHAR(36) NOT NULL,
     supplier_id VARCHAR(36) NOT NULL,
-    credential_id VARCHAR(36) NULL,
     contract_id VARCHAR(100) NULL,
     direct_debit BOOLEAN DEFAULT FALSE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-    FOREIGN KEY (credential_id) REFERENCES user_supplier_credentials(id) ON DELETE SET NULL,
     INDEX idx_ps_property (property_id),
     INDEX idx_ps_supplier (supplier_id),
-    INDEX idx_ps_credential (credential_id),
     INDEX idx_ps_contract (contract_id),
     UNIQUE INDEX idx_ps_property_supplier (property_id, supplier_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

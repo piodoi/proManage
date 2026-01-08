@@ -91,14 +91,6 @@ export const api = {
     sync: (token: string, propertyId: string) => request<{ status: string; property_id: string; bills_created: number; errors?: string[]; message?: string; multiple_contracts?: Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }>; progress?: Array<{ supplier_name: string; status: string; bills_found: number; bills_created: number; error?: string }> }>(`/suppliers/sync/${propertyId}`, { method: 'POST', token }),
   },
 
-  supplierCredentials: {
-    list: (token: string) => request<UserSupplierCredential[]>('/supplier-credentials', { token }),
-    create: (token: string, data: UserSupplierCredentialCreate) => request<UserSupplierCredential>('/supplier-credentials', { method: 'POST', body: data, token }),
-    update: (token: string, credentialId: string, data: UserSupplierCredentialUpdate) => request<UserSupplierCredential>(`/supplier-credentials/${credentialId}`, { method: 'PUT', body: data, token }),
-    delete: (token: string, credentialId: string) => request<{ status: string }>(`/supplier-credentials/${credentialId}`, { method: 'DELETE', token }),
-  },
-
-
   renters: {
     list: (token: string, propertyId: string) => request<Renter[]>(`/properties/${propertyId}/renters`, { token }),
     create: (token: string, propertyId: string, data: RenterCreate) => request<Renter>(`/properties/${propertyId}/renters`, { method: 'POST', body: data, token }),
@@ -153,7 +145,7 @@ export const api = {
     configure: (token: string, data: EblocConfigCreate) => request<{ status: string; message: string }>('/ebloc/configure', { method: 'POST', body: data, token }),
     getConfig: (token: string) => request<{ username: string; password?: string; configured: boolean }>('/ebloc/config', { token }),
     sync: (token: string, propertyId: string, associationId?: string) => request<{ status: string; property_id: string; property_name: string; matches?: Array<{ id: string; nume: string; address: string; score: number }>; balance?: { outstanding_debt: number; last_payment_date?: string; oldest_debt_month?: string }; bills_created: number; payments_created: number }>(`/ebloc/sync/${propertyId}${associationId ? `?association_id=${associationId}` : ''}`, { method: 'POST', token }),
-    setupSupplierForProperties: (token: string, propertyIds: string[]) => request<{ status: string; supplier_id: string; credential_id: string; properties_updated: number }>('/ebloc/setup-supplier-for-properties', { method: 'POST', body: propertyIds, token }),
+    setupSupplierForProperties: (token: string, propertyIds: string[]) => request<{ status: string; supplier_id: string; properties_updated: number }>('/ebloc/setup-supplier-for-properties', { method: 'POST', body: propertyIds, token }),
   },
 
   subscription: {
@@ -254,7 +246,6 @@ export type PropertySupplier = {
   supplier: Supplier;
   property_id: string;
   supplier_id: string;
-  credential_id?: string | null;
   contract_id?: string | null;
   direct_debit: boolean;
   has_credentials: boolean;
@@ -264,36 +255,13 @@ export type PropertySupplier = {
 
 export type PropertySupplierCreate = {
   supplier_id: string;
-  credential_id?: string | null;
   contract_id?: string | null;
   direct_debit?: boolean;
 };
 
 export type PropertySupplierUpdate = {
-  credential_id?: string | null;
   contract_id?: string;
   direct_debit?: boolean;
-};
-
-export type UserSupplierCredential = {
-  id: string;
-  supplier: Supplier;
-  user_id: string;
-  supplier_id: string;
-  has_credentials: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type UserSupplierCredentialCreate = {
-  supplier_id: string;
-  username?: string;
-  password?: string;
-};
-
-export type UserSupplierCredentialUpdate = {
-  username?: string;
-  password?: string;
 };
 
 export type Renter = {

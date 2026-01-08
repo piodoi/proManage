@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Mail, AlertCircle, User, Copy, Check } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
-import SupplierCredentialsSettings from './SupplierCredentialsSettings';
 import { validateIban, formatIban } from '../utils/iban';
 import { formatDateWithPreferences } from '../lib/utils';
 
@@ -156,9 +155,6 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
           </TabsTrigger>
           <TabsTrigger value="rent-bills" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
             {t('settings.rentWarning')}
-          </TabsTrigger>
-          <TabsTrigger value="suppliers" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-            {t('settings.manageSuppliersCredentials')}
           </TabsTrigger>
           <TabsTrigger value="email" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
             {t('settings.emailBillImport')}
@@ -374,10 +370,6 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
             </div>
           </CardContent>
         </Card>
-          </TabsContent>
-
-          <TabsContent value="suppliers" className="m-0 p-6 space-y-4">
-          <SupplierCredentialsSettings token={token} onError={onError} />
           </TabsContent>
 
           <TabsContent value="email" className="m-0 p-6 space-y-4">

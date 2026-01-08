@@ -66,8 +66,6 @@ class User(BaseModel):
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE  # Deprecated, use subscription_tier
     subscription_tier: int = 0  # 0 = off, 1 = on (reserved for future tiers)
     subscription_expires: Optional[datetime] = None
-    ebloc_username: Optional[str] = None  # E-bloc login credentials (one per user)
-    ebloc_password_hash: Optional[str] = None  # Encrypted password for E-bloc
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -296,11 +294,6 @@ class PaymentCreate(BaseModel):
     method: PaymentMethod
 
 
-class EblocConfigCreate(BaseModel):
-    username: str
-    password: str
-
-
 class Supplier(BaseModel):
     """Represents a supported supplier (from extraction patterns or hardcoded list)"""
     id: str = Field(default_factory=gen_id)
@@ -311,23 +304,11 @@ class Supplier(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class UserSupplierCredential(BaseModel):
-    """Represents user credentials for a supplier (shared across all user's properties)"""
-    id: str = Field(default_factory=gen_id)
-    user_id: str  # Reference to User.id
-    supplier_id: str  # Reference to Supplier.id
-    username: Optional[str] = None  # Encrypted username for API access
-    password_hash: Optional[str] = None  # Encrypted password for API access
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-
 class PropertySupplier(BaseModel):
     """Represents a supplier configured for a specific property"""
     id: str = Field(default_factory=gen_id)
     property_id: str
     supplier_id: str  # Reference to Supplier.id
-    credential_id: Optional[str] = None  # Reference to UserSupplierCredential.id (shared credentials)
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property (filled on first scrape)
     direct_debit: bool = False  # Whether bills will be paid automatically on due date
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -350,7 +331,6 @@ class SupplierUpdate(BaseModel):
 
 class PropertySupplierCreate(BaseModel):
     supplier_id: str
-    credential_id: Optional[str] = None  # Link to existing user-supplier credential
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
     direct_debit: bool = False  # Whether bills will be paid automatically on due date
 
@@ -359,19 +339,6 @@ class PropertySupplierUpdate(BaseModel):
     credential_id: Optional[str] = None  # Link to existing user-supplier credential
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
     direct_debit: Optional[bool] = None  # Whether bills will be paid automatically on due date
-
-
-class UserSupplierCredentialCreate(BaseModel):
-    supplier_id: str
-    username: Optional[str] = None
-    password: Optional[str] = None
-
-
-class UserSupplierCredentialUpdate(BaseModel):
-    username: Optional[str] = None
-    password: Optional[str] = None
-
-
 
 
 class TokenData(BaseModel):

@@ -14,7 +14,7 @@ load_dotenv(dotenv_path=env_path)
 
 from app.models import (
     User, Property, Renter, Bill, Payment,
-    Supplier, PropertySupplier, UserSupplierCredential,
+    Supplier, PropertySupplier,
     UserPreferences, UserRole
 )
 
@@ -137,8 +137,6 @@ class Database:
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
                     subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires and hasattr(row.subscription_expires, 'isoformat') else row.subscription_expires,
-                    ebloc_username=row.ebloc_username,
-                    ebloc_password_hash=row.ebloc_password_hash,
                     created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
                 ))
             return users
@@ -153,7 +151,7 @@ class Database:
         existing = self._impl.get_user_by_id(user.id)
         if existing:
             updates = {}
-            for field in ['email', 'name', 'password_hash', 'ebloc_username', 'ebloc_password_hash', 'subscription_tier', 'subscription_expires']:
+            for field in ['email', 'name', 'password_hash', 'subscription_tier', 'subscription_expires']:
                 if getattr(user, field, None) != getattr(existing, field, None):
                     updates[field] = getattr(user, field)
             if updates:
@@ -464,55 +462,6 @@ class Database:
             return suppliers
     
     # ==================== USER SUPPLIER CREDENTIALS ====================
-    def get_user_supplier_credential(self, credential_id: str) -> Optional[UserSupplierCredential]:
-        from sqlalchemy import text
-        with self._impl.engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT * FROM user_supplier_credentials WHERE id = :id"),
-                {"id": credential_id}
-            )
-            row = result.fetchone()
-            if row:
-                return UserSupplierCredential(
-                    id=row.id,
-                    user_id=row.user_id,
-                    supplier_id=row.supplier_id,
-                    username=row.username,
-                    password_hash=row.password_hash,
-                    created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None),
-                    updated_at=row.updated_at if isinstance(row.updated_at, str) else (row.updated_at.isoformat() if row.updated_at else None)
-                )
-            return None
-    
-    def get_user_supplier_credential_by_user_supplier(self, user_id: str, supplier_id: str) -> Optional[UserSupplierCredential]:
-        return self._impl.get_user_supplier_credentials(user_id, supplier_id)
-    
-    def list_user_supplier_credentials(self, user_id: str) -> List[UserSupplierCredential]:
-        from sqlalchemy import text
-        with self._impl.engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT * FROM user_supplier_credentials WHERE user_id = :user_id"),
-                {"user_id": user_id}
-            )
-            credentials = []
-            for row in result:
-                credentials.append(UserSupplierCredential(
-                    id=row.id,
-                    user_id=row.user_id,
-                    supplier_id=row.supplier_id,
-                    username=row.username,
-                    password_hash=row.password_hash,
-                    created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None),
-                    updated_at=row.updated_at if isinstance(row.updated_at, str) else (row.updated_at.isoformat() if row.updated_at else None)
-                ))
-            return credentials
-    
-    def save_user_supplier_credential(self, credential: UserSupplierCredential) -> UserSupplierCredential:
-        return self._impl.create_user_supplier_credential(credential)
-    
-    def delete_user_supplier_credential(self, credential_id: str) -> bool:
-        return self._impl.delete_user_supplier_credential(credential_id)
-    
     # ==================== USER PREFERENCES ====================
     def get_user_preferences(self, user_id: str) -> Optional[UserPreferences]:
         return self._impl.get_user_preferences(user_id)
