@@ -103,6 +103,7 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
     default_iban = preferences.iban if preferences and preferences.iban else None
     
     bills_created = 0
+    created_bills = []  # Store the created bills to return to frontend
     errors = []
     
     for prop in properties:
@@ -121,30 +122,48 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
             for renter in renters_with_rent:
                 # Calculate due date
                 now = datetime.utcnow()
+                from datetime import timedelta
                 
-                # Calculate next month
-                if now.month == 12:
-                    next_year = now.year + 1
-                    next_month = 1
-                else:
-                    next_year = now.year
-                    next_month = now.month + 1
+                # Determine which month to generate the bill for:
+                # If the due date for THIS month is still in the future, generate THIS month's bill
+                # Otherwise, generate NEXT month's bill
                 
-                # Use rent_day if specified, otherwise use 1st + warning_days
+                # Calculate what the due date would be for THIS month
                 if renter.rent_day and 1 <= renter.rent_day <= 28:
-                    due_date = datetime(next_year, next_month, renter.rent_day, 0, 0, 0)
+                    this_month_due = datetime(now.year, now.month, renter.rent_day, 0, 0, 0)
                 else:
                     # Default: 1st of month + warning_days
-                    from datetime import timedelta
                     warning_offset = max(0, warning_days - 1)
-                    due_date = datetime(next_year, next_month, 1, 0, 0, 0) + timedelta(days=warning_offset)
+                    this_month_due = datetime(now.year, now.month, 1, 0, 0, 0) + timedelta(days=warning_offset)
+                
+                # If today is before or on the due date for this month, use this month
+                # Otherwise, use next month
+                if now.date() <= this_month_due.date():
+                    # Due date is still in the future or today - generate THIS month's bill
+                    target_year = now.year
+                    target_month = now.month
+                    due_date = this_month_due
+                else:
+                    # Due date has passed - generate NEXT month's bill
+                    if now.month == 12:
+                        target_year = now.year + 1
+                        target_month = 1
+                    else:
+                        target_year = now.year
+                        target_month = now.month + 1
+                    
+                    if renter.rent_day and 1 <= renter.rent_day <= 28:
+                        due_date = datetime(target_year, target_month, renter.rent_day, 0, 0, 0)
+                    else:
+                        warning_offset = max(0, warning_days - 1)
+                        due_date = datetime(target_year, target_month, 1, 0, 0, 0) + timedelta(days=warning_offset)
                 
                 # Create bill with month number as bill_number
-                bill_number = f"{next_month:02d}"  # Month number: 01-12
+                bill_number = f"{target_month:02d}"  # Month number: 01-12
                 
                 # Check if a similar bill already exists for this month
                 existing_bills = db.list_bills(property_id=prop.id)
-                month_year_str = f"{next_year}-{next_month:02d}"
+                month_year_str = f"{target_year}-{target_month:02d}"
                 duplicate_found = False
                 
                 for existing_bill in existing_bills:
@@ -166,13 +185,13 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
                 # Format month name
                 month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
                               'July', 'August', 'September', 'October', 'November', 'December']
-                month_name = month_names[next_month]
+                month_name = month_names[target_month]
                 
                 bill = Bill(
                     property_id=prop.id,
                     renter_id=renter.id,
                     bill_type=BillType.RENT,
-                    description=f"{month_name} {next_year}",
+                    description=f"{month_name} {target_year}",
                     amount=renter.rent_amount_eur,
                     currency=default_currency,
                     due_date=due_date,
@@ -183,6 +202,27 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
                 
                 db.save_bill(bill)
                 bills_created += 1
+                
+                # Store created bill with property and renter info for frontend display
+                created_bills.append({
+                    "id": bill.id,
+                    "property_id": prop.id,
+                    "property_name": prop.name,
+                    "property_address": prop.address,
+                    "renter_id": renter.id,
+                    "renter_name": renter.name,
+                    "bill_type": "rent",
+                    "description": bill.description,
+                    "amount": bill.amount,
+                    "currency": bill.currency,
+                    "due_date": bill.due_date.isoformat(),
+                    "bill_number": bill.bill_number,
+                    "iban": bill.iban,
+                    "source": "rent",
+                    "address_confidence": 100,  # Rent bills always have 100% confidence
+                    "match_reason": "rent_bill",
+                })
+                
                 logger.info(
                     f"[Rent Bills] Created rent bill for property {prop.id}, "
                     f"renter {renter.id}, amount {renter.rent_amount_eur} {default_currency}, "
@@ -198,6 +238,7 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
     
     return {
         "bills_created": bills_created,
+        "created_bills": created_bills,
         "errors": errors,
     }
 

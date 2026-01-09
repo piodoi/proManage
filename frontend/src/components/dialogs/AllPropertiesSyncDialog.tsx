@@ -40,7 +40,6 @@ export default function AllPropertiesSyncDialog({
   const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
   const [savingBills, setSavingBills] = useState(false);
   const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
-  const [totalEmailBillsSynced, setTotalEmailBillsSynced] = useState(0);
   const [propertiesWithRentersCount, setPropertiesWithRentersCount] = useState(0);
   const [totalRentersCount, setTotalRentersCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<string>('');
@@ -59,7 +58,6 @@ export default function AllPropertiesSyncDialog({
       setSyncing(false);
       setSavingBills(false);
       setTotalRentBillsGenerated(0);
-      setTotalEmailBillsSynced(0);
       setSyncProgress('');
       discoveredBillsRef.current = [];
     }
@@ -88,8 +86,8 @@ export default function AllPropertiesSyncDialog({
     setTotalRentersCount(totalRenters);
   };
 
-  const generateRentBills = async (): Promise<number> => {
-    if (!token) return 0;
+  const generateRentBills = async (): Promise<{ count: number; bills: DiscoveredBill[] }> => {
+    if (!token) return { count: 0, bills: [] };
     
     try {
       setSyncProgress(t('supplier.generatingRentBills'));
@@ -107,10 +105,30 @@ export default function AllPropertiesSyncDialog({
       }
       
       const result = await response.json();
-      return result.bills_created || 0;
+      const count = result.bills_created || 0;
+      
+      // Convert backend bills to DiscoveredBill format
+      const rentBills: DiscoveredBill[] = (result.created_bills || []).map((bill: any) => ({
+        id: bill.id,
+        supplier_name: 'Rent',
+        bill_number: bill.bill_number,
+        amount: bill.amount || 0,
+        due_date: bill.due_date,
+        iban: bill.iban,
+        description: `${bill.description} - ${bill.renter_name}`,
+        property_id: bill.property_id,
+        property_name: bill.property_name,
+        address_confidence: 100,
+        match_reason: 'rent_bill',
+        bill_data: bill,
+        source: 'rent',
+        supplier: 'Rent',
+      }));
+      
+      return { count, bills: rentBills };
     } catch (err) {
       console.error('Failed to generate rent bills:', err);
-      return 0;
+      return { count: 0, bills: [] };
     }
   };
 
@@ -122,13 +140,14 @@ export default function AllPropertiesSyncDialog({
 
     setStage('syncing');
     setSyncing(true);
-    let rentCount = 0;
+    const allDiscoveredBills: DiscoveredBill[] = [];
 
     try {
       // Generate rent bills if requested
       if (refreshRentBills) {
-        rentCount = await generateRentBills();
-        setTotalRentBillsGenerated(rentCount);
+        const { count, bills: rentBills } = await generateRentBills();
+        setTotalRentBillsGenerated(count);
+        allDiscoveredBills.push(...rentBills);
       }
 
       // Sync email bills if requested - discover only, don't create yet
@@ -166,17 +185,19 @@ export default function AllPropertiesSyncDialog({
           });
           setProcessedEmailIds(newEmailIds);
           
-          // Add to discovered bills
-          discoveredBillsRef.current = emailBills;
-          setDiscoveredBills(emailBills);
-          
-          // Pre-select all email bills
-          setSelectedBillIds(new Set(emailBills.map(b => b.id)));
-          setTotalEmailBillsSynced(emailBills.length);
+          allDiscoveredBills.push(...emailBills);
         } else {
           onError(result.message || 'Failed to sync email bills');
         }
       }
+
+      // Set all discovered bills (rent + email)
+      discoveredBillsRef.current = allDiscoveredBills;
+      setDiscoveredBills(allDiscoveredBills);
+      
+      // Pre-select only email bills (rent bills are already saved)
+      const emailBillIds = allDiscoveredBills.filter(b => b.source === 'email').map(b => b.id);
+      setSelectedBillIds(new Set(emailBillIds));
 
       // Move to bills stage (even if no bills found)
       setSyncing(false);
@@ -189,10 +210,11 @@ export default function AllPropertiesSyncDialog({
   };
 
   const handleSelectAllBills = () => {
-    if (selectedBillIds.size === discoveredBills.length) {
+    const emailBills = discoveredBills.filter(b => b.source === 'email');
+    if (selectedBillIds.size === emailBills.length) {
       setSelectedBillIds(new Set());
     } else {
-      setSelectedBillIds(new Set(discoveredBills.map(b => b.id)));
+      setSelectedBillIds(new Set(emailBills.map(b => b.id)));
     }
   };
 
@@ -237,8 +259,9 @@ export default function AllPropertiesSyncDialog({
 
     setSavingBills(true);
     try {
+      // Only save email bills (rent bills are already saved by the backend)
       const billsToSave = discoveredBills
-        .filter(b => selectedBillIds.has(b.id))
+        .filter(b => selectedBillIds.has(b.id) && b.source === 'email')
         .map(b => {
           if (b.bill_data) {
             return {
@@ -264,19 +287,21 @@ export default function AllPropertiesSyncDialog({
           };
         });
       
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${API_URL}/suppliers/sync-all/save-bills`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ bills: billsToSave }),
-      });
+      if (billsToSave.length > 0) {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${API_URL}/suppliers/sync-all/save-bills`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ bills: billsToSave }),
+        });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-        throw new Error(error.detail || 'Failed to save bills');
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+          throw new Error(error.detail || 'Failed to save bills');
+        }
       }
 
       // Close dialog and delete emails in background
@@ -418,73 +443,75 @@ export default function AllPropertiesSyncDialog({
           {/* Stage 3: Bill Selection */}
           {stage === 'bills' && (
             <div className="flex flex-col flex-1 min-h-0 space-y-4">
-              {/* Summary of what was synced */}
-              <div className="space-y-2 text-sm">
-                {refreshRentBills && (
-                  <div className="flex items-center justify-between px-4 py-2 rounded bg-slate-750 border border-slate-700">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <Users className="w-4 h-4" />
-                      <span>{t('supplier.refreshRentBills')}</span>
-                    </div>
-                    <span className={totalRentBillsGenerated > 0 ? "text-emerald-400 font-medium" : "text-slate-400"}>
-                      {totalRentBillsGenerated > 0 ? `+${totalRentBillsGenerated}` : '0'}
-                    </span>
-                  </div>
-                )}
-                {syncEmailBills && (
-                  <div className="flex items-center justify-between px-4 py-2 rounded bg-slate-750 border border-slate-700">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <Mail className="w-4 h-4" />
-                      <span>{t('supplier.emailBillsFound')}</span>
-                    </div>
-                    <span className={totalEmailBillsSynced > 0 ? "text-emerald-400 font-medium" : "text-slate-400"}>
-                      {totalEmailBillsSynced}
-                    </span>
-                  </div>
-                )}
-              </div>
 
               {/* Bills list */}
               {discoveredBills.length > 0 ? (
                 <>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-300 font-medium">
-                      {t('supplier.selectBillsToSave')} ({discoveredBills.length})
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSelectAllBills}
-                      className="text-xs"
-                    >
-                      {selectedBillIds.size === discoveredBills.length
-                        ? t('common.deselectAll')
-                        : t('common.selectAll')}
-                    </Button>
-                  </div>
+                  {/* Rent bills section (already saved, read-only display) */}
+                  {discoveredBills.filter(b => b.source === 'rent').length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-slate-300 font-medium flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        {t('supplier.rentBillsGenerated', { count: totalRentBillsGenerated })}
+                      </p>
+                      <div className="border border-slate-600 rounded-lg bg-slate-700/30 p-3 space-y-2 max-h-40 overflow-y-auto">
+                        {discoveredBills.filter(b => b.source === 'rent').map((bill) => (
+                          <div key={bill.id} className="flex items-center justify-between p-2 bg-slate-700 rounded text-sm">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              <span className="text-slate-100">{bill.description}</span>
+                              <span className="text-slate-400">- {bill.property_name}</span>
+                            </div>
+                            <span className="font-semibold text-slate-100">{bill.amount} {bill.bill_data?.currency || 'EUR'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                  <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
-                    {discoveredBills.map((bill) => (
-                      <DiscoveredBillItem
-                        key={bill.id}
-                        bill={bill}
-                        selected={selectedBillIds.has(bill.id)}
-                        onToggle={handleBillToggle}
-                        properties={properties}
-                        onPropertyChange={handlePropertyChange}
-                      />
-                    ))}
-                  </div>
+                  {/* Email bills section (need confirmation) */}
+                  {discoveredBills.filter(b => b.source === 'email').length > 0 && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-slate-300 font-medium flex items-center gap-2">
+                          <Mail className="w-4 h-4" />
+                          {t('supplier.selectBillsToSave')} ({discoveredBills.filter(b => b.source === 'email').length})
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSelectAllBills}
+                          className="text-xs"
+                        >
+                          {selectedBillIds.size === discoveredBills.filter(b => b.source === 'email').length
+                            ? t('common.deselectAll')
+                            : t('common.selectAll')}
+                        </Button>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
+                        {discoveredBills.filter(b => b.source === 'email').map((bill) => (
+                          <DiscoveredBillItem
+                            key={bill.id}
+                            bill={bill}
+                            selected={selectedBillIds.has(bill.id)}
+                            onToggle={handleBillToggle}
+                            properties={properties}
+                            onPropertyChange={handlePropertyChange}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 space-y-4">
                   <CheckCircle2 className="w-12 h-12 text-emerald-500" />
-                  <p className="text-sm text-slate-300">{t('supplier.noBillsDiscovered')}</p>
-                  {totalRentBillsGenerated > 0 && (
-                    <p className="text-xs text-slate-400">
-                      {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
-                    </p>
-                  )}
+                  <p className="text-sm text-slate-300">
+                    {totalRentBillsGenerated > 0 
+                      ? t('supplier.syncComplete')
+                      : t('supplier.noBillsDiscovered')}
+                  </p>
                 </div>
               )}
 
@@ -497,7 +524,7 @@ export default function AllPropertiesSyncDialog({
                 >
                   {t('common.back')}
                 </Button>
-                {discoveredBills.length === 0 ? (
+                {discoveredBills.filter(b => b.source === 'email').length === 0 ? (
                   <Button
                     onClick={handleClose}
                     className="bg-emerald-600 hover:bg-emerald-700"
