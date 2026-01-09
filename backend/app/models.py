@@ -115,7 +115,6 @@ class Bill(BaseModel):
     contract_id: Optional[str] = None  # Contract/client ID extracted from PDF for payment
     payment_details: Optional[dict] = None  # Additional payment details (e.g., client_code) stored as JSON
     status: BillStatus = BillStatus.PENDING
-    source_email_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

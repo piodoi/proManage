@@ -482,6 +482,7 @@
     "billsSynced": "Facturile au fost sincronizate cu succes"
   },
   "tools": {
+    "tools": "Unelte",
     "createPattern": "Creează Model",
     "matchPattern": "Potrivește Model",
     "editPattern": "Editează Model",

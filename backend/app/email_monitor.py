@@ -359,7 +359,7 @@ class EmailMonitor:
                             logger.info(f"[Email Monitor] Processing PDF: {filename} ({len(pdf_data)} bytes)")
                             
                             # Use text pattern extraction (from text_patterns folder)
-                            extracted_data, pattern_id, pattern_name = extract_bill_from_pdf_auto(pdf_data)
+                            extracted_data, pattern_id, pattern_name, pattern_bill_type = extract_bill_from_pdf_auto(pdf_data)
                             
                             if not extracted_data:
                                 error_msg = f"No pattern matched for {filename}"
@@ -367,7 +367,7 @@ class EmailMonitor:
                                 errors.append(error_msg)
                                 continue
                             
-                            logger.info(f"[Email Monitor] Matched pattern: {pattern_name} (ID: {pattern_id}) for {filename}")
+                            logger.info(f"[Email Monitor] Matched pattern: {pattern_name} (ID: {pattern_id}, bill_type={pattern_bill_type}) for {filename}")
                             
                             # Get user's properties to match address
                             properties = db.list_properties(landlord_id=extracted_user_id)
@@ -470,6 +470,7 @@ class EmailMonitor:
                                         logger.warning(f"[Email Bill] Could not parse amount: {extracted_data.get('amount')}")
                             
                             # Create discovered bill object
+                            # Use pattern name directly as description (e.g., "Engie", "Digi", "E-bloc")
                             discovered_bill = {
                                 'id': f"email_{email_id}_{filename}",  # Temporary ID
                                 'email_id': email_id,
@@ -479,7 +480,8 @@ class EmailMonitor:
                                 'property_address': matched_property.address if matched_property else None,
                                 'supplier': pattern_name,  # Supplier from pattern name (for backend processing)
                                 'supplier_name': pattern_name,  # Supplier name for display
-                                'description': extracted_data.get('description') or pattern_name,  # Use description from pattern or supplier name
+                                'description': pattern_name,  # Always use pattern name as description
+                                'bill_type': pattern_bill_type or 'utilities',  # Bill type from pattern
                                 'amount': amount,
                                 'currency': 'RON',
                                 'due_date': due_date.isoformat(),
@@ -512,11 +514,24 @@ class EmailMonitor:
                                     contract_id=extracted_contract_id
                                 )
                                 
+                                # Resolve bill_type from pattern, matching against BillType enum case-insensitively
+                                def resolve_bill_type(bill_type_str: str) -> BillType:
+                                    """Match bill_type string to BillType enum case-insensitively, default to OTHER."""
+                                    if not bill_type_str:
+                                        return BillType.OTHER
+                                    bill_type_lower = bill_type_str.lower()
+                                    for bt in BillType:
+                                        if bt.value.lower() == bill_type_lower:
+                                            return bt
+                                    return BillType.OTHER
+                                
+                                resolved_bill_type = resolve_bill_type(pattern_bill_type)
+                                
                                 bill = Bill(
                                     property_id=matched_property.id,
                                     renter_id=None,  # Applies to all renters
-                                    bill_type=BillType.UTILITIES,
-                                    description=discovered_bill['description'],
+                                    bill_type=resolved_bill_type,
+                                    description=pattern_name,  # Use pattern name as description
                                     amount=amount,
                                     currency="RON",
                                     due_date=due_date if due_date else datetime.utcnow(),
@@ -529,7 +544,6 @@ class EmailMonitor:
                                     contract_id=extracted_data.get('contract_id'),
                                     payment_details=None,
                                     status=BillStatus.PENDING,
-                                    source_email_id=email_id
                                 )
                                 
                                 db.save_bill(bill)

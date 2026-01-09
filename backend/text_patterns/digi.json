@@ -1,0 +1,50 @@
+{
+  "id": "digi",
+  "name": "Digi",
+  "bill_type": "utilities",
+  "supplier": "Digi Romania S.A.",
+  "field_patterns": [
+    {
+      "field_name": "amount",
+      "label_text": "Factura curenta:",
+      "line_offset": 3
+    },
+    {
+      "field_name": "currency",
+      "label_text": "Valoare",
+      "line_offset": 1
+    },
+    {
+      "field_name": "due_date",
+      "label_text": "Ultima zi de plată:",
+      "line_offset": 12
+    },
+    {
+      "field_name": "bill_date",
+      "label_text": "Data:",
+      "line_offset": 12
+    },
+    {
+      "field_name": "iban",
+      "label_text": "Prin virament bancar în unul din conturile*:",
+      "line_offset": 1
+    },
+    {
+      "field_name": "bill_number",
+      "label_text": "Factură seria și nr.:",
+      "line_offset": 11
+    },
+    {
+      "field_name": "payment_details",
+      "label_text": "Informații pentru plata",
+      "line_offset": 10
+    },
+    {
+      "field_name": "address",
+      "label_text": "Factură seria și nr.:",
+      "line_offset": 23
+    }
+  ],
+  "created_at": "2026-01-09T16:00:34.193510",
+  "updated_at": "2026-01-09T16:00:34.193517"
+}

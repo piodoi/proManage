@@ -488,6 +488,7 @@ export type ExtractionResult = {
   matched_pattern_id?: string;
   matched_pattern_name?: string;
   matched_pattern_supplier?: string;
+  matched_pattern_bill_type?: string;
   raw_text?: string;
   address_matches?: boolean;
   address_warning?: string;

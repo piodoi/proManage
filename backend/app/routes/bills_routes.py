@@ -187,14 +187,15 @@ async def parse_bill_pdf(
     logger.info(f"[PDF Parse] Starting parse for property {property_id} using text patterns")
     
     # Use new text pattern extraction system
-    extracted_data, pattern_id, pattern_name = extract_bill_from_pdf_auto(pdf_bytes)
+    extracted_data, pattern_id, pattern_name, pattern_bill_type = extract_bill_from_pdf_auto(pdf_bytes)
     
     if not extracted_data:
         raise HTTPException(status_code=400, detail="Could not extract bill data from PDF. Please ensure the PDF matches a known supplier format.")
     
-    logger.info(f"[PDF Parse] Result: pattern={pattern_name}, amount={extracted_data.get('amount')}, due_date={extracted_data.get('due_date')}, bill_number={extracted_data.get('bill_number')}")
+    logger.info(f"[PDF Parse] Result: pattern={pattern_name}, bill_type={pattern_bill_type}, amount={extracted_data.get('amount')}, due_date={extracted_data.get('due_date')}, bill_number={extracted_data.get('bill_number')}")
     
     # Convert extracted_data to match old format for compatibility
+    # Use pattern name as description (will be used as bill description)
     result = {
         "iban": extracted_data.get("iban"),
         "bill_number": extracted_data.get("bill_number"),
@@ -206,6 +207,7 @@ async def parse_bill_pdf(
         "matched_pattern_id": pattern_id,
         "matched_pattern_name": pattern_name,
         "matched_pattern_supplier": extracted_data.get("legal_name") or pattern_name,  # Supplier from pattern
+        "matched_pattern_bill_type": pattern_bill_type,  # Bill type from pattern
     }
     
     # Check if extracted address matches property address
@@ -420,12 +422,23 @@ async def create_bill_from_pdf(
         contract_id=data.get("contract_id")
     )
     
-    # Get supplier display name if supplier_id was resolved
-    bill_description = data.get("description", "Bill from PDF")
-    if supplier_id:
-        supplier = db.get_supplier(supplier_id)
-        if supplier:
-            bill_description = supplier.name
+    # Use pattern name as description (from matched_pattern_name)
+    # This ensures consistent naming: "Engie", "Digi", "E-bloc" etc.
+    bill_description = data.get("matched_pattern_name") or data.get("description", "Bill from PDF")
+    
+    # Resolve bill_type from pattern, matching against BillType enum case-insensitively
+    def resolve_bill_type(bill_type_str: str) -> BillType:
+        """Match bill_type string to BillType enum case-insensitively, default to OTHER."""
+        if not bill_type_str:
+            return BillType.OTHER
+        bill_type_lower = bill_type_str.lower()
+        for bt in BillType:
+            if bt.value.lower() == bill_type_lower:
+                return bt
+        return BillType.OTHER
+    
+    pattern_bill_type = data.get("matched_pattern_bill_type") or data.get("bill_type", "utilities")
+    resolved_bill_type = resolve_bill_type(pattern_bill_type)
     
     # Handle renter_id - convert 'all' to None
     renter_id = data.get("renter_id")
@@ -436,7 +449,7 @@ async def create_bill_from_pdf(
     bill = Bill(
         property_id=property_id,
         renter_id=renter_id,
-        bill_type=BillType(data.get("bill_type", "utilities")),
+        bill_type=resolved_bill_type,
         description=bill_description,
         amount=float(data.get("amount", 0)),
         currency=data.get("currency", "RON"),

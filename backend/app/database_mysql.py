@@ -391,11 +391,11 @@ class MySQLDatabase:
                     INSERT INTO bills (
                         id, property_id, renter_id, supplier_id, bill_type, description,
                         amount, currency, due_date, bill_date, legal_name, iban, bill_number,
-                        extraction_pattern_id, contract_id, payment_details, status, source_email_id, created_at
+                        extraction_pattern_id, contract_id, payment_details, status, created_at
                     ) VALUES (
                         :id, :property_id, :renter_id, :supplier_id, :bill_type, :description,
                         :amount, :currency, :due_date, :bill_date, :legal_name, :iban, :bill_number,
-                        :extraction_pattern_id, :contract_id, :payment_details, :status, :source_email_id, :created_at
+                        :extraction_pattern_id, :contract_id, :payment_details, :status, :created_at
                     )
                 """),
                 {
@@ -416,7 +416,6 @@ class MySQLDatabase:
                     "contract_id": bill.contract_id,
                     "payment_details": json.dumps(bill.payment_details) if bill.payment_details else None,
                     "status": bill.status or "pending",
-                    "source_email_id": bill.source_email_id,
                     "created_at": bill.created_at or datetime.now().isoformat()
                 }
             )
@@ -482,7 +481,6 @@ class MySQLDatabase:
             contract_id=row.contract_id,
             payment_details=payment_details,
             status=row.status,
-            source_email_id=row.source_email_id,
             created_at=row.created_at.isoformat() if row.created_at else None
         )
     

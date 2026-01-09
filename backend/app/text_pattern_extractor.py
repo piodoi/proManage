@@ -109,7 +109,7 @@ def extract_with_text_pattern(pdf_bytes: bytes, pattern_id: str) -> Dict[str, An
     return extracted_data
 
 
-def extract_bill_from_pdf_auto(pdf_bytes: bytes) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+def extract_bill_from_pdf_auto(pdf_bytes: bytes) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str], Optional[str]]:
     """
     Automatically extract bill data from PDF by finding best matching pattern.
     
@@ -117,27 +117,28 @@ def extract_bill_from_pdf_auto(pdf_bytes: bytes) -> Tuple[Optional[Dict[str, Any
         pdf_bytes: PDF file as bytes
         
     Returns:
-        Tuple of (extracted_data, pattern_id, pattern_name) or (None, None, None) if no match
+        Tuple of (extracted_data, pattern_id, pattern_name, pattern_bill_type) or (None, None, None, None) if no match
     """
     # Find matching patterns
     matches = match_text_patterns(pdf_bytes)
     
     if not matches:
         logger.warning("[Text Pattern] No matching patterns found for PDF")
-        return None, None, None
+        return None, None, None, None
     
     # Use best match
     best_match = matches[0]
     pattern_id = best_match['pattern_id']
     pattern_name = best_match['pattern'].get('name', pattern_id)
+    pattern_bill_type = best_match['pattern'].get('bill_type', 'utilities')  # Default to utilities
     
-    logger.info(f"[Text Pattern] Best match: {pattern_name} ({best_match['match_percentage']:.1f}% match)")
+    logger.info(f"[Text Pattern] Best match: {pattern_name} ({best_match['match_percentage']:.1f}% match, bill_type={pattern_bill_type})")
     
     # Extract data using best pattern
     try:
         extracted_data = extract_with_text_pattern(pdf_bytes, pattern_id)
-        return extracted_data, pattern_id, pattern_name
+        return extracted_data, pattern_id, pattern_name, pattern_bill_type
     except Exception as e:
         logger.error(f"[Text Pattern] Error extracting with pattern {pattern_id}: {e}")
-        return None, None, None
+        return None, None, None, None
 

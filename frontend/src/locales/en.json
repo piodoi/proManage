@@ -489,6 +489,7 @@
     "billsSynced": "Bills synced successfully"
   },
   "tools": {
+    "tools": "Tools",
     "createPattern": "Create Pattern",
     "matchPattern": "Match Pattern",
     "editPattern": "Edit Pattern",

@@ -150,19 +150,13 @@ export default function PropertyBillsView({
         dueDate = new Date().toISOString().split('T')[0];
       }
       
-      // Use supplier from matched pattern, or provided supplier, or fallback
-      // Priority: provided supplier > matched_pattern_supplier > 'PDF'
-      // Note: We don't use matched_pattern_name as it's the pattern name, not the supplier
-      const billSupplier = supplier || result.matched_pattern_supplier || 'PDF';
+      // Use pattern name as description, supplier name for supplier matching
       const extractionPatternId = patternId || result.matched_pattern_id;
       
-      // Description should just be the supplier name 
-      
+      // Send matched_pattern_name and matched_pattern_bill_type - backend will use these
       const billData = {
         property_id: propertyId,
         renter_id: 'all', // Default to all/property
-        bill_type: extractionPatternId ? 'utilities' : 'other',
-        description: billSupplier,
         amount: result.amount || 0,
         currency: preferences.bill_currency || 'RON',
         due_date: dueDate,
@@ -170,6 +164,10 @@ export default function PropertyBillsView({
         bill_number: result.bill_number,
         extraction_pattern_id: extractionPatternId,
         contract_id: result.contract_id,
+        // Pass pattern info for backend to resolve description and bill_type
+        matched_pattern_name: result.matched_pattern_name,
+        matched_pattern_supplier: supplier || result.matched_pattern_supplier,
+        matched_pattern_bill_type: (result as any).matched_pattern_bill_type,
       };
       
       await api.billParser.createFromPdf(token, billData);

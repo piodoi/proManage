@@ -93,7 +93,6 @@ CREATE TABLE bills (
     contract_id VARCHAR(100) NULL,
     payment_details TEXT NULL,
     status ENUM('pending', 'paid', 'overdue') DEFAULT 'pending',
-    source_email_id VARCHAR(100) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,

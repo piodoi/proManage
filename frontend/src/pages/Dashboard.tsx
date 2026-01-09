@@ -267,7 +267,7 @@ export default function Dashboard() {
             </TabsTrigger>
             <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <FileText className="w-4 h-4 mr-2" />
-              Tools
+              {t('tools.tools')}
             </TabsTrigger>
             {isAdmin && (
               <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">

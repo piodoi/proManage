@@ -1,7 +1,7 @@
 {
   "id": "e-bloc",
   "name": "e-bloc",
-  "bill_type": "utilities",
+  "bill_type": "ebloc",
   "supplier": "",
   "field_patterns": [
     {

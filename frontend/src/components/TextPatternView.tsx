@@ -815,7 +815,7 @@ export default function TextPatternView() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => adjustFieldSize(currentField, -5)}
+              onClick={() => adjustFieldSize(currentField, -1)}
               className="h-8 w-8 bg-slate-700 border-slate-600 text-slate-100"
             >
               -
@@ -827,7 +827,7 @@ export default function TextPatternView() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => adjustFieldSize(currentField, 5)}
+              onClick={() => adjustFieldSize(currentField, 1)}
               className="h-8 w-8 bg-slate-700 border-slate-600 text-slate-100"
             >
               +
@@ -1055,14 +1055,14 @@ export default function TextPatternView() {
         }} className="w-full">
           <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
             <TabsTrigger value="create" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              Create Pattern
+              {t('tools.createPattern')}
             </TabsTrigger>
             <TabsTrigger value="match" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              Match Pattern
+              {t('tools.matchPattern')}
             </TabsTrigger>
             {user?.role === 'admin' && (
               <TabsTrigger value="edit" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-                Edit Pattern
+                {t('tools.editPattern')}
               </TabsTrigger>
             )}
           </TabsList>

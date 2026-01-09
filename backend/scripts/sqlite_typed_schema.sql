@@ -97,7 +97,6 @@ CREATE TABLE bills (
     contract_id TEXT,
     payment_details TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'overdue', 'cancelled')),
-    source_email_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
     FOREIGN KEY (renter_id) REFERENCES renters(id) ON DELETE SET NULL,
