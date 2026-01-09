@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Test PDF extraction patterns for all JSON files in extraction_patterns (except suppliers.json).
-Also includes PDF analyzer for future user-driven interface.
 Run with: python backend/test_patterns.py
 """
 
@@ -13,7 +12,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.pdf_parser import parse_pdf_with_patterns, extract_text_from_pdf
 from app.models import ExtractionPattern
-from app.pdf_analyzer import PDFAnalyzer
 
 
 def load_pattern_from_json(json_path: str) -> ExtractionPattern:

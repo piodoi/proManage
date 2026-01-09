@@ -90,6 +90,7 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
     """
     from app.models import Bill, BillType
     from calendar import monthrange
+    from app.utils.date_formatter import get_month_name
     
     logger.info(f"[Rent Bills] Generating rent bills for user {current_user.user_id}")
     
@@ -101,6 +102,7 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
     default_currency = preferences.rent_currency if preferences and preferences.rent_currency else "EUR"
     warning_days = preferences.rent_warning_days if preferences and preferences.rent_warning_days else 5
     default_iban = preferences.iban if preferences and preferences.iban else None
+    user_language = preferences.language if preferences and preferences.language else "en"
     
     bills_created = 0
     created_bills = []  # Store the created bills to return to frontend
@@ -181,11 +183,8 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
                 if duplicate_found:
                     continue
                 
-                # Create the bill
-                # Format month name
-                month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                              'July', 'August', 'September', 'October', 'November', 'December']
-                month_name = month_names[target_month]
+                # Create the bill with localized month name
+                month_name = get_month_name(target_month, user_language)
                 
                 bill = Bill(
                     property_id=prop.id,

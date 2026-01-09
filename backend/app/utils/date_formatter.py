@@ -5,6 +5,43 @@ from datetime import datetime, date
 from typing import Optional, Union
 
 
+# Centralized month names for EN and RO
+MONTH_NAMES = {
+    "en": [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ],
+    "ro": [
+        "Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie",
+        "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"
+    ]
+}
+
+# Romanian month names for parsing (lowercase for case-insensitive matching)
+MONTH_NAMES_RO_PARSE = {
+    'ianuarie': '01', 'ian': '01',
+    'februarie': '02', 'feb': '02',
+    'martie': '03', 'mar': '03',
+    'aprilie': '04', 'apr': '04',
+    'mai': '05',
+    'iunie': '06', 'iun': '06',
+    'iulie': '07', 'iul': '07',
+    'august': '08', 'aug': '08',
+    'septembrie': '09', 'sep': '09', 'sept': '09',
+    'octombrie': '10', 'oct': '10',
+    'noiembrie': '11', 'noi': '11', 'nov': '11',
+    'decembrie': '12', 'dec': '12',
+}
+
+
+def get_month_name(month: int, language: str = "en") -> str:
+    """Get localized month name (1-indexed: 1=January/Ianuarie)."""
+    names = MONTH_NAMES.get(language, MONTH_NAMES["en"])
+    if 1 <= month <= 12:
+        return names[month - 1]
+    return ""
+
+
 def format_date(
     date_obj: Optional[Union[datetime, date, str]],
     date_format: str = "DD/MM/YYYY",
@@ -44,17 +81,7 @@ def format_date(
         year_short = str(year)[2:]
         
         if date_format == "DD/Month/YYYY":
-            month_names = {
-                "en": [
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
-                ],
-                "ro": [
-                    "Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie",
-                    "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"
-                ]
-            }
-            month_name = month_names.get(language, month_names["en"])[month - 1]
+            month_name = get_month_name(month, language)
             return f"{day}/{month_name}/{year}"
         elif date_format == "MM/DD/YYYY":
             # American format

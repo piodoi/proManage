@@ -132,29 +132,15 @@ def clean_bill_number(text: str) -> Optional[str]:
 
 def parse_date_with_month_names(date_str: str) -> Optional[str]:
     """Parse date with Romanian/English month names and return ISO format (YYYY-MM-DD)."""
+    from app.utils.date_formatter import MONTH_NAMES_RO_PARSE
+    
     if not date_str:
         return None
     
-    # Romanian month names mapping
-    month_names_ro = {
-        'ianuarie': '01', 'ian': '01',
-        'februarie': '02', 'feb': '02',
-        'martie': '03', 'mar': '03',
-        'aprilie': '04', 'apr': '04',
-        'mai': '05',
-        'iunie': '06', 'iun': '06',
-        'iulie': '07', 'iul': '07',
-        'august': '08', 'aug': '08',
-        'septembrie': '09', 'sep': '09',
-        'octombrie': '10', 'oct': '10',
-        'noiembrie': '11', 'nov': '11',
-        'decembrie': '12', 'dec': '12'
-    }
-    
     date_str_lower = date_str.lower().strip()
     
-    # Try matching "DD month YYYY"
-    for month_name, month_num in month_names_ro.items():
+    # Try matching "DD month YYYY" using centralized month names
+    for month_name, month_num in MONTH_NAMES_RO_PARSE.items():
         if month_name in date_str_lower:
             parts = re.findall(r'\d+', date_str)
             if len(parts) >= 2:

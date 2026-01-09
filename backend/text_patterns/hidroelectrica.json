@@ -2,7 +2,7 @@
   "id": "Hidroelectrica",
   "name": "Hidroelectrica",
   "bill_type": "utilities",
-  "supplier": null,
+  "supplier": "",
   "field_patterns": [
     {
       "field_name": "amount",
@@ -57,5 +57,5 @@
     }
   ],
   "created_at": "2026-01-09T16:58:43.548358",
-  "updated_at": "2026-01-09T16:58:43.548367"
+  "updated_at": "2026-01-09T21:20:24.130383"
 }

@@ -298,12 +298,7 @@ def convert_romanian_date_to_standard(romanian_date: str) -> Optional[str]:
     Convert Romanian date format to standard format (DD/MM/YYYY).
     Example: "11 Ianuarie 2026" -> "11/01/2026"
     """
-    # Romanian month names mapping
-    month_map = {
-        'ianuarie': '01', 'februarie': '02', 'martie': '03', 'aprilie': '04',
-        'mai': '05', 'iunie': '06', 'iulie': '07', 'august': '08',
-        'septembrie': '09', 'octombrie': '10', 'noiembrie': '11', 'decembrie': '12'
-    }
+    from app.utils.date_formatter import MONTH_NAMES_RO_PARSE
     
     # Try to match Romanian date pattern: "DD Month YYYY" or "DD MonthName YYYY"
     # Pattern: day (1-2 digits), month name, year (4 digits)
@@ -315,8 +310,8 @@ def convert_romanian_date_to_standard(romanian_date: str) -> Optional[str]:
         month_lower = month_str.lower()
         
         # Check if it's a Romanian month name
-        if month_lower in month_map:
-            month_num = month_map[month_lower]
+        if month_lower in MONTH_NAMES_RO_PARSE:
+            month_num = MONTH_NAMES_RO_PARSE[month_lower]
             day_padded = day.zfill(2)  # Ensure 2 digits
             return f"{day_padded}/{month_num}/{year}"
     
