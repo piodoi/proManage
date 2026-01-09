@@ -217,7 +217,7 @@ def extract_field_value(pdf_lines: List[str], label_text: str, line_offset: int)
     Args:
         pdf_lines: List of text lines from PDF
         label_text: Label text to search for
-        line_offset: Offset from label line (0 = same line, 1 = next line, etc.)
+        line_offset: Offset from label line (-1 same whole line including label, 0 = same line, 1 = next line, etc.)
         
     Returns:
         Extracted value or None if not found
@@ -251,13 +251,20 @@ def extract_field_value(pdf_lines: List[str], label_text: str, line_offset: int)
         label_line_num = pdf_text[:label_pos].count('\n')
         
         # Look for value at label_line_num + line_offset
-        target_line_num = label_line_num + line_offset
+        if line_offset == -1:
+            target_line_num = label_line_num
+        else:
+            target_line_num = label_line_num + line_offset
         
         if 0 <= target_line_num < len(pdf_lines):
             # Get the text from the target line
             target_line = pdf_lines[target_line_num].strip()
             if target_line:
                 extracted_value = None
+
+                # If offset is -1 (same whole line including label), use whole line
+                if line_offset == -1:
+                    extracted_value = target_line.strip();
                 # If offset is 0 (same line), remove label from extracted value
                 if line_offset == 0:
                     # Find label position in the line
@@ -271,7 +278,7 @@ def extract_field_value(pdf_lines: List[str], label_text: str, line_offset: int)
                     else:
                         # Label not found in line, use whole line
                         extracted_value = re.sub(r'\s+', ' ', target_line).strip()
-                else:
+                elif line_offset > 0:
                     # Offset > 0, use whole line
                     extracted_value = re.sub(r'\s+', ' ', target_line).strip()
                 

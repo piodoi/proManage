@@ -1,0 +1,55 @@
+{
+  "id": "vodafone",
+  "name": "Vodafone",
+  "bill_type": "utilities",
+  "supplier": "Vodafone Romania S.A.",
+  "field_patterns": [
+    {
+      "field_name": "amount",
+      "label_text": "Factură curentă (Lei)",
+      "line_offset": 4
+    },
+    {
+      "field_name": "currency",
+      "label_text": "Lei",
+      "line_offset": 0
+    },
+    {
+      "field_name": "bill_date",
+      "label_text": "Data facturii:",
+      "line_offset": 0
+    },
+    {
+      "field_name": "due_date",
+      "label_text": "Data scadenţei:",
+      "line_offset": 1
+    },
+    {
+      "field_name": "iban",
+      "label_text": "Transfer bancar prin:",
+      "line_offset": 8
+    },
+    {
+      "field_name": "bill_number",
+      "label_text": "Seria şi numărul facturii:",
+      "line_offset": 0
+    },
+    {
+      "field_name": "contract_id",
+      "label_text": "Cont client:",
+      "line_offset": 0
+    },
+    {
+      "field_name": "address",
+      "label_text": "Adresa de instalare:",
+      "line_offset": 0
+    },
+    {
+      "field_name": "legal_name",
+      "label_text": "Vodafone Romania S.A.",
+      "line_offset": -1
+    }
+  ],
+  "created_at": "2026-01-09T18:02:54.509409",
+  "updated_at": "2026-01-09T18:29:24.468051"
+}

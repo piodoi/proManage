@@ -203,14 +203,14 @@ export default function TextPatternView() {
     
     // Calculate line number where label appears
     const labelLineNum = pdfText.substring(0, labelIndex).split('\n').length - 1;
-    const targetLineNum = labelLineNum + lineOffset;
+    const targetLineNum = labelLineNum + lineOffset>0?lineOffset:0;
     
     if (targetLineNum < 0 || targetLineNum >= lines.length) return '';
     
     let targetLine = lines[targetLineNum].trim();
     if (!targetLine) return '';
     
-    // If offset is 0, remove label from extracted value
+    // If offset is 0, remove label from extracted value for -1 and bigger keep the whole line
     if (lineOffset === 0) {
       const labelInLine = targetLine.indexOf(labelText);
       if (labelInLine >= 0) {
@@ -374,7 +374,7 @@ export default function TextPatternView() {
   
   const adjustLineOffset = (field: string, delta: number) => {
     const currentOffset = lineOffsets.get(field) || 0;
-    const newOffset = Math.max(0, currentOffset + delta);
+    const newOffset = Math.max(-1, currentOffset + delta);
     
     setLineOffsets(prev => {
       const newMap = new Map(prev);
