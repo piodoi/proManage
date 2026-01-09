@@ -130,7 +130,7 @@ async def setup_ebloc_supplier_for_properties(
             logger.info(f"[E-Bloc] E-bloc supplier already added to property {property_id}, skipping")
             continue
         
-        # Add supplier to property (no credential_id)
+        # Add supplier to property
         property_supplier = PropertySupplier(
             property_id=property_id,
             supplier_id=ebloc_supplier.id,

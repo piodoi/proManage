@@ -335,7 +335,6 @@ class PropertySupplierCreate(BaseModel):
 
 
 class PropertySupplierUpdate(BaseModel):
-    credential_id: Optional[str] = None  # Link to existing user-supplier credential
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
     direct_debit: Optional[bool] = None  # Whether bills will be paid automatically on due date
 

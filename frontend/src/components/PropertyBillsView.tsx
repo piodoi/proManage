@@ -109,6 +109,12 @@ export default function PropertyBillsView({
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [showAddressWarning, setShowAddressWarning] = useState(false);
   const [showPatternSelection, setShowPatternSelection] = useState(false);
+  const [duplicateConflict, setDuplicateConflict] = useState<{
+    billNumber: string;
+    existingAmount: number;
+    newAmount: number;
+    billData: any;
+  } | null>(null);
   const [showContractSelector, setShowContractSelector] = useState(false);
   const [multipleContracts, setMultipleContracts] = useState<Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }>>({});
   const [selectedContracts, setSelectedContracts] = useState<Record<string, string>>({});
@@ -128,7 +134,7 @@ export default function PropertyBillsView({
     }
   };
 
-  const createBillFromPdf = async (result: ExtractionResult, patternId?: string, supplier?: string) => {
+  const createBillFromPdf = async (result: ExtractionResult, patternId?: string, supplier?: string, forceUpdate?: boolean) => {
     if (!token || !result) return;
     
     try {
@@ -154,7 +160,7 @@ export default function PropertyBillsView({
       const extractionPatternId = patternId || result.matched_pattern_id;
       
       // Send matched_pattern_name and matched_pattern_bill_type - backend will use these
-      const billData = {
+      const billData: any = {
         property_id: propertyId,
         renter_id: 'all', // Default to all/property
         amount: result.amount || 0,
@@ -170,7 +176,32 @@ export default function PropertyBillsView({
         matched_pattern_bill_type: (result as any).matched_pattern_bill_type,
       };
       
-      await api.billParser.createFromPdf(token, billData);
+      if (forceUpdate) {
+        billData.force_update = true;
+      }
+      
+      const response = await api.billParser.createFromPdf(token, billData);
+      
+      // Handle duplicate detection response
+      if (response.duplicate) {
+        if (response.action === 'skipped') {
+          // Same bill_number and amount - just show info message
+          handleError(new Error(response.message || t('bill.duplicateSkipped')));
+        } else if (response.action === 'conflict') {
+          // Different amount - show conflict dialog
+          setDuplicateConflict({
+            billNumber: response.bill_number,
+            existingAmount: response.existing_amount,
+            newAmount: response.new_amount,
+            billData: { ...billData, result, patternId, supplier },
+          });
+          return; // Don't close dialogs yet - waiting for user decision
+        } else if (response.action === 'updated') {
+          // Successfully updated
+          setDuplicateConflict(null);
+        }
+      }
+      
       setPdfResult(null);
       setShowAddressWarning(false);
       setShowPatternSelection(false);
@@ -180,6 +211,20 @@ export default function PropertyBillsView({
     } catch (err) {
       handleError(err);
     }
+  };
+  
+  const handleDuplicateUpdate = async () => {
+    if (!duplicateConflict) return;
+    const { billData } = duplicateConflict;
+    await createBillFromPdf(billData.result, billData.patternId, billData.supplier, true);
+    setDuplicateConflict(null);
+  };
+  
+  const handleDuplicateSkip = () => {
+    setDuplicateConflict(null);
+    setPdfResult(null);
+    setShowAddressWarning(false);
+    setShowPatternSelection(false);
   };
 
   const handleSaveBill = async () => {
@@ -573,6 +618,47 @@ export default function PropertyBillsView({
           }
         }}
       />
+      {/* Duplicate Bill Conflict Dialog */}
+      <Dialog open={!!duplicateConflict} onOpenChange={(open) => !open && setDuplicateConflict(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-slate-200">{t('bill.duplicateBillFound')}</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {t('bill.duplicateBillDescription', { billNumber: duplicateConflict?.billNumber })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-slate-750 border border-slate-700 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">{t('bill.existingAmount')}:</span>
+                <span className="text-slate-200 font-medium">{duplicateConflict?.existingAmount?.toFixed(2)} {preferences.bill_currency || 'RON'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">{t('bill.newAmount')}:</span>
+                <span className="text-emerald-400 font-medium">{duplicateConflict?.newAmount?.toFixed(2)} {preferences.bill_currency || 'RON'}</span>
+              </div>
+            </div>
+            <p className="text-sm text-slate-400">
+              {t('bill.duplicateDecision')}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleDuplicateSkip}
+                className="bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600"
+              >
+                {t('bill.skipBill')}
+              </Button>
+              <Button
+                onClick={handleDuplicateUpdate}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {t('bill.updateBill')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={showContractSelector} onOpenChange={setShowContractSelector}>
         <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
           <DialogHeader>

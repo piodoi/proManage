@@ -176,7 +176,16 @@ export const api = {
       }
       return response.json();
     },
-    createFromPdf: (token: string, data: any) => request<Bill>('/bills/create-from-pdf', { method: 'POST', body: data, token }),
+    createFromPdf: (token: string, data: any) => request<{
+      bill: Bill | null;
+      duplicate: boolean;
+      action: 'created' | 'skipped' | 'updated' | 'conflict';
+      message?: string;
+      existing_bill_id?: string;
+      existing_amount?: number;
+      new_amount?: number;
+      bill_number?: string;
+    }>('/bills/create-from-pdf', { method: 'POST', body: data, token }),
   },
 
   extractionPatterns: {

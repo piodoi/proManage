@@ -527,6 +527,30 @@ class EmailMonitor:
                                 
                                 resolved_bill_type = resolve_bill_type(pattern_bill_type)
                                 
+                                # Check for duplicate bill (same bill_number for same property)
+                                bill_number = discovered_bill['bill_number']
+                                skip_bill = False
+                                
+                                if bill_number:
+                                    existing_bills = db.list_bills(property_id=matched_property.id)
+                                    for existing_bill in existing_bills:
+                                        if existing_bill.bill_number == bill_number:
+                                            # Found a bill with same bill_number
+                                            if abs(existing_bill.amount - amount) < 0.01:  # Same amount
+                                                logger.info(f"[Email Monitor] Skipping duplicate bill: {bill_number} with same amount {amount}")
+                                                skip_bill = True
+                                            else:
+                                                # Different amount - log warning but don't create (user can review in UI)
+                                                logger.warning(
+                                                    f"[Email Monitor] Bill {bill_number} exists with different amount: "
+                                                    f"existing={existing_bill.amount}, new={amount}. Skipping - review manually."
+                                                )
+                                                skip_bill = True
+                                            break
+                                
+                                if skip_bill:
+                                    continue
+                                
                                 bill = Bill(
                                     property_id=matched_property.id,
                                     renter_id=None,  # Applies to all renters
@@ -538,7 +562,7 @@ class EmailMonitor:
                                     bill_date=bill_date if bill_date else datetime.utcnow(),
                                     legal_name=discovered_bill['legal_name'],
                                     iban=discovered_bill['iban'],
-                                    bill_number=discovered_bill['bill_number'],
+                                    bill_number=bill_number,
                                     extraction_pattern_id=None,  # Text patterns don't have DB IDs
                                     supplier_id=supplier_id,
                                     contract_id=extracted_data.get('contract_id'),

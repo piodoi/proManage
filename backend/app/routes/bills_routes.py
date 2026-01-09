@@ -353,15 +353,14 @@ async def parse_bill_pdf(
                 property_supplier = PropertySupplier(
                     property_id=property_id,
                     supplier_id=matched_supplier.id,
-                    credential_id=None,
                 )
                 db.save_property_supplier(property_supplier)
                 supplier_added = True
                 logger.info(f"[PDF Parse] Auto-added supplier '{matched_supplier.name}' to property {property_id}")
             
-            # Add message about API capability if supplier has API support
+            # Add message about supplier being added
             if matched_supplier.has_api:
-                supplier_message = f"Supplier '{matched_supplier.name}' has been added to this property. Since this supplier supports API integration, you can configure your login credentials in the property settings to enable automatic bill fetching."
+                supplier_message = f"Supplier '{matched_supplier.name}' has been added to this property."
             elif supplier_added:
                 supplier_message = f"Supplier '{matched_supplier.name}' has been added to this property."
     
@@ -445,17 +444,64 @@ async def create_bill_from_pdf(
     if renter_id == "all" or not renter_id:
         renter_id = None
     
+    # Get the new amount
+    new_amount = float(data.get("amount", 0))
+    bill_number = data.get("bill_number")
+    
+    # Check for duplicate bill (same bill_number for same property)
+    if bill_number:
+        existing_bills = db.list_bills(property_id=property_id)
+        for existing_bill in existing_bills:
+            if existing_bill.bill_number == bill_number:
+                # Found a bill with same bill_number
+                if abs(existing_bill.amount - new_amount) < 0.01:  # Same amount (within tolerance)
+                    # Return existing bill with duplicate flag - no action needed
+                    return {
+                        "bill": existing_bill,
+                        "duplicate": True,
+                        "action": "skipped",
+                        "message": f"Bill with number '{bill_number}' already exists with same amount ({new_amount}). Skipped."
+                    }
+                else:
+                    # Different amount - return warning for user to decide
+                    # If force_update is True, update the existing bill
+                    if data.get("force_update"):
+                        existing_bill.amount = new_amount
+                        existing_bill.due_date = due_date
+                        existing_bill.iban = data.get("iban") or existing_bill.iban
+                        existing_bill.contract_id = data.get("contract_id") or existing_bill.contract_id
+                        existing_bill.description = bill_description
+                        db.save_bill(existing_bill)
+                        return {
+                            "bill": existing_bill,
+                            "duplicate": True,
+                            "action": "updated",
+                            "message": f"Bill with number '{bill_number}' updated from {existing_bill.amount} to {new_amount}."
+                        }
+                    else:
+                        # Return conflict info for user to decide
+                        return {
+                            "bill": None,
+                            "duplicate": True,
+                            "action": "conflict",
+                            "existing_bill_id": existing_bill.id,
+                            "existing_amount": existing_bill.amount,
+                            "new_amount": new_amount,
+                            "bill_number": bill_number,
+                            "message": f"Bill with number '{bill_number}' already exists with different amount: existing={existing_bill.amount}, new={new_amount}. Use 'force_update' to update."
+                        }
+    
     # Create bill
     bill = Bill(
         property_id=property_id,
         renter_id=renter_id,
         bill_type=resolved_bill_type,
         description=bill_description,
-        amount=float(data.get("amount", 0)),
+        amount=new_amount,
         currency=data.get("currency", "RON"),
         due_date=due_date,
         iban=data.get("iban"),
-        bill_number=data.get("bill_number"),
+        bill_number=bill_number,
         extraction_pattern_id=data.get("extraction_pattern_id"),
         supplier_id=supplier_id,
         contract_id=data.get("contract_id"),
@@ -472,7 +518,12 @@ async def create_bill_from_pdf(
             property_supplier.contract_id = contract_id_from_data
             db.save_property_supplier(property_supplier)
     
-    return bill
+    return {
+        "bill": bill,
+        "duplicate": False,
+        "action": "created",
+        "message": "Bill created successfully."
+    }
 
 
 @router.get("/payments")
