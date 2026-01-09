@@ -25,7 +25,10 @@
     "amount": "Amount",
     "currency": "Currency",
     "paymentDetails": "Payment Details",
-    "description": "Description"
+    "description": "Description",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "syncing": "Syncing..."
   },
   "app": {
     "title": "ProManage",
@@ -241,8 +244,6 @@
     "noAssignedSuppliers": "No suppliers assigned to properties. Add suppliers in the Properties dashboard to set up credentials.",
     "selectSuppliers": "Select Suppliers",
     "selectSuppliersToSync": "Select Suppliers to Sync",
-    "selectAll": "Select All",
-    "deselectAll": "Deselect All",
     "syncBills": "Sync Bills",
     "syncAllProperties": "Sync All Properties",
     "refreshRentBills": "Generate Rent Bills",
@@ -251,7 +252,6 @@
     "syncEmailBills": "Sync Email Bills",
     "syncEmailBillsDesc": "Import bills from forwarded emails",
     "startSync": "Start Sync",
-    "syncing": "Syncing...",
     "syncComplete": "Sync Complete!",
     "syncDescription": "Generate rent bills and sync email bills",
     "rentBillsGenerated": "{count} rent bill(s) generated",
@@ -264,11 +264,15 @@
     "notEligible": "Not Eligible",
     "credentialsMissing": "Credentials missing",
     "selectBills": "Select Bills to Save",
-    "selectBillsToSave": "Select Bills to Save",
+    "selectBillsToSave": "Select bills to save",
     "saveBills": "Save Bills",
-    "noBillsDiscovered": "No bills discovered",
+    "noBillsDiscovered": "No new bills discovered from email",
     "discoveredBills": "Discovered Bills",
-    "supplierSyncProgress": "Sync Progress"
+    "supplierSyncProgress": "Sync Progress",
+    "emailBillsFound": "Email bills found",
+    "generatingRentBills": "Generating rent bills...",
+    "fetchingEmailBills": "Fetching bills from email...",
+    "selectAtLeastOne": "Please select at least one option"
   },
   "ebloc": {
     "syncEbloc": "Sync E-Bloc",
@@ -279,7 +283,6 @@
     "noMatch": "No exact match found. Please select the correct association:",
     "selectAssociation": "Select association",
     "syncDebts": "Sync Debts",
-    "syncing": "Syncing...",
     "configure": "Configure",
     "username": "Username",
     "password": "Password",

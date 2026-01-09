@@ -25,7 +25,10 @@
     "amount": "Sumă",
     "currency": "Monedă",
     "paymentDetails": "Detalii Plată",
-    "description": "Descriere"
+    "description": "Descriere",
+    "selectAll": "Selectează Tot",
+    "deselectAll": "Deselectează Tot",
+    "syncing": "Se sincronizează..."
   },
   "app": {
     "title": "ProManage",
@@ -234,8 +237,6 @@
     "contractSelectionsSaved": "Selecțiile contractelor au fost salvate. Poți sincroniza din nou facturile pentru a filtra după contractele selectate.",
     "selectSuppliers": "Selectează Furnizori",
     "selectSuppliersToSync": "Selectează Furnizori pentru Sincronizare",
-    "selectAll": "Selectează Tot",
-    "deselectAll": "Deselectează Tot",
     "syncBills": "Sincronizează Facturi",
     "syncAllProperties": "Sincronizează Toate Proprietățile",
     "refreshRentBills": "Generează Facturi de Chirie",
@@ -244,7 +245,6 @@
     "syncEmailBills": "Sincronizează Facturi Email",
     "syncEmailBillsDesc": "Importă facturi din emailuri trimise",
     "startSync": "Începe Sincronizarea",
-    "syncing": "Se sincronizează...",
     "syncComplete": "Sincronizare Completă!",
     "syncDescription": "Generează facturi de chirie și sincronizează facturi din email",
     "rentBillsGenerated": "{count} factură/i de chirie generate",
@@ -257,11 +257,15 @@
     "notEligible": "Neeligibil",
     "credentialsMissing": "Credențiale lipsă",
     "selectBills": "Selectează Facturi de Salvat",
-    "selectBillsToSave": "Selectează Facturi de Salvat",
+    "selectBillsToSave": "Selectează facturile de salvat",
     "saveBills": "Salvează Facturi",
-    "noBillsDiscovered": "Nu au fost găsite facturi",
+    "noBillsDiscovered": "Nu au fost găsite facturi noi din email",
     "discoveredBills": "Facturi descoperite",
-    "supplierSyncProgress": "Progres sincronizare"
+    "supplierSyncProgress": "Progres sincronizare",
+    "emailBillsFound": "Facturi găsite în email",
+    "generatingRentBills": "Se generează facturile de chirie...",
+    "fetchingEmailBills": "Se preiau facturile din email...",
+    "selectAtLeastOne": "Selectează cel puțin o opțiune"
   },
   "ebloc": {
     "syncEbloc": "Sincronizează E-Bloc",
@@ -272,7 +276,6 @@
     "noMatch": "Nu s-a găsit potrivire exactă. Te rog selectează asociația corectă:",
     "selectAssociation": "Selectează asociație",
     "syncDebts": "Sincronizează Datorii",
-    "syncing": "Se sincronizează...",
     "configure": "Configurează",
     "username": "Utilizator",
     "password": "Parolă",

@@ -200,3 +200,123 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
         "bills_created": bills_created,
         "errors": errors,
     }
+
+
+@router.post("/suppliers/sync-all/save-bills")
+async def save_discovered_bills(data: dict, current_user: TokenData = Depends(require_landlord)):
+    """
+    Save discovered bills from email sync.
+    
+    Receives a list of bills discovered from email and creates them in the database.
+    Bills can be modified (e.g., property_id changed) before saving.
+    """
+    from app.models import Bill, BillType, BillStatus
+    
+    bills = data.get("bills", [])
+    if not bills:
+        raise HTTPException(status_code=400, detail="No bills provided")
+    
+    logger.info(f"[Save Bills] Saving {len(bills)} discovered bills for user {current_user.user_id}")
+    
+    bills_created = 0
+    errors = []
+    
+    for bill_data in bills:
+        try:
+            property_id = bill_data.get("property_id")
+            if not property_id:
+                errors.append("Bill missing property_id")
+                continue
+            
+            # Verify property belongs to user
+            prop = db.get_property(property_id)
+            if not prop:
+                errors.append(f"Property {property_id} not found")
+                continue
+            if prop.landlord_id != current_user.user_id:
+                errors.append(f"Property {property_id} access denied")
+                continue
+            
+            # Resolve bill type
+            def resolve_bill_type(bill_type_str: str) -> BillType:
+                if not bill_type_str:
+                    return BillType.OTHER
+                bill_type_lower = bill_type_str.lower()
+                for bt in BillType:
+                    if bt.value.lower() == bill_type_lower:
+                        return bt
+                return BillType.OTHER
+            
+            bill_type = resolve_bill_type(bill_data.get("bill_type", "utilities"))
+            
+            # Resolve supplier_id if supplier name is provided
+            supplier_id = resolve_supplier_id(
+                property_id=property_id,
+                supplier_name=bill_data.get("supplier") or bill_data.get("pattern_name"),
+                extraction_pattern_id=bill_data.get("pattern_id"),
+                contract_id=bill_data.get("contract_id")
+            )
+            
+            # Parse due date
+            due_date = None
+            if bill_data.get("due_date"):
+                try:
+                    if isinstance(bill_data["due_date"], str):
+                        due_date = datetime.fromisoformat(bill_data["due_date"].replace("Z", "+00:00"))
+                    else:
+                        due_date = bill_data["due_date"]
+                except:
+                    due_date = datetime.utcnow()
+            else:
+                due_date = datetime.utcnow()
+            
+            # Check for duplicate by bill_number
+            bill_number = bill_data.get("bill_number")
+            skip_bill = False
+            if bill_number:
+                existing_bills = db.list_bills(property_id=property_id)
+                for existing_bill in existing_bills:
+                    if existing_bill.bill_number == bill_number:
+                        logger.info(f"[Save Bills] Skipping duplicate bill_number {bill_number}")
+                        skip_bill = True
+                        break
+            
+            if skip_bill:
+                continue
+            
+            # Get description from pattern_name (supplier name)
+            description = bill_data.get("description") or bill_data.get("pattern_name") or bill_data.get("supplier") or "Imported Bill"
+            
+            # Create bill
+            bill = Bill(
+                property_id=property_id,
+                renter_id=None,  # Applies to all renters
+                bill_type=bill_type,
+                description=description,
+                amount=float(bill_data.get("amount", 0)),
+                currency=bill_data.get("currency", "RON"),
+                due_date=due_date,
+                legal_name=bill_data.get("legal_name"),
+                iban=bill_data.get("iban"),
+                bill_number=bill_number,
+                extraction_pattern_id=None,
+                supplier_id=supplier_id,
+                contract_id=bill_data.get("contract_id"),
+                status=BillStatus.PENDING,
+            )
+            
+            db.save_bill(bill)
+            bills_created += 1
+            logger.info(f"[Save Bills] Created bill: {description}, amount={bill.amount}, property={property_id}")
+            
+        except Exception as e:
+            error_msg = f"Error saving bill: {str(e)}"
+            logger.error(f"[Save Bills] {error_msg}")
+            errors.append(error_msg)
+    
+    logger.info(f"[Save Bills] Complete. Created {bills_created} bills, {len(errors)} errors")
+    
+    return {
+        "bills_created": bills_created,
+        "errors": errors,
+    }

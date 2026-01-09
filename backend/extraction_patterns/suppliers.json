@@ -1,20 +1,14 @@
 [
   {
-    "name": "Apanova",
-    "bill_type": "utilities",
-    "has_api": true,
-    "extraction_pattern_supplier": null
-  },
-  {
     "name": "Digi",
     "bill_type": "utilities",
     "has_api": false,
-    "extraction_pattern_supplier": "Digi"
+    "extraction_pattern_supplier": "digi"
   },
   {
     "name": "E-bloc",
     "bill_type": "ebloc",
-    "has_api": false,
+    "has_api": true,
     "extraction_pattern_supplier": "e-bloc"
   },
   {
@@ -30,16 +24,10 @@
     "extraction_pattern_supplier": "engie.gaz"
   },
   {
-    "name": "EonRomania",
-    "bill_type": "utilities",
-    "has_api": true,
-    "extraction_pattern_supplier": null
-  },
-  {
     "name": "Hidroelectrica",
     "bill_type": "utilities",
     "has_api": false,
-    "extraction_pattern_supplier": "Hidroelectrica"
+    "extraction_pattern_supplier": "hidroelectrica"
   },
   {
     "name": "MyElectrica",
@@ -51,6 +39,6 @@
     "name": "Vodafone",
     "bill_type": "utilities",
     "has_api": false,
-    "extraction_pattern_supplier": "Vodafone"
+    "extraction_pattern_supplier": "vodafone"
   }
 ]

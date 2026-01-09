@@ -388,35 +388,67 @@ class EmailMonitor:
                             match_reason = None
                             best_score = 0
                             
+                            logger.info(f"[Property Match] Starting property matching for bill from {pattern_name}")
+                            logger.info(f"[Property Match] Extracted contract_id: '{extracted_contract_id}'")
+                            logger.info(f"[Property Match] Extracted address: '{extracted_address}'")
+                            logger.info(f"[Property Match] User has {len(properties)} properties")
+                            
                             # Strategy 1: Match by contract_id if available
                             if extracted_contract_id:
+                                logger.info(f"[Property Match] Strategy 1: Trying contract_id match...")
                                 for prop in properties:
                                     # Get suppliers for this property
                                     property_suppliers = db.list_property_suppliers(prop.id)
+                                    logger.info(f"[Property Match] Property '{prop.name}' has {len(property_suppliers)} suppliers")
+                                    
                                     for prop_supplier in property_suppliers:
                                         # Get the actual Supplier object to access its name
                                         supplier = db.get_supplier(prop_supplier.supplier_id)
                                         if not supplier:
+                                            logger.warning(f"[Property Match] Could not find supplier {prop_supplier.supplier_id}")
                                             continue
+                                        
+                                        logger.info(f"[Property Match] Checking supplier '{supplier.name}' with contract_id '{prop_supplier.contract_id}'")
                                         
                                         # Check if supplier name matches pattern name
                                         if supplier.name and extracted_supplier:
                                             supplier_name_lower = supplier.name.lower()
                                             pattern_name_lower = extracted_supplier.lower()
-                                            if supplier_name_lower in pattern_name_lower or pattern_name_lower in supplier_name_lower:
+                                            supplier_matches = supplier_name_lower in pattern_name_lower or pattern_name_lower in supplier_name_lower
+                                            logger.info(f"[Property Match] Supplier name match: '{supplier_name_lower}' vs '{pattern_name_lower}' = {supplier_matches}")
+                                            
+                                            if supplier_matches:
                                                 # Check if contract_id matches
-                                                if prop_supplier.contract_id and prop_supplier.contract_id.lower() == extracted_contract_id.lower():
-                                                    matched_property = prop
-                                                    match_reason = f"contract_id match ({extracted_contract_id})"
-                                                    break
+                                                if prop_supplier.contract_id:
+                                                    contract_matches = prop_supplier.contract_id.lower() == extracted_contract_id.lower()
+                                                    logger.info(f"[Property Match] Contract_id match: '{prop_supplier.contract_id}' vs '{extracted_contract_id}' = {contract_matches}")
+                                                    if contract_matches:
+                                                        matched_property = prop
+                                                        match_reason = f"contract_id match ({extracted_contract_id})"
+                                                        logger.info(f"[Property Match] ✓ MATCHED by contract_id to property '{prop.name}'")
+                                                        break
+                                                else:
+                                                    logger.info(f"[Property Match] Property supplier has no contract_id set")
                                     if matched_property:
                                         break
+                                
+                                if not matched_property:
+                                    logger.info(f"[Property Match] Strategy 1 FAILED: No contract_id match found")
+                            else:
+                                logger.info(f"[Property Match] Strategy 1 SKIPPED: No contract_id extracted from bill")
                             
                             # Strategy 2: Match by address scoring (always use best match, user decides in UI)
                             if not matched_property and extracted_address:
+                                logger.info(f"[Property Match] Strategy 2: Trying address match...")
                                 best_match_property = None
                                 for prop in properties:
                                     confidence, debug_info = calculate_address_confidence(extracted_address, prop.address)
+                                    logger.info(f"[Property Match] Address confidence for '{prop.name}': {confidence}%")
+                                    logger.info(f"[Property Match]   Extracted: '{extracted_address}'")
+                                    logger.info(f"[Property Match]   Property:  '{prop.address}'")
+                                    logger.info(f"[Property Match]   Common tokens: {debug_info.get('common_tokens', set())}")
+                                    logger.info(f"[Property Match]   Extracted components: {debug_info.get('extracted_components', {})}")
+                                    logger.info(f"[Property Match]   Property components: {debug_info.get('property_components', {})}")
                                     
                                     if confidence > best_score:
                                         best_score = confidence
@@ -426,11 +458,23 @@ class EmailMonitor:
                                 if best_match_property and best_score > 0:
                                     matched_property = best_match_property
                                     match_reason = f"address match ({best_score}% confidence)"
+                                    logger.info(f"[Property Match] ✓ MATCHED by address to property '{best_match_property.name}' ({best_score}%)")
+                                else:
+                                    logger.info(f"[Property Match] Strategy 2 FAILED: Best score was {best_score}")
+                            elif not matched_property:
+                                logger.info(f"[Property Match] Strategy 2 SKIPPED: No address extracted from bill")
                             
                             # Strategy 3: If only one property exists, use it
                             if not matched_property and len(properties) == 1:
                                 matched_property = properties[0]
                                 match_reason = "single property for user"
+                                logger.info(f"[Property Match] ✓ MATCHED by single property fallback to '{matched_property.name}'")
+                            
+                            # Final result summary
+                            if matched_property:
+                                logger.info(f"[Property Match] ===== FINAL RESULT: Matched to '{matched_property.name}' - {match_reason}")
+                            else:
+                                logger.warning(f"[Property Match] ===== FINAL RESULT: NO MATCH FOUND for bill from {pattern_name}")
                             
                             # Parse due date if it's a string (dates come in YYYY-MM-DD format from utils)
                             from datetime import datetime
@@ -494,7 +538,8 @@ class EmailMonitor:
                                 'pattern_name': pattern_name,
                                 'extracted_address': extracted_address,
                                 'match_reason': match_reason if matched_property else 'No match',
-                                'address_confidence': best_score if extracted_address else None,
+                                # Contract_id match = 100% confidence (exact), address match = actual score
+                                'address_confidence': 100 if (match_reason and 'contract_id' in match_reason) else (best_score if extracted_address else None),
                                 'user_id': extracted_user_id,
                                 'source': 'email',
                                 # Note: pdf_data not included in response as it's binary and can't be JSON serialized

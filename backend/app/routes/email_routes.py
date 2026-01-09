@@ -58,8 +58,8 @@ async def sync_email_bills(current_user: TokenData = Depends(require_landlord)):
             detail="Email monitoring not configured. Set EMAIL_MONITOR_* environment variables."
         )
     
-    # Process emails for the current user
-    result = email_monitor.process_email_bills(user_id=current_user.user_id)
+    # Process emails for the current user (discover only, don't create bills yet)
+    result = email_monitor.process_email_bills(user_id=current_user.user_id, create_bills=False)
     
     return result
 

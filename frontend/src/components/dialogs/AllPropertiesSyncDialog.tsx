@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, Property } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -6,6 +6,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '../../lib/i18n';
+import { usePreferences } from '../../hooks/usePreferences';
+import DiscoveredBillItem, { type DiscoveredBill } from '../supplierSync/DiscoveredBillItem';
 import { CheckCircle2, Mail, Users } from 'lucide-react';
 
 type AllPropertiesSyncDialogProps = {
@@ -17,6 +19,8 @@ type AllPropertiesSyncDialogProps = {
   onError: (error: string) => void;
 };
 
+type Stage = 'selection' | 'syncing' | 'bills';
+
 export default function AllPropertiesSyncDialog({
   token,
   properties,
@@ -26,29 +30,40 @@ export default function AllPropertiesSyncDialog({
   onError,
 }: AllPropertiesSyncDialogProps) {
   const { t } = useI18n();
+  usePreferences(); // Initialize preferences context
+  const [stage, setStage] = useState<Stage>('selection');
   const [refreshRentBills, setRefreshRentBills] = useState(true);
   const [syncEmailBills, setSyncEmailBills] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [completed, setCompleted] = useState(false);
+  const [discoveredBills, setDiscoveredBills] = useState<DiscoveredBill[]>([]);
+  const [selectedBillIds, setSelectedBillIds] = useState<Set<string>>(new Set());
+  const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
+  const [savingBills, setSavingBills] = useState(false);
   const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
   const [totalEmailBillsSynced, setTotalEmailBillsSynced] = useState(0);
   const [propertiesWithRentersCount, setPropertiesWithRentersCount] = useState(0);
   const [totalRentersCount, setTotalRentersCount] = useState(0);
+  const [syncProgress, setSyncProgress] = useState<string>('');
+  const discoveredBillsRef = useRef<DiscoveredBill[]>([]);
 
+  // Load counts when dialog opens
   useEffect(() => {
-    // Only reset when dialog is being opened (transitions to open=true)
     if (open && token) {
       loadRenterCounts();
-      // Don't reset if already syncing or completed
-      if (!syncing && !completed) {
-        setRefreshRentBills(true);
-        setSyncEmailBills(true);
-        setTotalRentBillsGenerated(0);
-        setTotalEmailBillsSynced(0);
-      }
+      setStage('selection');
+      setRefreshRentBills(true);
+      setSyncEmailBills(true);
+      setDiscoveredBills([]);
+      setSelectedBillIds(new Set());
+      setProcessedEmailIds(new Set());
+      setSyncing(false);
+      setSavingBills(false);
+      setTotalRentBillsGenerated(0);
+      setTotalEmailBillsSynced(0);
+      setSyncProgress('');
+      discoveredBillsRef.current = [];
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, token]);
+  }, [open, token, properties]);
 
   const loadRenterCounts = async () => {
     if (!token) return;
@@ -77,7 +92,7 @@ export default function AllPropertiesSyncDialog({
     if (!token) return 0;
     
     try {
-      // Call backend endpoint to generate all rent bills at once
+      setSyncProgress(t('supplier.generatingRentBills'));
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const response = await fetch(`${API_URL}/rent/generate`, {
         method: 'POST',
@@ -92,11 +107,6 @@ export default function AllPropertiesSyncDialog({
       }
       
       const result = await response.json();
-      
-      if (result.errors && result.errors.length > 0) {
-        console.error('Errors generating rent bills:', result.errors);
-      }
-      
       return result.bills_created || 0;
     } catch (err) {
       console.error('Failed to generate rent bills:', err);
@@ -104,16 +114,15 @@ export default function AllPropertiesSyncDialog({
     }
   };
 
-  const handleSync = async () => {
+  const handleStartSync = async () => {
     if (!refreshRentBills && !syncEmailBills) {
-      onError('Please select at least one option');
+      onError(t('supplier.selectAtLeastOne'));
       return;
     }
 
+    setStage('syncing');
     setSyncing(true);
-    setCompleted(false);
     let rentCount = 0;
-    let emailCount = 0;
 
     try {
       // Generate rent bills if requested
@@ -122,142 +131,295 @@ export default function AllPropertiesSyncDialog({
         setTotalRentBillsGenerated(rentCount);
       }
 
-      // Sync email bills if requested
+      // Sync email bills if requested - discover only, don't create yet
       if (syncEmailBills) {
+        setSyncProgress(t('supplier.fetchingEmailBills'));
         const result = await api.email.sync(token!);
-        emailCount = result.bills_created || 0;
-        setTotalEmailBillsSynced(emailCount);
+        
+        if (result.status === 'success') {
+          // Process email bills (even if empty array)
+          const emailBills: DiscoveredBill[] = (result.discovered_bills || []).map((bill: any) => ({
+            id: bill.id || crypto.randomUUID(),
+            supplier_name: bill.supplier_name || bill.pattern_name || 'Unknown',
+            bill_number: bill.bill_number,
+            amount: bill.amount || 0,
+            due_date: bill.due_date,
+            iban: bill.iban,
+            contract_id: bill.contract_id,
+            description: bill.description || bill.pattern_name || bill.supplier_name,
+            property_id: bill.property_id,
+            property_name: bill.property_name,
+            address_confidence: bill.address_confidence,
+            match_reason: bill.match_reason,
+            bill_data: bill,
+            source: 'email',
+            supplier: bill.supplier || bill.pattern_name,
+            email_id: bill.email_id,
+          }));
+          
+          // Collect email_ids for deletion later
+          const newEmailIds = new Set(processedEmailIds);
+          emailBills.forEach((bill) => {
+            if (bill.email_id) {
+              newEmailIds.add(bill.email_id);
+            }
+          });
+          setProcessedEmailIds(newEmailIds);
+          
+          // Add to discovered bills
+          discoveredBillsRef.current = emailBills;
+          setDiscoveredBills(emailBills);
+          
+          // Pre-select all email bills
+          setSelectedBillIds(new Set(emailBills.map(b => b.id)));
+          setTotalEmailBillsSynced(emailBills.length);
+        } else {
+          onError(result.message || 'Failed to sync email bills');
+        }
       }
 
-      setCompleted(true);
+      // Move to bills stage (even if no bills found)
+      setSyncing(false);
+      setStage('bills');
+    } catch (err) {
+      setSyncing(false);
+      onError(err instanceof Error ? err.message : 'Sync failed');
+      setStage('bills'); // Still show bills stage even on error
+    }
+  };
+
+  const handleSelectAllBills = () => {
+    if (selectedBillIds.size === discoveredBills.length) {
+      setSelectedBillIds(new Set());
+    } else {
+      setSelectedBillIds(new Set(discoveredBills.map(b => b.id)));
+    }
+  };
+
+  const handleBillToggle = (billId: string) => {
+    const newSet = new Set(selectedBillIds);
+    if (newSet.has(billId)) {
+      newSet.delete(billId);
+    } else {
+      newSet.add(billId);
+    }
+    setSelectedBillIds(newSet);
+  };
+
+  const handlePropertyChange = (billId: string, propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    if (!property) return;
+    
+    const updatedBills = discoveredBills.map(bill => {
+      if (bill.id === billId) {
+        return {
+          ...bill,
+          property_id: propertyId,
+          property_name: property.name,
+          bill_data: {
+            ...bill.bill_data,
+            property_id: propertyId,
+          }
+        };
+      }
+      return bill;
+    });
+    
+    setDiscoveredBills(updatedBills);
+    discoveredBillsRef.current = updatedBills;
+  };
+
+  const handleSaveBills = async () => {
+    if (!token || selectedBillIds.size === 0) {
+      onError(t('supplier.selectBillsToSave'));
+      return;
+    }
+
+    setSavingBills(true);
+    try {
+      const billsToSave = discoveredBills
+        .filter(b => selectedBillIds.has(b.id))
+        .map(b => {
+          if (b.bill_data) {
+            return {
+              ...b.bill_data,
+              property_id: b.property_id, // Use potentially updated property_id
+            };
+          }
+          
+          return {
+            property_id: b.property_id,
+            renter_id: null,
+            bill_type: 'utilities',
+            description: b.description,
+            amount: b.amount,
+            due_date: b.due_date,
+            iban: b.iban || null,
+            bill_number: b.bill_number || null,
+            extraction_pattern_id: null,
+            contract_id: b.contract_id || null,
+            status: 'pending',
+            source: b.source || null,
+            supplier: b.supplier || null,
+          };
+        });
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${API_URL}/suppliers/sync-all/save-bills`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ bills: billsToSave }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || 'Failed to save bills');
+      }
+
+      // Close dialog and delete emails in background
+      handleCloseAndCleanup();
       onSuccess();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Sync failed');
-    } finally {
-      setSyncing(false);
+      setSavingBills(false);
+      onError(err instanceof Error ? err.message : 'Failed to save bills');
+    }
+  };
+
+  const handleCloseAndCleanup = () => {
+    // Close dialog immediately
+    onOpenChange(false);
+    
+    // Delete processed emails in background (fire-and-forget)
+    if (processedEmailIds.size > 0 && token) {
+      const emailIdsToDelete = Array.from(processedEmailIds);
+      console.log(`[Email Delete] Deleting ${emailIdsToDelete.length} emails in background`);
+      
+      api.email.delete(token, emailIdsToDelete)
+        .then(() => {
+          console.log(`[Email Delete] ✓ Successfully deleted ${emailIdsToDelete.length} emails`);
+        })
+        .catch((err) => {
+          console.error('[Email Delete] ✗ Failed to delete emails:', err);
+        });
     }
   };
 
   const handleClose = () => {
-    if (!syncing) {
-      onOpenChange(false);
-      // Reset state after dialog closes
-      setTimeout(() => {
-        setRefreshRentBills(true);
-        setSyncEmailBills(true);
-        setCompleted(false);
-        setTotalRentBillsGenerated(0);
-        setTotalEmailBillsSynced(0);
-      }, 300);
+    if (syncing) {
+      return; // Don't allow closing while syncing
     }
+    handleCloseAndCleanup();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-slate-100">
-            {t('supplier.syncAllProperties')}
+            {stage === 'selection' && t('supplier.syncAllProperties')}
+            {stage === 'syncing' && t('supplier.syncProgress')}
+            {stage === 'bills' && t('supplier.selectBills')}
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            {properties.length === 1 
-              ? t('supplier.syncDescription') 
-              : `${t('supplier.syncDescription')} (${properties.length} ${t('property.properties').toLowerCase()})`}
+          <DialogDescription className="text-slate-400 sr-only">
+            {stage === 'selection' && t('supplier.syncAllProperties')}
+            {stage === 'syncing' && t('supplier.syncProgress')}
+            {stage === 'bills' && t('supplier.selectBills')}
           </DialogDescription>
         </DialogHeader>
-
-        {!completed ? (
-          <div className="space-y-4">
-            {/* Rent Bills Option */}
-            <div className="flex items-start space-x-3 p-3 rounded-lg border border-slate-700 bg-slate-750">
-              <Checkbox
-                id="refresh-rent"
-                checked={refreshRentBills}
-                onCheckedChange={(checked) => setRefreshRentBills(checked as boolean)}
-                disabled={syncing}
-                className="mt-0.5"
-              />
-              <div className="flex-1">
-                <Label
-                  htmlFor="refresh-rent"
-                  className="text-sm font-medium text-slate-200 cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    {t('supplier.refreshRentBills')}
+        
+        <div className="flex flex-col flex-1 min-h-0 space-y-4">
+          {/* Stage 1: Selection */}
+          {stage === 'selection' && (
+            <div className="flex flex-col flex-1 min-h-0 space-y-4">
+              <p className="text-sm text-slate-300">{t('supplier.syncDescription')}</p>
+              
+              <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
+                {/* Rent Bills Option */}
+                <div className="flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
+                  <Checkbox
+                    id="refresh-rent-bills"
+                    checked={refreshRentBills}
+                    onCheckedChange={(checked) => setRefreshRentBills(checked === true)}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="refresh-rent-bills" className="text-sm font-medium text-slate-100 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        {t('supplier.refreshRentBills')}
+                      </div>
+                    </Label>
+                    <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
+                      <span>
+                        {t('supplier.properties')}: <span className="text-slate-300">{propertiesWithRentersCount}</span>
+                      </span>
+                      <span>
+                        {t('supplier.renters')}: <span className="text-slate-300">{totalRentersCount}</span>
+                      </span>
+                    </div>
                   </div>
-                </Label>
-                <p className="text-xs text-slate-400 mt-1">
-                  {t('supplier.refreshRentBillsDesc', {
-                    count: propertiesWithRentersCount,
-                    renters: totalRentersCount
-                  })}
-                </p>
+                </div>
+
+                {/* Email Bills Option */}
+                <div className="flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
+                  <Checkbox
+                    id="sync-email-bills"
+                    checked={syncEmailBills}
+                    onCheckedChange={(checked) => setSyncEmailBills(checked === true)}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="sync-email-bills" className="text-sm font-medium text-slate-100 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4" />
+                        {t('supplier.syncEmailBills')}
+                      </div>
+                    </Label>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {t('supplier.syncEmailBillsDesc')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-slate-700 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600"
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  onClick={handleStartSync}
+                  disabled={!refreshRentBills && !syncEmailBills}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {t('supplier.startSync')}
+                </Button>
               </div>
             </div>
+          )}
 
-            {/* Email Bills Option */}
-            <div className="flex items-start space-x-3 p-3 rounded-lg border border-slate-700 bg-slate-750">
-              <Checkbox
-                id="sync-email"
-                checked={syncEmailBills}
-                onCheckedChange={(checked) => setSyncEmailBills(checked as boolean)}
-                disabled={syncing}
-                className="mt-0.5"
-              />
-              <div className="flex-1">
-                <Label
-                  htmlFor="sync-email"
-                  className="text-sm font-medium text-slate-200 cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    {t('supplier.syncEmailBills')}
-                  </div>
-                </Label>
-                <p className="text-xs text-slate-400 mt-1">
-                  {t('supplier.syncEmailBillsDesc')}
+          {/* Stage 2: Syncing Progress */}
+          {stage === 'syncing' && (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <Spinner className="w-8 h-8 text-emerald-500" />
+              <p className="text-sm text-slate-300">{syncProgress || t('common.syncing')}</p>
+              {totalRentBillsGenerated > 0 && (
+                <p className="text-xs text-slate-400">
+                  {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
                 </p>
-              </div>
+              )}
             </div>
+          )}
 
-            {/* Sync Button */}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={handleClose}
-                disabled={syncing}
-                className="bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                onClick={handleSync}
-                disabled={syncing || (!refreshRentBills && !syncEmailBills)}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {syncing ? (
-                  <>
-                    <Spinner className="w-4 h-4 mr-2" />
-                    {t('supplier.syncing')}
-                  </>
-                ) : (
-                  t('supplier.startSync')
-                )}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center py-6">
-              <CheckCircle2 className="w-16 h-16 text-emerald-500" />
-            </div>
-            <div className="text-center space-y-3">
-              <h3 className="text-lg font-medium text-slate-100">
-                {t('supplier.syncComplete')}
-              </h3>
+          {/* Stage 3: Bill Selection */}
+          {stage === 'bills' && (
+            <div className="flex flex-col flex-1 min-h-0 space-y-4">
+              {/* Summary of what was synced */}
               <div className="space-y-2 text-sm">
-                {/* Rent Bills Summary */}
                 {refreshRentBills && (
                   <div className="flex items-center justify-between px-4 py-2 rounded bg-slate-750 border border-slate-700">
                     <div className="flex items-center gap-2 text-slate-300">
@@ -269,41 +431,99 @@ export default function AllPropertiesSyncDialog({
                     </span>
                   </div>
                 )}
-                {/* Email Bills Summary */}
                 {syncEmailBills && (
                   <div className="flex items-center justify-between px-4 py-2 rounded bg-slate-750 border border-slate-700">
                     <div className="flex items-center gap-2 text-slate-300">
                       <Mail className="w-4 h-4" />
-                      <span>{t('supplier.syncEmailBills')}</span>
+                      <span>{t('supplier.emailBillsFound')}</span>
                     </div>
                     <span className={totalEmailBillsSynced > 0 ? "text-emerald-400 font-medium" : "text-slate-400"}>
-                      {totalEmailBillsSynced > 0 ? `+${totalEmailBillsSynced}` : '0'}
-                    </span>
-                  </div>
-                )}
-                {/* Total Summary */}
-                {(refreshRentBills || syncEmailBills) && (
-                  <div className="flex items-center justify-between px-4 py-3 rounded bg-emerald-900/20 border border-emerald-700/50 mt-3">
-                    <span className="text-slate-200 font-medium">
-                      Total
-                    </span>
-                    <span className="text-emerald-400 font-bold text-lg">
-                      +{totalRentBillsGenerated + totalEmailBillsSynced}
+                      {totalEmailBillsSynced}
                     </span>
                   </div>
                 )}
               </div>
+
+              {/* Bills list */}
+              {discoveredBills.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-slate-300 font-medium">
+                      {t('supplier.selectBillsToSave')} ({discoveredBills.length})
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllBills}
+                      className="text-xs"
+                    >
+                      {selectedBillIds.size === discoveredBills.length
+                        ? t('common.deselectAll')
+                        : t('common.selectAll')}
+                    </Button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto border border-slate-600 rounded-lg bg-slate-700/50 p-4 space-y-2">
+                    {discoveredBills.map((bill) => (
+                      <DiscoveredBillItem
+                        key={bill.id}
+                        bill={bill}
+                        selected={selectedBillIds.has(bill.id)}
+                        onToggle={handleBillToggle}
+                        properties={properties}
+                        onPropertyChange={handlePropertyChange}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                  <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                  <p className="text-sm text-slate-300">{t('supplier.noBillsDiscovered')}</p>
+                  {totalRentBillsGenerated > 0 && (
+                    <p className="text-xs text-slate-400">
+                      {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2 border-t border-slate-700 space-x-2">
+                <Button
+                  onClick={() => setStage('selection')}
+                  variant="outline"
+                  disabled={savingBills}
+                  className="bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600"
+                >
+                  {t('common.back')}
+                </Button>
+                {discoveredBills.length === 0 ? (
+                  <Button
+                    onClick={handleClose}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {t('common.close')}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSaveBills}
+                    disabled={selectedBillIds.size === 0 || savingBills}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {savingBills ? (
+                      <>
+                        <Spinner className="w-4 h-4 mr-2" />
+                        {t('common.loading')}
+                      </>
+                    ) : (
+                      t('supplier.saveBills')
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={handleClose}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {t('common.close')}
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

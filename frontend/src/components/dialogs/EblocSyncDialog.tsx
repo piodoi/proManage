@@ -145,7 +145,7 @@ export default function EblocSyncDialog({
                   {syncing ? (
                     <>
                       <Spinner className="w-4 h-4 mr-2" />
-                      {t('ebloc.syncing')}
+                      {t('common.syncing')}
                     </>
                   ) : (
                     t('ebloc.syncDebts')
