@@ -254,7 +254,7 @@
     "refreshRentBillsDescription": "Generate rent bills for all tenants dated on the calculated due date (warning days before due, but no less than 1st of the month). The month number will be used as the bill number.",
     "refreshRentBillsDesc": "{count} properties with {renters} renters",
     "syncEmailBills": "Sync Email Bills",
-    "syncEmailBillsDesc": "Import bills from forwarded emails",
+    "syncEmailBillsDesc": "Import bills from forwarded emails. See: Settings -> Email Bill Import",
     "startSync": "Start Sync",
     "syncComplete": "Sync Complete!",
     "syncDescription": "Generate rent bills and sync email bills",

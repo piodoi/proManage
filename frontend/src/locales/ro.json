@@ -150,7 +150,7 @@
     "bills": "Facturi",
     "addBill": "Adaugă Factură",
     "editBill": "Editează Factură",
-    "clickToToggleStatus": "Click pentru a comuta între Plătit/În așteptare",
+    "clickToToggleStatus": "Click pentru a comuta între Plătit/Urmează",
     "supplier": "Furnizor",
     "deleteBill": "Șterge Factură",
     "billType": "Tip Factură",
@@ -172,7 +172,7 @@
     "syncBills": "Sincronizează Facturi",
     "syncingBills": "Se sincronizează Facturile",
     "status": {
-      "pending": "În Așteptare",
+      "pending": "Urmează",
       "paid": "Plătită",
       "overdue": "Restanță"
     },
@@ -247,7 +247,7 @@
     "refreshRentBillsDescription": "Generează facturi de chirie pentru toți chiriașii datate pe data scadenței calculate (zile de avertizare înainte de scadență, dar nu mai puțin de data de 1 a lunii). Numărul lunii va fi folosit ca număr de factură.",
     "refreshRentBillsDesc": "{count} proprietăți cu {renters} chiriași",
     "syncEmailBills": "Sincronizează Facturi Email",
-    "syncEmailBillsDesc": "Importă facturi din emailuri trimise",
+    "syncEmailBillsDesc": "Importă facturi din emailuri trimise. Vezi: Setări -> Import Facturi Email",
     "startSync": "Începe Sincronizarea",
     "syncComplete": "Sincronizare Completă!",
     "syncDescription": "Generează facturi de chirie și sincronizează facturi din email",
