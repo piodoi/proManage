@@ -389,11 +389,11 @@ class MySQLDatabase:
             conn.execute(
                 text("""
                     INSERT INTO bills (
-                        id, property_id, renter_id, supplier_id, bill_type, description,
+                        id, property_id, renter_id, property_supplier_id, bill_type, description,
                         amount, currency, due_date, bill_date, legal_name, iban, bill_number,
                         extraction_pattern_id, contract_id, payment_details, status, created_at
                     ) VALUES (
-                        :id, :property_id, :renter_id, :supplier_id, :bill_type, :description,
+                        :id, :property_id, :renter_id, :property_supplier_id, :bill_type, :description,
                         :amount, :currency, :due_date, :bill_date, :legal_name, :iban, :bill_number,
                         :extraction_pattern_id, :contract_id, :payment_details, :status, :created_at
                     )
@@ -402,7 +402,7 @@ class MySQLDatabase:
                     "id": bill.id,
                     "property_id": bill.property_id,
                     "renter_id": renter_id,
-                    "supplier_id": bill.supplier_id,
+                    "property_supplier_id": bill.property_supplier_id,
                     "bill_type": bill.bill_type or "utilities",
                     "description": bill.description,
                     "amount": bill.amount,
@@ -467,7 +467,7 @@ class MySQLDatabase:
             id=row.id,
             property_id=row.property_id,
             renter_id=row.renter_id,
-            supplier_id=row.supplier_id,
+            property_supplier_id=getattr(row, 'property_supplier_id', None),
             bill_type=row.bill_type,
             description=row.description,
             amount=float(row.amount) if row.amount else 0,

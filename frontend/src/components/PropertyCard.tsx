@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { formatDateWithPreferences } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { ExternalLink, Trash2, Pencil, Copy, Settings, MessageCircle } from 'lucide-react';
+import { ExternalLink, Trash2, Pencil, Copy, Factory, MessageCircle } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
@@ -125,9 +125,9 @@ export default function PropertyCard({
                 setShowSupplierSettings(true);
               }}
               className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600"
-              title={t('supplier.manageSuppliers')}
-            >
-              <Settings className="w-4 h-4" />
+              title={t('supplier.manageSuppliers')}> 
+              <Factory className="w-4 h-4" />
+              {t('supplier.manageSuppliers')}
             </Button>
             <PropertySupplierSettingsDialog
               token={token}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { api, Bill, Renter, ExtractionResult, Property, BillType, BILL_TYPES } from '../api';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { api, Bill, Renter, ExtractionResult, Property, BillType, BILL_TYPES, PropertySupplier } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,9 +37,11 @@ export default function PropertyBillsView({
   const { preferences } = usePreferences();
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [propertySuppliers, setPropertySuppliers] = useState<PropertySupplier[]>([]);
   const [billForm, setBillForm] = useState({
     renter_id: 'all',  // 'all' means "all/property", specific renter ID otherwise
     bill_type: 'other' as BillType,
+    property_supplier_id: '',  // Selected PropertySupplier.id for non-rent bills
     description: '',
     amount: '',
     currency: preferences.bill_currency || 'RON',
@@ -47,6 +49,24 @@ export default function PropertyBillsView({
     status: 'pending' as 'pending' | 'paid' | 'overdue',
     bill_number: '',
   });
+
+  // Status cycling with debounce
+  const [pendingStatusChanges, setPendingStatusChanges] = useState<Record<string, 'pending' | 'paid' | 'overdue'>>({});
+  const statusUpdateTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Clear pending status changes when bills prop updates (fresh data from server)
+  useEffect(() => {
+    setPendingStatusChanges({});
+  }, [bills]);
+
+  // Load property suppliers on mount
+  useEffect(() => {
+    if (token && propertyId) {
+      api.suppliers.listForProperty(token, propertyId)
+        .then(setPropertySuppliers)
+        .catch((err) => handleError(err));
+    }
+  }, [token, propertyId]);
 
   // Update currency when preferences change
   useEffect(() => {
@@ -134,6 +154,55 @@ export default function PropertyBillsView({
     }
   };
 
+  // Handle status cycling with debounce
+  const handleStatusClick = useCallback((bill: Bill) => {
+    // Only cycle between pending and paid (not overdue - that's automatic based on date)
+    const currentStatus = pendingStatusChanges[bill.id] ?? bill.status;
+    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+    
+    // Update local state immediately for UI feedback
+    setPendingStatusChanges(prev => ({ ...prev, [bill.id]: newStatus }));
+    
+    // Clear any existing timer for this bill
+    if (statusUpdateTimerRef.current[bill.id]) {
+      clearTimeout(statusUpdateTimerRef.current[bill.id]);
+    }
+    
+    // Set new timer for debounced DB update
+    statusUpdateTimerRef.current[bill.id] = setTimeout(async () => {
+      // Only update if status actually changed from original
+      if (newStatus !== bill.status && token) {
+        try {
+          await api.bills.update(token, bill.id, { status: newStatus });
+          // Keep the pending change as local override - don't clear it
+          // The UI will use pendingStatusChanges to show the new status
+          // It will be cleared when bills prop refreshes naturally
+        } catch (err) {
+          // Revert on error - clear pending change so UI shows original status
+          setPendingStatusChanges(prev => {
+            const updated = { ...prev };
+            delete updated[bill.id];
+            return updated;
+          });
+          handleError(err);
+        }
+      } else {
+        // Status was cycled back to original, clear pending change
+        setPendingStatusChanges(prev => {
+          const updated = { ...prev };
+          delete updated[bill.id];
+          return updated;
+        });
+      }
+      delete statusUpdateTimerRef.current[bill.id];
+    }, 1000);
+  }, [pendingStatusChanges, token]);
+
+  // Get effective status for a bill (pending change or actual status)
+  const getEffectiveStatus = useCallback((bill: Bill): 'pending' | 'paid' | 'overdue' => {
+    return pendingStatusChanges[bill.id] ?? bill.status;
+  }, [pendingStatusChanges]);
+
   const createBillFromPdf = async (result: ExtractionResult, patternId?: string, supplier?: string, forceUpdate?: boolean) => {
     if (!token || !result) return;
     
@@ -166,6 +235,8 @@ export default function PropertyBillsView({
         amount: result.amount || 0,
         currency: preferences.bill_currency || 'RON',
         due_date: dueDate,
+        bill_date: result.bill_date,  // Date when bill was issued (from pattern)
+        legal_name: result.legal_name,  // Legal name from pattern
         iban: result.iban,
         bill_number: result.bill_number,
         extraction_pattern_id: extractionPatternId,
@@ -234,14 +305,25 @@ export default function PropertyBillsView({
       return;
     }
     try {
+      // Get description from supplier name if not rent and supplier is selected
+      let description = billForm.description;
+      if (billForm.bill_type !== 'rent' && billForm.property_supplier_id) {
+        const selectedSupplier = propertySuppliers.find(ps => ps.id === billForm.property_supplier_id);
+        if (selectedSupplier) {
+          description = selectedSupplier.supplier.name;
+        }
+      }
+      description = description || t(`bill.${billForm.bill_type}`);
+
       const billData: any = {
         bill_type: billForm.bill_type,
-        description: billForm.description || t(`bill.${billForm.bill_type}`),
+        description,
         amount: parseFloat(billForm.amount),
         currency: billForm.currency || preferences.bill_currency || 'RON',
         due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
         status: billForm.status,
         bill_number: billForm.bill_number || undefined,
+        property_supplier_id: billForm.property_supplier_id || undefined,
       };
 
       // For create, include property_id and renter_id
@@ -260,7 +342,7 @@ export default function PropertyBillsView({
       setShowBillForm(false);
       setEditingBill(null);
       const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
-      setBillForm({ renter_id: defaultRenterId, bill_type: 'other', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
+      setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
       if (onBillsChange) {
         onBillsChange();
       }
@@ -286,6 +368,7 @@ export default function PropertyBillsView({
     setBillForm({
       renter_id: bill.renter_id || 'all',
       bill_type: bill.bill_type,
+      property_supplier_id: bill.property_supplier_id || '',
       description: bill.description || '',
       amount: bill.amount.toString(),
       currency: bill.currency || preferences.bill_currency || 'RON',
@@ -380,7 +463,7 @@ export default function PropertyBillsView({
               if (!open) {
                 setEditingBill(null);
                 const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
-                setBillForm({ renter_id: defaultRenterId, bill_type: 'other', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
+                setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
               }
             }}>
               <DialogTrigger asChild>
@@ -464,14 +547,38 @@ export default function PropertyBillsView({
                     </div>
                   </div>
                   <div>
-                    <Label className="text-slate-300">{t('common.description')}</Label>
-                    <Input
-                      type="text"
-                      value={billForm.description}
-                      onChange={(e) => setBillForm({ ...billForm, description: e.target.value })}
-                      className="bg-slate-700 border-slate-600 text-slate-100"
-                      placeholder={billForm.bill_type === 'rent' ? 'January 2026' : t('common.description')}
-                    />
+                    {billForm.bill_type === 'rent' ? (
+                      <>
+                        <Label className="text-slate-300">{t('common.description')}</Label>
+                        <Input
+                          type="text"
+                          value={billForm.description}
+                          onChange={(e) => setBillForm({ ...billForm, description: e.target.value })}
+                          className="bg-slate-700 border-slate-600 text-slate-100"
+                          placeholder="January 2026"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label className="text-slate-300">{t('bill.supplier')}</Label>
+                        <Select 
+                          value={billForm.property_supplier_id || '_none'} 
+                          onValueChange={(v) => setBillForm({ ...billForm, property_supplier_id: v === '_none' ? '' : v })}
+                        >
+                          <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                            <SelectValue placeholder={t('supplier.selectSupplier')} />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-700 border-slate-600">
+                            <SelectItem value="_none">{t('common.none')}</SelectItem>
+                            {propertySuppliers.map(ps => (
+                              <SelectItem key={ps.id} value={ps.id}>
+                                {ps.supplier.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -543,13 +650,17 @@ export default function PropertyBillsView({
                     <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || 'RON'}</TableCell>
                     <TableCell className="text-slate-300">{formatDateWithPreferences(bill.due_date, preferences.date_format, language)}</TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        bill.status === 'paid' ? 'bg-green-900 text-green-200' :
-                        bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
-                        'bg-amber-900 text-amber-200'
-                      }`}>
-                        {t(`bill.status.${bill.status}`)}
-                      </span>
+                      <button
+                        onClick={() => handleStatusClick(bill)}
+                        className={`px-2 py-1 rounded text-xs cursor-pointer transition-all hover:opacity-80 active:scale-95 ${
+                          getEffectiveStatus(bill) === 'paid' ? 'bg-green-900 text-green-200' :
+                          getEffectiveStatus(bill) === 'overdue' ? 'bg-red-900 text-red-200' :
+                          'bg-amber-900 text-amber-200'
+                        } ${pendingStatusChanges[bill.id] ? 'ring-2 ring-offset-1 ring-offset-slate-800 ring-indigo-400' : ''}`}
+                        title={t('bill.clickToToggleStatus')}
+                      >
+                        {t(`bill.status.${getEffectiveStatus(bill)}`)}
+                      </button>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">

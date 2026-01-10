@@ -177,9 +177,9 @@ export default function PropertySupplierSettingsDialog({
   const availableSuppliers = allSuppliers;
 
   // Filter patterns to only show ones not already linked to a supplier
-  // A pattern is "used" if any supplier has extraction_pattern_supplier matching the pattern's supplier or name
+  // A pattern is "used" if any supplier has extraction_pattern_supplier matching the pattern's id and name
   const availablePatterns = textPatterns.filter(pattern => {
-    const patternIdentifier = pattern.name || pattern.pattern_id;
+    const patternIdentifier = pattern.name && pattern.pattern_id;
     // Check if any supplier already has this pattern linked
     const isLinkedToSupplier = allSuppliers.some(supplier => 
       supplier.extraction_pattern_supplier && 
@@ -187,6 +187,13 @@ export default function PropertySupplierSettingsDialog({
     );
     return !isLinkedToSupplier;
   });
+
+  // Auto-select if only one pattern is available
+  useEffect(() => {
+    if (availablePatterns.length === 1 && !selectedPatternId) {
+      setSelectedPatternId(availablePatterns[0].pattern_id);
+    }
+  }, [availablePatterns, selectedPatternId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

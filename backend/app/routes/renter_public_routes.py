@@ -74,9 +74,9 @@ async def renter_bills(token: str):
     # Only filter out bills with a specific renter_id that doesn't match
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
     
-    # Get property suppliers to check direct_debit status
+    # Get property suppliers to check direct_debit status (keyed by PropertySupplier.id)
     property_suppliers = db.list_property_suppliers(renter.property_id)
-    direct_debit_suppliers = {ps.supplier_id: ps.direct_debit for ps in property_suppliers}
+    direct_debit_by_property_supplier = {ps.id: ps.direct_debit for ps in property_suppliers}
     
     bill_ids = [bill.id for bill in bills]
     all_payments = db.list_payments_for_bills(bill_ids)
@@ -92,10 +92,10 @@ async def renter_bills(token: str):
         payments = payments_by_bill.get(bill.id, [])
         paid_amount = sum(p.amount for p in payments if p.status == PaymentStatus.COMPLETED)
         
-        # Check if this bill's supplier has direct_debit enabled
+        # Check if this bill's property supplier has direct_debit enabled
         is_direct_debit = False
-        if bill.supplier_id and bill.supplier_id in direct_debit_suppliers:
-            is_direct_debit = direct_debit_suppliers[bill.supplier_id]
+        if bill.property_supplier_id and bill.property_supplier_id in direct_debit_by_property_supplier:
+            is_direct_debit = direct_debit_by_property_supplier[bill.property_supplier_id]
         
         result.append({
             "bill": bill,

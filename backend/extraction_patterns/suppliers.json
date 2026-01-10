@@ -31,7 +31,7 @@
   },
   {
     "name": "Vodafone",
-    "bill_type": "utilities",
+    "bill_type": "telecom",
     "has_api": false,
     "extraction_pattern_supplier": "vodafone"
   }

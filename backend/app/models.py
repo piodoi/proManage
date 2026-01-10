@@ -116,7 +116,7 @@ class Bill(BaseModel):
     iban: Optional[str] = None
     bill_number: Optional[str] = None
     extraction_pattern_id: Optional[str] = None  # ID of the extraction pattern used to parse this bill
-    supplier_id: Optional[str] = None  # Reference to Supplier.id (to check PropertySupplier.direct_debit)
+    property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id (links to property-supplier relationship)
     contract_id: Optional[str] = None  # Contract/client ID extracted from PDF for payment
     payment_details: Optional[dict] = None  # Additional payment details (e.g., client_code) stored as JSON
     status: BillStatus = BillStatus.PENDING
@@ -275,6 +275,7 @@ class BillCreate(BaseModel):
     bill_number: Optional[str] = None
     extraction_pattern_id: Optional[str] = None
     contract_id: Optional[str] = None
+    property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id
 
 
 class BillUpdate(BaseModel):
@@ -290,6 +291,7 @@ class BillUpdate(BaseModel):
     contract_id: Optional[str] = None
     payment_details: Optional[dict] = None
     status: Optional[BillStatus] = None
+    property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id
 
 
 class PaymentCreate(BaseModel):

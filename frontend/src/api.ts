@@ -324,7 +324,7 @@ export type Bill = {
   due_date: string;
   iban?: string;
   bill_number?: string;
-  supplier_id?: string;  // Reference to Supplier.id (to check PropertySupplier.direct_debit)
+  property_supplier_id?: string;  // Reference to PropertySupplier.id (links to property-supplier relationship)
   status: 'pending' | 'paid' | 'overdue';
   created_at: string;
 };
@@ -339,6 +339,7 @@ export type BillCreate = {
   due_date: string;
   iban?: string;
   bill_number?: string;
+  property_supplier_id?: string;  // Reference to PropertySupplier.id
 };
 
 export type BillUpdate = {
@@ -351,6 +352,7 @@ export type BillUpdate = {
   iban?: string;
   bill_number?: string;
   status?: 'pending' | 'paid' | 'overdue';
+  property_supplier_id?: string;  // Reference to PropertySupplier.id
 };
 
 export type Payment = {
@@ -499,6 +501,8 @@ export type ExtractionResult = {
   bill_number?: string;
   amount?: number;
   due_date?: string;
+  bill_date?: string;  // Date when bill was issued (from pattern)
+  legal_name?: string;  // Legal name of supplier (from pattern)
   address?: string;
   consumption_location?: string;
   business_name?: string;

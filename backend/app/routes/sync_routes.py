@@ -20,22 +20,22 @@ router = APIRouter(tags=["sync"])
 logger = logging.getLogger(__name__)
 
 
-def resolve_supplier_id(
+def resolve_property_supplier_id(
     property_id: str,
     supplier_name: Optional[str] = None,
     extraction_pattern_id: Optional[str] = None,
     contract_id: Optional[str] = None
 ) -> Optional[str]:
     """
-    Resolve the supplier_id for a bill based on available information.
+    Resolve the PropertySupplier.id for a bill based on available information.
     
     Tries in order:
     1. Match by contract_id against PropertySupplier for this property
     2. Match by supplier name against PropertySupplier for this property
-    3. Match by extraction_pattern_id -> pattern.supplier -> Supplier
+    3. Match by extraction_pattern_id -> pattern.supplier -> PropertySupplier
     
     Returns:
-        supplier_id if found, None otherwise
+        PropertySupplier.id if found, None otherwise
     """
     # Get all property suppliers for this property
     property_suppliers = db.list_property_suppliers(property_id)
@@ -50,13 +50,13 @@ def resolve_supplier_id(
                 # Check if this supplier is linked to the property
                 ps_match = next((ps for ps in property_suppliers if ps.supplier_id == s.id), None)
                 if ps_match:
-                    return s.id
+                    return ps_match.id  # Return PropertySupplier.id
     
     # SECOND: Try to match by contract_id
     if contract_id:
         for ps in property_suppliers:
             if ps.contract_id and ps.contract_id == contract_id:
-                return ps.supplier_id
+                return ps.id  # Return PropertySupplier.id
     
     # THIRD: Try to match by supplier name from extraction pattern
     if supplier_name:
@@ -65,15 +65,20 @@ def resolve_supplier_id(
                 # Check if this supplier is linked to the property
                 ps_match = next((ps for ps in property_suppliers if ps.supplier_id == s.id), None)
                 if ps_match:
-                    return s.id
+                    return ps_match.id  # Return PropertySupplier.id
+        
+        # Also try matching by extraction_pattern_supplier field
+        for ps in property_suppliers:
+            if ps.extraction_pattern_supplier and ps.extraction_pattern_supplier.lower() == supplier_name.lower():
+                return ps.id  # Return PropertySupplier.id
     
     # Log detailed error only when no match is found
     supplier_names = [s.name for s in all_suppliers]
     extraction_patterns = [(s.name, s.extraction_pattern_supplier) for s in all_suppliers if s.extraction_pattern_supplier]
-    property_supplier_contracts = [(ps.supplier_id, ps.contract_id) for ps in property_suppliers if ps.contract_id]
+    property_supplier_contracts = [(ps.id, ps.supplier_id, ps.contract_id) for ps in property_suppliers if ps.contract_id]
     
     logger.warning(
-        f"[Supplier Resolver] Failed to match supplier for property {property_id}\n"
+        f"[Supplier Resolver] Failed to match property supplier for property {property_id}\n"
         f"  Searched for: extraction_pattern_id='{extraction_pattern_id}', supplier_name='{supplier_name}', contract_id='{contract_id}'\n"
         f"  Available suppliers: {supplier_names}\n"
         f"  Extraction patterns: {extraction_patterns}\n"
@@ -289,8 +294,8 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
             
             bill_type = resolve_bill_type(bill_data.get("bill_type", "utilities"))
             
-            # Resolve supplier_id if supplier name is provided
-            supplier_id = resolve_supplier_id(
+            # Resolve property_supplier_id (links bill to PropertySupplier entry)
+            property_supplier_id = resolve_property_supplier_id(
                 property_id=property_id,
                 supplier_name=bill_data.get("supplier") or bill_data.get("pattern_name"),
                 extraction_pattern_id=bill_data.get("pattern_id"),
@@ -309,6 +314,17 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
                     due_date = datetime.utcnow()
             else:
                 due_date = datetime.utcnow()
+            
+            # Parse bill_date (date when bill was issued), None if not found
+            bill_date = None
+            if bill_data.get("bill_date"):
+                try:
+                    if isinstance(bill_data["bill_date"], str):
+                        bill_date = datetime.fromisoformat(bill_data["bill_date"].replace("Z", "+00:00"))
+                    else:
+                        bill_date = bill_data["bill_date"]
+                except:
+                    bill_date = None
             
             # Check for duplicate by bill_number
             bill_number = bill_data.get("bill_number")
@@ -336,11 +352,12 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
                 amount=float(bill_data.get("amount", 0)),
                 currency=bill_data.get("currency", "RON"),
                 due_date=due_date,
-                legal_name=bill_data.get("legal_name"),
+                bill_date=bill_date,  # Date when bill was issued (from pattern), None if not extracted
+                legal_name=bill_data.get("legal_name") or bill_data.get("supplier") or bill_data.get("pattern_name"),
                 iban=bill_data.get("iban"),
                 bill_number=bill_number,
                 extraction_pattern_id=None,
-                supplier_id=supplier_id,
+                property_supplier_id=property_supplier_id,
                 contract_id=bill_data.get("contract_id"),
                 status=BillStatus.PENDING,
             )

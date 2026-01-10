@@ -550,9 +550,9 @@ class EmailMonitor:
                             
                             # If create_bills is True, create the bill immediately
                             if create_bills and matched_property:
-                                # Resolve supplier_id for this email bill
-                                from app.routes.sync_routes import resolve_supplier_id
-                                supplier_id = resolve_supplier_id(
+                                # Resolve property_supplier_id (links bill to PropertySupplier entry)
+                                from app.routes.sync_routes import resolve_property_supplier_id
+                                property_supplier_id = resolve_property_supplier_id(
                                     property_id=matched_property.id,
                                     supplier_name=pattern_name,
                                     extraction_pattern_id=None,  # Text patterns don't have extraction_pattern_id
@@ -605,11 +605,11 @@ class EmailMonitor:
                                     currency="RON",
                                     due_date=due_date if due_date else datetime.utcnow(),
                                     bill_date=bill_date if bill_date else datetime.utcnow(),
-                                    legal_name=discovered_bill['legal_name'],
+                                    legal_name=discovered_bill['legal_name'] or pattern_name,
                                     iban=discovered_bill['iban'],
                                     bill_number=bill_number,
                                     extraction_pattern_id=None,  # Text patterns don't have DB IDs
-                                    supplier_id=supplier_id,
+                                    property_supplier_id=property_supplier_id,
                                     contract_id=extracted_data.get('contract_id'),
                                     payment_details=None,
                                     status=BillStatus.PENDING,

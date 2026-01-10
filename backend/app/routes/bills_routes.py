@@ -12,7 +12,7 @@ from app.auth import require_landlord
 from app.database import db
 from app.text_pattern_extractor import extract_bill_from_pdf_auto
 from app.utils.suppliers import initialize_suppliers
-from app.routes.sync_routes import resolve_supplier_id
+from app.routes.sync_routes import resolve_property_supplier_id
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -79,6 +79,7 @@ async def create_bill(data: BillCreate, current_user: TokenData = Depends(requir
         due_date=data.due_date,
         iban=data.iban,
         bill_number=data.bill_number,
+        property_supplier_id=data.property_supplier_id,
     )
     db.save_bill(bill)
     return bill
@@ -139,6 +140,8 @@ async def update_bill(
         bill.bill_number = data.bill_number
     if data.status is not None:
         bill.status = data.status
+    if data.property_supplier_id is not None:
+        bill.property_supplier_id = data.property_supplier_id
     db.save_bill(bill)
     return bill
 
@@ -201,6 +204,8 @@ async def parse_bill_pdf(
         "bill_number": extracted_data.get("bill_number"),
         "amount": extracted_data.get("amount"),
         "due_date": extracted_data.get("due_date"),  # Already in ISO format YYYY-MM-DD
+        "bill_date": extracted_data.get("bill_date"),  # Date when bill was issued (from pattern)
+        "legal_name": extracted_data.get("legal_name"),  # Legal name of supplier
         "contract_id": extracted_data.get("contract_id"),
         "address": extracted_data.get("address"),
         "business_name": extracted_data.get("legal_name") or extracted_data.get("description"),
@@ -412,14 +417,32 @@ async def create_bill_from_pdf(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error parsing due_date: {str(e)}")
     
-    # Resolve supplier_id
+    # Resolve property_supplier_id (links bill to PropertySupplier entry)
     supplier_name = data.get("matched_pattern_supplier") or data.get("description")
-    supplier_id = resolve_supplier_id(
+    property_supplier_id = resolve_property_supplier_id(
         property_id=property_id,
         supplier_name=supplier_name,
         extraction_pattern_id=data.get("extraction_pattern_id"),
         contract_id=data.get("contract_id")
     )
+    
+    # Get legal_name from pattern data
+    legal_name = data.get("legal_name") or data.get("matched_pattern_supplier")
+    
+    # Get bill_date from extracted data (the date the bill was issued), None if not found
+    bill_date = None
+    bill_date_str = data.get("bill_date")
+    if bill_date_str:
+        try:
+            # Try parsing different date formats
+            for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y", "%Y-%m-%dT%H:%M:%S"]:
+                try:
+                    bill_date = datetime.strptime(bill_date_str.strip(), fmt)
+                    break
+                except ValueError:
+                    continue
+        except Exception:
+            bill_date = None
     
     # Use pattern name as description (from matched_pattern_name)
     # This ensures consistent naming: "Engie", "Digi", "E-bloc" etc.
@@ -491,7 +514,7 @@ async def create_bill_from_pdf(
                             "message": f"Bill with number '{bill_number}' already exists with different amount: existing={existing_bill.amount}, new={new_amount}. Use 'force_update' to update."
                         }
     
-    # Create bill
+    # Create bill with all available fields
     bill = Bill(
         property_id=property_id,
         renter_id=renter_id,
@@ -500,20 +523,22 @@ async def create_bill_from_pdf(
         amount=new_amount,
         currency=data.get("currency", "RON"),
         due_date=due_date,
+        bill_date=bill_date,  # Date when bill was issued (from pattern), None if not extracted
+        legal_name=legal_name,  # Legal name of supplier from pattern
         iban=data.get("iban"),
         bill_number=bill_number,
         extraction_pattern_id=data.get("extraction_pattern_id"),
-        supplier_id=supplier_id,
+        property_supplier_id=property_supplier_id,
         contract_id=data.get("contract_id"),
         status=BillStatus.PENDING,
     )
     db.save_bill(bill)
     
-    # Save contract_id to PropertySupplier if supplier was resolved and contract_id exists
+    # Save contract_id to PropertySupplier if resolved and contract_id exists
     contract_id_from_data = data.get("contract_id")
-    if supplier_id and contract_id_from_data:
-        # Get the PropertySupplier for this supplier
-        property_supplier = db.get_property_supplier_by_supplier(property_id, supplier_id)
+    if property_supplier_id and contract_id_from_data:
+        # Get the PropertySupplier by its ID
+        property_supplier = db.get_property_supplier(property_supplier_id)
         if property_supplier and not property_supplier.contract_id:
             property_supplier.contract_id = contract_id_from_data
             db.save_property_supplier(property_supplier)

@@ -281,7 +281,7 @@ class Database:
         if existing:
             updates = {}
             for field in ['description', 'amount', 'currency', 'due_date', 'bill_date', 
-                         'legal_name', 'iban', 'bill_number', 'status', 'supplier_id',
+                         'legal_name', 'iban', 'bill_number', 'status', 'property_supplier_id',
                          'extraction_pattern_id', 'contract_id', 'payment_details', 'renter_id']:
                 if getattr(bill, field) != getattr(existing, field):
                     updates[field] = getattr(bill, field)

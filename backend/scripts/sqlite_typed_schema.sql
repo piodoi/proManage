@@ -83,7 +83,7 @@ CREATE TABLE bills (
     id TEXT PRIMARY KEY,
     property_id TEXT NOT NULL,
     renter_id TEXT,
-    supplier_id TEXT,
+    property_supplier_id TEXT,
     bill_type TEXT NOT NULL DEFAULT 'utilities' CHECK(bill_type IN ('rent', 'utilities', 'telecom', 'ebloc', 'other')),
     description TEXT NOT NULL,
     amount REAL NOT NULL,
@@ -100,12 +100,12 @@ CREATE TABLE bills (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
     FOREIGN KEY (renter_id) REFERENCES renters(id) ON DELETE SET NULL,
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
+    FOREIGN KEY (property_supplier_id) REFERENCES property_suppliers(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_bills_property ON bills(property_id);
 CREATE INDEX idx_bills_renter ON bills(renter_id);
-CREATE INDEX idx_bills_supplier ON bills(supplier_id);
+CREATE INDEX idx_bills_property_supplier ON bills(property_supplier_id);
 CREATE INDEX idx_bills_due_date ON bills(due_date);
 CREATE INDEX idx_bills_status ON bills(status);
 CREATE INDEX idx_bills_bill_type ON bills(bill_type);
