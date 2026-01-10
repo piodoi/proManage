@@ -203,14 +203,17 @@ export default function TextPatternView() {
     
     // Calculate line number where label appears
     const labelLineNum = pdfText.substring(0, labelIndex).split('\n').length - 1;
-    const targetLineNum = labelLineNum + lineOffset>0?lineOffset:0;
+    // -1 = whole line including label, 0 = same line after label, >0 = lines after label
+    const targetLineNum = labelLineNum + (lineOffset === -1 ? 0 : lineOffset);
     
     if (targetLineNum < 0 || targetLineNum >= lines.length) return '';
     
     let targetLine = lines[targetLineNum].trim();
     if (!targetLine) return '';
     
-    // If offset is 0, remove label from extracted value for -1 and bigger keep the whole line
+    // If offset is -1, keep whole line including label
+    // If offset is 0, remove label from extracted value
+    // If offset > 0, keep whole line (different line from label)
     if (lineOffset === 0) {
       const labelInLine = targetLine.indexOf(labelText);
       if (labelInLine >= 0) {
