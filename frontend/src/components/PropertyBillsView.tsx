@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, Bill, Renter, ExtractionResult, Property } from '../api';
+import { api, Bill, Renter, ExtractionResult, Property, BillType, BILL_TYPES } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -39,7 +39,7 @@ export default function PropertyBillsView({
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [billForm, setBillForm] = useState({
     renter_id: 'all',  // 'all' means "all/property", specific renter ID otherwise
-    bill_type: 'other' as 'rent' | 'utilities' | 'ebloc' | 'other',
+    bill_type: 'other' as BillType,
     description: '',
     amount: '',
     currency: preferences.bill_currency || 'RON',
@@ -413,15 +413,14 @@ export default function PropertyBillsView({
                   </div>
                   <div>
                     <Label className="text-slate-300">{t('bill.billType')} *</Label>
-                    <Select value={billForm.bill_type} onValueChange={(v) => setBillForm({ ...billForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}>
+                    <Select value={billForm.bill_type} onValueChange={(v) => setBillForm({ ...billForm, bill_type: v as BillType })}>
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                         <SelectValue placeholder={t('bill.billType')} />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="rent">{t('bill.rent')}</SelectItem>
-                        <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
-                        <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
-                        <SelectItem value="other">{t('bill.other')}</SelectItem>
+                        {BILL_TYPES.map(type => (
+                          <SelectItem key={type} value={type}>{t(`bill.${type}`)}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

@@ -24,8 +24,13 @@ class BillStatus(str, Enum):
 class BillType(str, Enum):
     RENT = "rent"
     UTILITIES = "utilities"
+    TELECOM = "telecom"
     EBLOC = "ebloc"
     OTHER = "other"
+
+
+# Export bill type values as a list for validation
+BILL_TYPE_VALUES = [bt.value for bt in BillType]
 
 
 class PaymentMethod(str, Enum):
@@ -307,7 +312,8 @@ class PropertySupplier(BaseModel):
     """Represents a supplier configured for a specific property"""
     id: str = Field(default_factory=gen_id)
     property_id: str
-    supplier_id: str  # Reference to Supplier.id
+    supplier_id: str  # Reference to Supplier.id (0 = property-only supplier from pattern)
+    extraction_pattern_supplier: Optional[str] = None  # Supplier name from text pattern (when supplier_id = 0)
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property (filled on first scrape)
     direct_debit: bool = False  # Whether bills will be paid automatically on due date
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -329,12 +335,14 @@ class SupplierUpdate(BaseModel):
 
 
 class PropertySupplierCreate(BaseModel):
-    supplier_id: str
+    supplier_id: str  # Use "0" for property-only suppliers from patterns
+    extraction_pattern_supplier: Optional[str] = None  # Supplier name from text pattern (when supplier_id = "0")
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
     direct_debit: bool = False  # Whether bills will be paid automatically on due date
 
 
 class PropertySupplierUpdate(BaseModel):
+    extraction_pattern_supplier: Optional[str] = None  # Supplier name from text pattern
     contract_id: Optional[str] = None  # Contract ID to differentiate what to scrape for this property
     direct_debit: Optional[bool] = None  # Whether bills will be paid automatically on due date
 

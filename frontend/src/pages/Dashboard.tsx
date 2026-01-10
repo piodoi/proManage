@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-import { api, User, Supplier, SupplierCreate, SupplierUpdate } from '../api';
+import { api, User, Supplier, SupplierCreate, SupplierUpdate, BillType, BILL_TYPES } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -516,16 +516,15 @@ function AdminTabsContent({
                         <Label className="text-slate-300">{t('bill.billType')} *</Label>
                         <Select 
                           value={supplierForm.bill_type} 
-                          onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}
+                          onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as BillType })}
                         >
                           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-700 border-slate-600">
-                            <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
-                            <SelectItem value="rent">{t('bill.rent')}</SelectItem>
-                            <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
-                            <SelectItem value="other">{t('bill.other')}</SelectItem>
+                            {BILL_TYPES.map(type => (
+                              <SelectItem key={type} value={type}>{t(`bill.${type}`)}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -639,16 +638,15 @@ function AdminTabsContent({
                     <Label className="text-slate-300">{t('bill.billType')} *</Label>
                     <Select 
                       value={supplierForm.bill_type} 
-                      onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as 'rent' | 'utilities' | 'ebloc' | 'other' })}
+                      onValueChange={(v) => setSupplierForm({ ...supplierForm, bill_type: v as BillType })}
                     >
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="utilities">{t('bill.utilities')}</SelectItem>
-                        <SelectItem value="rent">{t('bill.rent')}</SelectItem>
-                        <SelectItem value="ebloc">{t('bill.ebloc')}</SelectItem>
-                        <SelectItem value="other">{t('bill.other')}</SelectItem>
+                        {BILL_TYPES.map(type => (
+                          <SelectItem key={type} value={type}>{t(`bill.${type}`)}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

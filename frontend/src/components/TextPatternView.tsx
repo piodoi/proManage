@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../App';
+import { BillType, BILL_TYPES } from '../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,7 +37,7 @@ export default function TextPatternView() {
   const [success, setSuccess] = useState('');
   const [patternName, setPatternName] = useState('');
   const [supplier, setSupplier] = useState('');
-  const [billType, setBillType] = useState<'rent' | 'utilities' | 'ebloc' | 'other'>('utilities');
+  const [billType, setBillType] = useState<BillType>('utilities');
   const [lineOffsets, setLineOffsets] = useState<Map<string, number>>(new Map());
   const [fieldSizes, setFieldSizes] = useState<Map<string, number>>(new Map());  // 0 = auto-size
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -911,10 +912,9 @@ export default function TextPatternView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-slate-700 border-slate-600">
-                <SelectItem value="utilities" className="text-slate-100">{t('bill.utilities')}</SelectItem>
-                <SelectItem value="rent" className="text-slate-100">{t('bill.rent')}</SelectItem>
-                <SelectItem value="ebloc" className="text-slate-100">{t('bill.ebloc')}</SelectItem>
-                <SelectItem value="other" className="text-slate-100">{t('bill.other')}</SelectItem>
+                {BILL_TYPES.map(type => (
+                  <SelectItem key={type} value={type} className="text-slate-100">{t(`bill.${type}`)}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

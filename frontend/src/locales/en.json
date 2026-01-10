@@ -145,6 +145,7 @@
     "billType": "Bill Type",
     "rent": "Rent",
     "utilities": "Utilities",
+    "telecom": "Telecom",
     "ebloc": "E-Bloc",
     "other": "Other",
     "dueDate": "Due Date",
@@ -272,7 +273,14 @@
     "emailBillsFound": "Email bills found",
     "generatingRentBills": "Generating rent bills...",
     "fetchingEmailBills": "Fetching bills from email...",
-    "selectAtLeastOne": "Please select at least one option"
+    "selectAtLeastOne": "Please select at least one option",
+    "addFromPattern": "Add from pattern",
+    "addFromPatternLabel": "Add Supplier from Text Pattern",
+    "selectPattern": "Select a pattern",
+    "patternNotFound": "Pattern not found",
+    "createPatternHint": "Need a new supplier? Create a new extraction pattern in",
+    "patternBased": "Pattern-based",
+    "allPatternsLinked": "All patterns are already linked to suppliers"
   },
   "ebloc": {
     "syncEbloc": "Sync E-Bloc",

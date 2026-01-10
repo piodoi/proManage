@@ -153,6 +153,7 @@
     "billType": "Tip Factură",
     "rent": "Chirie",
     "utilities": "Utilități",
+    "telecom": "Telecom",
     "ebloc": "E-Bloc",
     "other": "Altele",
     "dueDate": "Data Scadență",
@@ -265,7 +266,14 @@
     "emailBillsFound": "Facturi găsite în email",
     "generatingRentBills": "Se generează facturile de chirie...",
     "fetchingEmailBills": "Se preiau facturile din email...",
-    "selectAtLeastOne": "Selectează cel puțin o opțiune"
+    "selectAtLeastOne": "Selectează cel puțin o opțiune",
+    "addFromPattern": "Adaugă din model",
+    "addFromPatternLabel": "Adaugă Furnizor din Model Text",
+    "selectPattern": "Selectează un model",
+    "patternNotFound": "Modelul nu a fost găsit",
+    "createPatternHint": "Ai nevoie de un furnizor nou? Creează un model de extracție în",
+    "patternBased": "Din model",
+    "allPatternsLinked": "Toate modelele sunt deja legate de furnizori"
   },
   "ebloc": {
     "syncEbloc": "Sincronizează E-Bloc",

@@ -632,6 +632,7 @@ class MySQLDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at.isoformat() if row.created_at else None,
@@ -655,6 +656,7 @@ class MySQLDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at.isoformat() if row.created_at else None,
@@ -668,11 +670,12 @@ class MySQLDatabase:
             conn.execute(
                 text("""
                     INSERT INTO property_suppliers (
-                        id, property_id, supplier_id, contract_id, direct_debit, created_at, updated_at
+                        id, property_id, supplier_id, extraction_pattern_supplier, contract_id, direct_debit, created_at, updated_at
                     ) VALUES (
-                        :id, :property_id, :supplier_id, :contract_id, :direct_debit, :created_at, :updated_at
+                        :id, :property_id, :supplier_id, :extraction_pattern_supplier, :contract_id, :direct_debit, :created_at, :updated_at
                     )
                     ON DUPLICATE KEY UPDATE
+                        extraction_pattern_supplier = VALUES(extraction_pattern_supplier),
                         contract_id = VALUES(contract_id),
                         direct_debit = VALUES(direct_debit),
                         updated_at = VALUES(updated_at)
@@ -681,6 +684,7 @@ class MySQLDatabase:
                     "id": ps.id,
                     "property_id": ps.property_id,
                     "supplier_id": ps.supplier_id,
+                    "extraction_pattern_supplier": ps.extraction_pattern_supplier,
                     "contract_id": ps.contract_id,
                     "direct_debit": 1 if ps.direct_debit else 0,
                     "created_at": ps.created_at or datetime.now().isoformat(),

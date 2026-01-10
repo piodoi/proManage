@@ -70,7 +70,7 @@ CREATE TABLE suppliers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     has_api INTEGER NOT NULL DEFAULT 0,
-    bill_type TEXT NOT NULL DEFAULT 'utilities' CHECK(bill_type IN ('rent', 'utilities', 'ebloc', 'other')),
+    bill_type TEXT NOT NULL DEFAULT 'utilities' CHECK(bill_type IN ('rent', 'utilities', 'telecom', 'ebloc', 'other')),
     extraction_pattern_supplier TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -84,7 +84,7 @@ CREATE TABLE bills (
     property_id TEXT NOT NULL,
     renter_id TEXT,
     supplier_id TEXT,
-    bill_type TEXT NOT NULL DEFAULT 'utilities' CHECK(bill_type IN ('rent', 'utilities', 'ebloc', 'other')),
+    bill_type TEXT NOT NULL DEFAULT 'utilities' CHECK(bill_type IN ('rent', 'utilities', 'telecom', 'ebloc', 'other')),
     description TEXT NOT NULL,
     amount REAL NOT NULL,
     currency TEXT NOT NULL DEFAULT 'RON' CHECK(currency IN ('RON', 'EUR', 'USD')),
@@ -133,6 +133,7 @@ CREATE TABLE property_suppliers (
     id TEXT PRIMARY KEY,
     property_id TEXT NOT NULL,
     supplier_id TEXT NOT NULL,
+    extraction_pattern_supplier TEXT,
     contract_id TEXT,
     direct_debit INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -144,6 +145,7 @@ CREATE TABLE property_suppliers (
 
 CREATE INDEX idx_prop_supp_property ON property_suppliers(property_id);
 CREATE INDEX idx_prop_supp_supplier ON property_suppliers(supplier_id);
+CREATE INDEX idx_prop_supp_extraction_pattern ON property_suppliers(extraction_pattern_supplier);
 CREATE INDEX idx_prop_supp_contract ON property_suppliers(contract_id);
 CREATE INDEX idx_prop_supp_direct_debit ON property_suppliers(direct_debit);
 

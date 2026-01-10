@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, Property, Supplier, PropertySupplier } from '../../api';
+import { api, Property, Supplier, PropertySupplier, TextPattern } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, FileText } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
 type PropertySupplierSettingsDialogProps = {
@@ -30,10 +30,15 @@ export default function PropertySupplierSettingsDialog({
   const { t } = useI18n();
   const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
   const [propertySuppliers, setPropertySuppliers] = useState<PropertySupplier[]>([]);
+  const [textPatterns, setTextPatterns] = useState<TextPattern[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [contractId, setContractId] = useState<string>('');
   const [directDebit, setDirectDebit] = useState<boolean>(false);
+  // Pattern-based supplier form
+  const [selectedPatternId, setSelectedPatternId] = useState<string>('');
+  const [patternContractId, setPatternContractId] = useState<string>('');
+  const [patternDirectDebit, setPatternDirectDebit] = useState<boolean>(false);
   const prevOpenRef = useRef(open);
 
   // Load suppliers and property suppliers when dialog opens
@@ -45,6 +50,9 @@ export default function PropertySupplierSettingsDialog({
       setSelectedSupplierId('');
       setContractId('');
       setDirectDebit(false);
+      setSelectedPatternId('');
+      setPatternContractId('');
+      setPatternDirectDebit(false);
     }
   }, [open, token, property.id]);
 
@@ -70,12 +78,14 @@ export default function PropertySupplierSettingsDialog({
     if (!token) return;
     setLoading(true);
     try {
-      const [suppliers, propertySuppliersList] = await Promise.all([
+      const [suppliers, propertySuppliersList, patternsResponse] = await Promise.all([
         api.suppliers.list(token),
         api.suppliers.listForProperty(token, property.id),
+        api.textPatterns.list(token),
       ]);
       setAllSuppliers(suppliers);
       setPropertySuppliers(propertySuppliersList);
+      setTextPatterns(patternsResponse.patterns || []);
     } catch (err) {
       onError(err instanceof Error ? err.message : t('supplier.loadError'));
     } finally {
@@ -111,6 +121,43 @@ export default function PropertySupplierSettingsDialog({
     }
   };
 
+  const handleAddFromPattern = async () => {
+    if (!token || !selectedPatternId) {
+      onError(t('supplier.selectPattern'));
+      return;
+    }
+
+    // Find the selected pattern to get its supplier name
+    const selectedPattern = textPatterns.find(p => p.pattern_id === selectedPatternId);
+    if (!selectedPattern) {
+      onError(t('supplier.patternNotFound'));
+      return;
+    }
+
+    // Use pattern name or supplier name from the pattern
+    const patternSupplierName = selectedPattern.supplier || selectedPattern.name;
+
+    try {
+      const response = await api.suppliers.addToProperty(token, property.id, {
+        supplier_id: '0',  // Mark as pattern-only supplier
+        extraction_pattern_supplier: patternSupplierName,
+        contract_id: patternContractId.trim() || undefined,
+        direct_debit: patternDirectDebit,
+      });
+      await loadData();
+      // Reset pattern form but keep dialog open
+      setSelectedPatternId('');
+      setPatternContractId('');
+      setPatternDirectDebit(false);
+      // Show message if provided
+      if ((response as any).message) {
+        onError((response as any).message);
+      }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('supplier.addError'));
+    }
+  };
+
   const handleDeleteSupplier = async (propertySupplierId: string) => {
     if (!token) return;
     if (!confirm(t('supplier.removeConfirm'))) {
@@ -128,6 +175,18 @@ export default function PropertySupplierSettingsDialog({
 
   // Show all suppliers - allow adding same supplier multiple times with different contract IDs
   const availableSuppliers = allSuppliers;
+
+  // Filter patterns to only show ones not already linked to a supplier
+  // A pattern is "used" if any supplier has extraction_pattern_supplier matching the pattern's supplier or name
+  const availablePatterns = textPatterns.filter(pattern => {
+    const patternIdentifier = pattern.name || pattern.pattern_id;
+    // Check if any supplier already has this pattern linked
+    const isLinkedToSupplier = allSuppliers.some(supplier => 
+      supplier.extraction_pattern_supplier && 
+      supplier.extraction_pattern_supplier.toLowerCase() === patternIdentifier.toLowerCase()
+    );
+    return !isLinkedToSupplier;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -147,9 +206,6 @@ export default function PropertySupplierSettingsDialog({
           <div className="space-y-6">
             {/* Add Supplier Section */}
             <div className="space-y-2">
-              <p className="text-xs text-slate-500">
-                {t('supplier.credentialsManagedInSettings')}
-              </p>
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-end">
                   <div className="flex-1 min-w-0">
@@ -200,6 +256,70 @@ export default function PropertySupplierSettingsDialog({
               </div>
             </div>
 
+            {/* Add From Pattern Section */}
+            <div className="space-y-2 border-t border-slate-600 pt-4">
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-end">
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.addFromPatternLabel')}</Label>
+                    <Select value={selectedPatternId} onValueChange={setSelectedPatternId}>
+                      <SelectTrigger className="w-full bg-slate-700 border-slate-600 text-slate-100">
+                        <SelectValue placeholder={t('supplier.selectPattern')} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        {availablePatterns.length === 0 ? (
+                          <div className="text-slate-500 text-sm px-2 py-1">{t('supplier.allPatternsLinked')}</div>
+                        ) : (
+                          availablePatterns.map(pattern => (
+                            <SelectItem key={pattern.pattern_id} value={pattern.pattern_id}>
+                              <span className="flex items-center gap-2">
+                                <FileText className="w-3 h-3 text-slate-400" />
+                                {pattern.name} {pattern.supplier && `(${pattern.supplier})`}
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.contractId') || 'Contract ID'}</Label>
+                    <Input
+                      type="text"
+                      value={patternContractId}
+                      onChange={(e) => setPatternContractId(e.target.value)}
+                      placeholder={t('supplier.contractIdPlaceholder') || 'Contract ID (optional)'}
+                      className="w-full bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-slate-300 text-sm mb-1 block text-center">{t('supplier.directDebit') || 'Direct debit'}</Label>
+                    <div className="flex items-center justify-center h-10">
+                      <Checkbox
+                        id="pattern-direct-debit"
+                        checked={patternDirectDebit}
+                        onCheckedChange={(checked) => setPatternDirectDebit(checked === true)}
+                        className="bg-slate-700 border-slate-600"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleAddFromPattern}
+                    disabled={!selectedPatternId || availablePatterns.length === 0}
+                    className="bg-indigo-600 hover:bg-indigo-700 sm:flex-shrink-0"
+                  >
+                    <FileText className="w-4 h-4 mr-1" />
+                    {t('supplier.addFromPattern')}
+                  </Button>
+                </div>
+              </div>
+              {/* Info message about creating new patterns */}
+              <p className="text-xs text-slate-500 mt-3">
+                {t('supplier.createPatternHint')}{' '}
+                <span className="text-indigo-400">{t('tools.tools')}</span> → <span className="text-indigo-400">{t('tools.createPattern')}</span>
+              </p>
+            </div>
+
             {/* Property Suppliers List */}
             {propertySuppliers.length > 0 && (
               <div className="space-y-2">
@@ -213,7 +333,6 @@ export default function PropertySupplierSettingsDialog({
                         <TableHead className="text-slate-200">{t('supplier.contractId') || 'Contract ID'}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.directDebit') || 'Direct debit'}</TableHead>
                         <TableHead className="text-slate-200">{t('supplier.apiSupport')}</TableHead>
-                        <TableHead className="text-slate-200">{t('supplier.credentials')}</TableHead>
                         <TableHead className="text-slate-200">{t('common.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -231,17 +350,12 @@ export default function PropertySupplierSettingsDialog({
                             )}
                           </TableCell>
                           <TableCell className="text-slate-400">
-                            {ps.supplier.has_api ? (
+                            {ps.supplier_id === '0' ? (
+                              <span className="text-indigo-400">📄 {t('supplier.patternBased')}</span>
+                            ) : ps.supplier.has_api ? (
                               <span className="text-emerald-400">🔌 {t('supplier.available')}</span>
                             ) : (
                               <span className="text-slate-500">{t('supplier.notAvailable')}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-slate-400">
-                            {ps.has_credentials ? (
-                              <span className="text-emerald-400">✓ {t('supplier.saved')}</span>
-                            ) : (
-                              <span className="text-slate-500">{t('supplier.notSet')}</span>
                             )}
                           </TableCell>
                           <TableCell>

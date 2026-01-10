@@ -198,7 +198,15 @@ export const api = {
     delete: (token: string, id: string) =>
       request<{ status: string }>(`/admin/extraction-patterns/${id}`, { method: 'DELETE', token }),
   },
+
+  textPatterns: {
+    list: (token: string) => request<{ patterns: TextPattern[] }>('/text-patterns/list-patterns', { token }),
+  },
 };
+
+// Centralized Bill Type definition - single source of truth
+export type BillType = 'rent' | 'utilities' | 'telecom' | 'ebloc' | 'other';
+export const BILL_TYPES: readonly BillType[] = ['rent', 'utilities', 'telecom', 'ebloc', 'other'] as const;
 
 export type User = {
   id: string;
@@ -231,7 +239,7 @@ export type Supplier = {
   id: string;
   name: string;
   has_api: boolean;
-  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type: BillType;
   extraction_pattern_supplier?: string;
   created_at: string;
 };
@@ -239,14 +247,14 @@ export type Supplier = {
 export type SupplierCreate = {
   name: string;
   has_api: boolean;
-  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type: BillType;
   extraction_pattern_supplier?: string;
 };
 
 export type SupplierUpdate = {
   name?: string;
   has_api?: boolean;
-  bill_type?: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type?: BillType;
   extraction_pattern_supplier?: string;
 };
 
@@ -255,6 +263,7 @@ export type PropertySupplier = {
   supplier: Supplier;
   property_id: string;
   supplier_id: string;
+  extraction_pattern_supplier?: string | null;
   contract_id?: string | null;
   direct_debit: boolean;
   has_credentials: boolean;
@@ -264,6 +273,7 @@ export type PropertySupplier = {
 
 export type PropertySupplierCreate = {
   supplier_id: string;
+  extraction_pattern_supplier?: string | null;
   contract_id?: string | null;
   direct_debit?: boolean;
 };
@@ -307,7 +317,7 @@ export type Bill = {
   id: string;
   property_id: string;
   renter_id?: string;  // undefined/null means bill applies to all renters in the property
-  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type: BillType;
   description: string;
   amount: number;
   currency?: string;  // Currency for the bill: "EUR", "RON", or "USD"
@@ -322,7 +332,7 @@ export type Bill = {
 export type BillCreate = {
   property_id: string;
   renter_id?: string;  // undefined/null means bill applies to all renters in the property
-  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type: BillType;
   description: string;
   amount: number;
   currency?: string;  // Currency for the bill: "EUR", "RON", or "USD"
@@ -333,7 +343,7 @@ export type BillCreate = {
 
 export type BillUpdate = {
   renter_id?: string;  // undefined/null means bill applies to all renters in the property
-  bill_type?: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type?: BillType;
   description?: string;
   amount?: number;
   currency?: string;
@@ -448,7 +458,7 @@ export type SubscriptionStatus = {
 export type ExtractionPattern = {
   id: string;
   name: string;
-  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type: BillType;
   supplier?: string;
   vendor_hint?: string;
   iban_pattern?: string;
@@ -462,7 +472,7 @@ export type ExtractionPattern = {
 
 export type ExtractionPatternCreate = {
   name: string;
-  bill_type: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type: BillType;
   vendor_hint?: string;
   iban_pattern?: string;
   amount_pattern?: string;
@@ -473,7 +483,7 @@ export type ExtractionPatternCreate = {
 
 export type ExtractionPatternUpdate = {
   name?: string;
-  bill_type?: 'rent' | 'utilities' | 'ebloc' | 'other';
+  bill_type?: BillType;
   vendor_hint?: string;
   iban_pattern?: string;
   amount_pattern?: string;
@@ -505,4 +515,14 @@ export type ExtractionResult = {
   property_address?: string;
   supplier_added?: boolean;
   supplier_message?: string;
+};
+
+export type TextPattern = {
+  pattern_id: string;
+  name: string;
+  supplier?: string;
+  bill_type: BillType;
+  field_count: number;
+  created_at: string;
+  updated_at: string;
 };

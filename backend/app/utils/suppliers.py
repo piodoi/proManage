@@ -16,9 +16,12 @@ def save_suppliers_to_json():
         # Get all suppliers from database
         all_suppliers = db.list_suppliers()
         
-        # Convert to JSON format
+        # Convert to JSON format, excluding the placeholder supplier (id='0')
         suppliers_data = []
         for supplier in all_suppliers:
+            # Skip the pattern-based placeholder supplier
+            if supplier.id == "0":
+                continue
             supplier_dict = {
                 "name": supplier.name,
                 "bill_type": supplier.bill_type.value,
@@ -74,8 +77,28 @@ def load_suppliers_from_json():
         return []
 
 
+def ensure_pattern_placeholder_supplier():
+    """Ensure the special placeholder supplier for pattern-based property suppliers exists."""
+    # Check if the placeholder supplier with id='0' exists
+    existing = db.get_supplier("0")
+    if not existing:
+        # Create the placeholder supplier
+        placeholder = Supplier(
+            id="0",
+            name="[Pattern-based Supplier]",
+            has_api=False,
+            bill_type=BillType.UTILITIES,
+            extraction_pattern_supplier=None,
+        )
+        db.save_supplier(placeholder)
+        logger.info("Created placeholder supplier for pattern-based property suppliers (id='0')")
+
+
 def initialize_suppliers():
     """Initialize suppliers from suppliers.json file."""
+    # First, ensure the pattern placeholder supplier exists
+    ensure_pattern_placeholder_supplier()
+    
     # Load suppliers from JSON file (source of truth)
     suppliers_data = load_suppliers_from_json()
     

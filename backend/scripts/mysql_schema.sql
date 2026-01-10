@@ -67,7 +67,7 @@ CREATE TABLE suppliers (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     has_api BOOLEAN DEFAULT FALSE,
-    bill_type ENUM('rent', 'utilities', 'ebloc', 'other') DEFAULT 'utilities',
+    bill_type ENUM('rent', 'utilities', 'telecom', 'ebloc', 'other') DEFAULT 'utilities',
     extraction_pattern_supplier VARCHAR(255) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_suppliers_name (name),
@@ -80,7 +80,7 @@ CREATE TABLE bills (
     property_id VARCHAR(36) NOT NULL,
     renter_id VARCHAR(36) NULL,
     supplier_id VARCHAR(36) NULL,
-    bill_type ENUM('rent', 'utilities', 'ebloc', 'other') NOT NULL,
+    bill_type ENUM('rent', 'utilities', 'telecom', 'ebloc', 'other') NOT NULL,
     description TEXT NOT NULL,
     amount FLOAT NOT NULL,
     currency VARCHAR(10) DEFAULT 'RON',
@@ -127,6 +127,7 @@ CREATE TABLE property_suppliers (
     id VARCHAR(36) PRIMARY KEY,
     property_id VARCHAR(36) NOT NULL,
     supplier_id VARCHAR(36) NOT NULL,
+    extraction_pattern_supplier VARCHAR(255) NULL,
     contract_id VARCHAR(100) NULL,
     direct_debit BOOLEAN DEFAULT FALSE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -136,6 +137,7 @@ CREATE TABLE property_suppliers (
     INDEX idx_ps_property (property_id),
     INDEX idx_ps_supplier (supplier_id),
     INDEX idx_ps_contract (contract_id),
+    INDEX idx_ps_extraction_pattern (extraction_pattern_supplier),
     UNIQUE INDEX idx_ps_property_supplier (property_id, supplier_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

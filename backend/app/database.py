@@ -395,6 +395,7 @@ class Database:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None),
@@ -420,7 +421,7 @@ class Database:
         existing = self._impl.get_property_supplier(property_supplier.property_id, property_supplier.supplier_id)
         if existing:
             updates = {}
-            for field in ['contract_id', 'direct_debit']:
+            for field in ['extraction_pattern_supplier', 'contract_id', 'direct_debit']:
                 if getattr(property_supplier, field) != getattr(existing, field):
                     updates[field] = getattr(property_supplier, field)
             if updates:
@@ -452,6 +453,7 @@ class Database:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None),

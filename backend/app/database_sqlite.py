@@ -637,6 +637,7 @@ class SQLiteDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at,
@@ -660,6 +661,7 @@ class SQLiteDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
                     created_at=row.created_at,
@@ -674,15 +676,16 @@ class SQLiteDatabase:
                 conn.execute(
                     text("""
                         INSERT INTO property_suppliers (
-                            id, property_id, supplier_id, contract_id, direct_debit, created_at, updated_at
+                            id, property_id, supplier_id, extraction_pattern_supplier, contract_id, direct_debit, created_at, updated_at
                         ) VALUES (
-                            :id, :property_id, :supplier_id, :contract_id, :direct_debit, :created_at, :updated_at
+                            :id, :property_id, :supplier_id, :extraction_pattern_supplier, :contract_id, :direct_debit, :created_at, :updated_at
                         )
                     """),
                     {
                         "id": ps.id,
                         "property_id": ps.property_id,
                         "supplier_id": ps.supplier_id,
+                        "extraction_pattern_supplier": ps.extraction_pattern_supplier,
                         "contract_id": ps.contract_id,
                         "direct_debit": 1 if ps.direct_debit else 0,
                         "created_at": ps.created_at or datetime.now().isoformat(),
@@ -694,13 +697,15 @@ class SQLiteDatabase:
                 conn.execute(
                     text("""
                         UPDATE property_suppliers
-                        SET contract_id = :contract_id, 
+                        SET extraction_pattern_supplier = :extraction_pattern_supplier,
+                            contract_id = :contract_id, 
                             direct_debit = :direct_debit, updated_at = :updated_at
                         WHERE property_id = :property_id AND supplier_id = :supplier_id
                     """),
                     {
                         "property_id": ps.property_id,
                         "supplier_id": ps.supplier_id,
+                        "extraction_pattern_supplier": ps.extraction_pattern_supplier,
                         "contract_id": ps.contract_id,
                         "direct_debit": 1 if ps.direct_debit else 0,
                         "updated_at": datetime.now().isoformat()

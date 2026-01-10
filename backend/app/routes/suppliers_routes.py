@@ -37,12 +37,13 @@ async def list_suppliers(
             for ps in property_suppliers:
                 assigned_supplier_ids.add(ps.supplier_id)
         
-        # Get unique suppliers
+        # Get unique suppliers (excluding placeholder supplier id='0')
         all_suppliers = db.list_suppliers()
-        return [s for s in all_suppliers if s.id in assigned_supplier_ids]
+        return [s for s in all_suppliers if s.id in assigned_supplier_ids and s.id != "0"]
     else:
+        # Exclude placeholder supplier (id='0') from the list
         suppliers = db.list_suppliers()
-        return suppliers
+        return [s for s in suppliers if s.id != "0"]
 
 
 @router.get("/admin/suppliers")
@@ -196,18 +197,43 @@ async def list_property_suppliers(
     # Enrich with supplier details
     result = []
     for ps in property_suppliers:
-        supplier = db.get_supplier(ps.supplier_id)
-        if supplier:
+        # Handle pattern-based suppliers (supplier_id = "0")
+        if ps.supplier_id == "0":
+            # Create a virtual supplier object from the pattern data
+            from app.models import BillType
+            virtual_supplier = {
+                "id": "0",
+                "name": ps.extraction_pattern_supplier or "Unknown Pattern",
+                "has_api": False,
+                "bill_type": BillType.UTILITIES.value,
+                "extraction_pattern_supplier": ps.extraction_pattern_supplier,
+                "created_at": ps.created_at,
+            }
             result.append({
                 "id": ps.id,
-                "supplier": supplier,
+                "supplier": virtual_supplier,
                 "property_id": ps.property_id,
                 "supplier_id": ps.supplier_id,
+                "extraction_pattern_supplier": ps.extraction_pattern_supplier,
                 "contract_id": ps.contract_id,
                 "direct_debit": ps.direct_debit,
                 "created_at": ps.created_at,
                 "updated_at": ps.updated_at,
             })
+        else:
+            supplier = db.get_supplier(ps.supplier_id)
+            if supplier:
+                result.append({
+                    "id": ps.id,
+                    "supplier": supplier,
+                    "property_id": ps.property_id,
+                    "supplier_id": ps.supplier_id,
+                    "extraction_pattern_supplier": ps.extraction_pattern_supplier,
+                    "contract_id": ps.contract_id,
+                    "direct_debit": ps.direct_debit,
+                    "created_at": ps.created_at,
+                    "updated_at": ps.updated_at,
+                })
     return result
 
 
@@ -223,24 +249,53 @@ async def create_property_supplier(
     if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    supplier = db.get_supplier(data.supplier_id)
-    if not supplier:
-        raise HTTPException(status_code=404, detail="Supplier not found")
+    # Handle pattern-based suppliers (supplier_id = "0")
+    is_pattern_supplier = data.supplier_id == "0"
+    
+    if is_pattern_supplier:
+        # For pattern-based suppliers, validate extraction_pattern_supplier is provided
+        if not data.extraction_pattern_supplier:
+            raise HTTPException(status_code=400, detail="extraction_pattern_supplier is required when supplier_id is 0")
+        supplier = None
+        from app.models import BillType
+        virtual_supplier = {
+            "id": "0",
+            "name": data.extraction_pattern_supplier,
+            "has_api": False,
+            "bill_type": BillType.UTILITIES.value,
+            "extraction_pattern_supplier": data.extraction_pattern_supplier,
+        }
+    else:
+        supplier = db.get_supplier(data.supplier_id)
+        if not supplier:
+            raise HTTPException(status_code=404, detail="Supplier not found")
+        virtual_supplier = None
     
     # Check if exact duplicate exists (same supplier + same contract_id, including both None)
+    # For pattern suppliers, also check extraction_pattern_supplier
     contract_id_value = data.contract_id if data.contract_id else None
     existing = db.get_property_supplier_by_supplier_and_contract(property_id, data.supplier_id, contract_id_value)
+    
+    # For pattern suppliers, also need to match extraction_pattern_supplier
+    if existing and is_pattern_supplier:
+        if existing.extraction_pattern_supplier != data.extraction_pattern_supplier:
+            existing = None  # Not a match, different pattern
+    
     if existing:
         # Check if direct_debit is the same
         requested_direct_debit = data.direct_debit if data.direct_debit is not None else False
         if existing.direct_debit == requested_direct_debit:
             # Same configuration, nothing to do
-            supplier = db.get_supplier(existing.supplier_id)
+            if is_pattern_supplier:
+                return_supplier = virtual_supplier
+            else:
+                return_supplier = db.get_supplier(existing.supplier_id)
             return {
                 "id": existing.id,
-                "supplier": supplier,
+                "supplier": return_supplier,
                 "property_id": existing.property_id,
                 "supplier_id": existing.supplier_id,
+                "extraction_pattern_supplier": existing.extraction_pattern_supplier,
                 "contract_id": existing.contract_id,
                 "direct_debit": existing.direct_debit,
                 "created_at": existing.created_at,
@@ -253,13 +308,17 @@ async def create_property_supplier(
             existing.updated_at = datetime.utcnow()
             db.save_property_supplier(existing)
             
-            supplier = db.get_supplier(existing.supplier_id)
+            if is_pattern_supplier:
+                return_supplier = virtual_supplier
+            else:
+                return_supplier = db.get_supplier(existing.supplier_id)
             
             return {
                 "id": existing.id,
-                "supplier": supplier,
+                "supplier": return_supplier,
                 "property_id": existing.property_id,
                 "supplier_id": existing.supplier_id,
+                "extraction_pattern_supplier": existing.extraction_pattern_supplier,
                 "contract_id": existing.contract_id,
                 "direct_debit": existing.direct_debit,
                 "created_at": existing.created_at,
@@ -269,6 +328,7 @@ async def create_property_supplier(
     property_supplier = PropertySupplier(
         property_id=property_id,
         supplier_id=data.supplier_id,
+        extraction_pattern_supplier=data.extraction_pattern_supplier if is_pattern_supplier else None,
         contract_id=data.contract_id if data.contract_id else None,
         direct_debit=data.direct_debit if data.direct_debit is not None else False,
     )
@@ -276,9 +336,10 @@ async def create_property_supplier(
     
     return {
         "id": property_supplier.id,
-        "supplier": supplier,
+        "supplier": virtual_supplier if is_pattern_supplier else supplier,
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
+        "extraction_pattern_supplier": property_supplier.extraction_pattern_supplier,
         "contract_id": property_supplier.contract_id,
         "direct_debit": property_supplier.direct_debit,
         "created_at": property_supplier.created_at,
@@ -307,6 +368,10 @@ async def update_property_supplier(
     if property_supplier.property_id != property_id:
         raise HTTPException(status_code=400, detail="Property supplier does not belong to this property")
     
+    # Update extraction_pattern_supplier if provided
+    if data.extraction_pattern_supplier is not None:
+        property_supplier.extraction_pattern_supplier = data.extraction_pattern_supplier if data.extraction_pattern_supplier else None
+    
     # Update contract_id if provided
     if data.contract_id is not None:
         property_supplier.contract_id = data.contract_id if data.contract_id else None
@@ -318,13 +383,25 @@ async def update_property_supplier(
     property_supplier.updated_at = datetime.utcnow()
     db.save_property_supplier(property_supplier)
     
-    supplier = db.get_supplier(property_supplier.supplier_id)
+    # Handle pattern-based suppliers (supplier_id = "0")
+    if property_supplier.supplier_id == "0":
+        from app.models import BillType
+        return_supplier = {
+            "id": "0",
+            "name": property_supplier.extraction_pattern_supplier or "Unknown Pattern",
+            "has_api": False,
+            "bill_type": BillType.UTILITIES.value,
+            "extraction_pattern_supplier": property_supplier.extraction_pattern_supplier,
+        }
+    else:
+        return_supplier = db.get_supplier(property_supplier.supplier_id)
     
     return {
         "id": property_supplier.id,
-        "supplier": supplier,
+        "supplier": return_supplier,
         "property_id": property_supplier.property_id,
         "supplier_id": property_supplier.supplier_id,
+        "extraction_pattern_supplier": property_supplier.extraction_pattern_supplier,
         "contract_id": property_supplier.contract_id,
         "direct_debit": property_supplier.direct_debit,
         "created_at": property_supplier.created_at,

@@ -30,12 +30,6 @@
     "extraction_pattern_supplier": "hidroelectrica"
   },
   {
-    "name": "MyElectrica",
-    "bill_type": "utilities",
-    "has_api": true,
-    "extraction_pattern_supplier": null
-  },
-  {
     "name": "Vodafone",
     "bill_type": "utilities",
     "has_api": false,
