@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, RefreshCw, Wrench, Package, ShieldCheck } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
@@ -33,10 +33,6 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
-  const [showRefreshDialog, setShowRefreshDialog] = useState(false);
-  const [refreshingPatterns, setRefreshingPatterns] = useState(false);
-  const [forceRefresh, setForceRefresh] = useState(false);
-  const [refreshResults, setRefreshResults] = useState<Array<{ action: string; pattern_name: string; file_name: string; supplier?: string; error?: string }>>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [showSupplierCreate, setShowSupplierCreate] = useState(false);
@@ -331,15 +327,6 @@ export default function Dashboard() {
                   handleSupplierDelete={handleSupplierDelete}
                   openSupplierEdit={openSupplierEdit}
                   openSupplierDelete={openSupplierDelete}
-                  showRefreshDialog={showRefreshDialog}
-                  setShowRefreshDialog={setShowRefreshDialog}
-                  refreshingPatterns={refreshingPatterns}
-                  forceRefresh={forceRefresh}
-                  setForceRefresh={setForceRefresh}
-                  refreshResults={refreshResults}
-                  setRefreshingPatterns={setRefreshingPatterns}
-                  setRefreshResults={setRefreshResults}
-                  setError={setError}
                 />
               </TabsContent>
             )}
@@ -386,20 +373,12 @@ function AdminTabsContent({
   handleSupplierDelete,
   openSupplierEdit,
   openSupplierDelete,
-  showRefreshDialog,
-  setShowRefreshDialog,
-  refreshingPatterns,
-  forceRefresh,
-  setForceRefresh,
-  refreshResults,
-  setRefreshingPatterns,
-  setRefreshResults,
-  setError,
 }: any) {
   const { t } = useI18n();
   const [adminActiveTab, setAdminActiveTab] = useState(() => {
     const saved = sessionStorage.getItem('admin-active-tab');
-    return saved || 'housekeeping';
+    // Default to suppliers if housekeeping was previously saved
+    return saved && saved !== 'housekeeping' ? saved : 'suppliers';
   });
 
   useEffect(() => {
@@ -408,30 +387,10 @@ function AdminTabsContent({
     }
   }, [adminActiveTab]);
 
-  const handleRefreshPatterns = async () => {
-    if (!token) return;
-    setRefreshingPatterns(true);
-    setRefreshResults([]);
-    setShowRefreshDialog(true);
-    try {
-      const result = await api.admin.refreshPatterns(token, forceRefresh);
-      setRefreshResults(result.results);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'));
-      setShowRefreshDialog(false);
-    } finally {
-      setRefreshingPatterns(false);
-    }
-  };
-
   return (
     <div className="space-y-0">
       <Tabs value={adminActiveTab} onValueChange={setAdminActiveTab} className="w-full">
         <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
-          <TabsTrigger value="housekeeping" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-            <Wrench className="w-4 h-4 mr-2" />
-            {t('admin.housekeeping')}
-          </TabsTrigger>
           <TabsTrigger value="suppliers" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
             <Package className="w-4 h-4 mr-2" />
             {t('admin.suppliersManagement')}
@@ -443,44 +402,6 @@ function AdminTabsContent({
         </TabsList>
 
         <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
-          <TabsContent value="housekeeping" className="m-0 p-6 space-y-4">
-            <Card className="bg-slate-800 border-0 shadow-none">
-              <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2">
-                  <Wrench className="w-5 h-5" />
-                  {t('admin.housekeeping')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h3 className="text-slate-200 mb-2">{t('admin.billExtractionPatterns')}</h3>
-                  <p className="text-slate-400 text-sm mb-4">
-                    {t('admin.refreshPatternsDesc')}
-                  </p>
-                  <div className="flex items-center gap-4 mb-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={forceRefresh}
-                        onChange={(e) => setForceRefresh(e.target.checked)}
-                        className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-slate-300 text-sm">{t('admin.forceRefresh')}</span>
-                    </label>
-                  </div>
-                  <Button
-                    onClick={handleRefreshPatterns}
-                    disabled={refreshingPatterns}
-                    className="bg-emerald-600 text-white hover:bg-emerald-700"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${refreshingPatterns ? 'animate-spin' : ''}`} />
-                    {refreshingPatterns ? t('admin.refreshing') : t('admin.refreshBillPatterns')}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="suppliers" className="m-0 p-6 space-y-4">
             <Card className="bg-slate-800 border-0 shadow-none">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -996,79 +917,6 @@ function AdminTabsContent({
           </TabsContent>
         </div>
       </Tabs>
-
-      {/* Refresh Patterns Dialog */}
-      <Dialog open={showRefreshDialog} onOpenChange={setShowRefreshDialog}>
-        <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-slate-100 flex items-center gap-2">
-              <RefreshCw className="w-5 h-5" />
-              {t('admin.refreshBillPatternsTitle')}
-            </DialogTitle>
-            <DialogDescription className="text-slate-400 sr-only">
-              {t('admin.refreshBillPatternsTitle')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 text-slate-300">
-            {refreshingPatterns ? (
-              <div className="text-center py-4">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-emerald-500" />
-                <p>{t('admin.refreshingPatterns')}</p>
-              </div>
-            ) : refreshResults.length === 0 ? (
-              <p className="text-slate-400">{t('admin.noPatternsUpdated')}</p>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-slate-200 font-medium">
-                  {t('admin.updatedPatterns', { count: refreshResults.filter((r: { action: string }) => r.action === 'created' || r.action === 'updated').length })}
-                </p>
-                <div className="max-h-96 overflow-y-auto space-y-2">
-                  {refreshResults.map((result: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className={`p-3 rounded border ${
-                        result.action === 'error'
-                          ? 'bg-red-900/30 border-red-700 text-red-200'
-                          : result.action === 'created'
-                          ? 'bg-emerald-900/30 border-emerald-700 text-emerald-200'
-                          : 'bg-blue-900/30 border-blue-700 text-blue-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-medium">
-                            {result.action === 'created' ? t('admin.created') : result.action === 'updated' ? t('admin.updated') : t('admin.error')}
-                          </span>
-                          <span className="ml-2">{result.pattern_name}</span>
-                          {result.supplier && (
-                            <span className="text-slate-400 ml-2">({result.supplier})</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-slate-400">{result.file_name}</span>
-                      </div>
-                      {result.error && (
-                        <div className="mt-1 text-xs text-red-300">{result.error}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setShowRefreshDialog(false);
-                setRefreshResults([]);
-              }}
-              disabled={refreshingPatterns}
-              className="bg-slate-700 text-slate-100 hover:bg-slate-600"
-            >
-              OK
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

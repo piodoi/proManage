@@ -59,10 +59,6 @@ export const api = {
     deleteUser: (token: string, id: string) => request<{ status: string }>(`/admin/users/${id}`, { method: 'DELETE', token }),
     updateSubscription: (token: string, id: string, tier: number, expires?: string) =>
       request<User>(`/admin/users/${id}/subscription?tier=${tier}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
-    refreshPatterns: (token: string, force?: boolean) =>
-      request<{ status: string; updated_count: number; results: Array<{ action: string; pattern_name: string; file_name: string; supplier?: string; error?: string }> }>(`/admin/refresh-patterns${force ? '?force=true' : ''}`, { method: 'POST', token }),
-    testScraper: (token: string, supplierName: string, username: string, password: string, loginOnly?: boolean) =>
-      request<{ supplier_name: string; config_loaded: boolean; login_success: boolean; bills_found: number; bills: Array<any>; error?: string }>(`/admin/test-scraper?supplier_name=${encodeURIComponent(supplierName)}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}${loginOnly ? '&login_only=true' : ''}`, { method: 'POST', token }),
     suppliers: {
       list: (token: string) => request<Supplier[]>('/admin/suppliers', { token }),
       create: (token: string, data: SupplierCreate) => request<Supplier>('/admin/suppliers', { method: 'POST', body: data, token }),
@@ -186,17 +182,6 @@ export const api = {
       new_amount?: number;
       bill_number?: string;
     }>('/bills/create-from-pdf', { method: 'POST', body: data, token }),
-  },
-
-  extractionPatterns: {
-    list: (token: string) => request<ExtractionPattern[]>('/admin/extraction-patterns', { token }),
-    create: (token: string, data: ExtractionPatternCreate) =>
-      request<ExtractionPattern>('/admin/extraction-patterns', { method: 'POST', body: data, token }),
-    get: (token: string, id: string) => request<ExtractionPattern>(`/admin/extraction-patterns/${id}`, { token }),
-    update: (token: string, id: string, data: ExtractionPatternUpdate) =>
-      request<ExtractionPattern>(`/admin/extraction-patterns/${id}`, { method: 'PUT', body: data, token }),
-    delete: (token: string, id: string) =>
-      request<{ status: string }>(`/admin/extraction-patterns/${id}`, { method: 'DELETE', token }),
   },
 
   textPatterns: {
@@ -455,44 +440,6 @@ export type SubscriptionStatus = {
   property_count: number;
   needs_subscription: boolean;
   can_add_property: boolean;
-};
-
-export type ExtractionPattern = {
-  id: string;
-  name: string;
-  bill_type: BillType;
-  supplier?: string;
-  vendor_hint?: string;
-  iban_pattern?: string;
-  amount_pattern?: string;
-  address_pattern?: string;
-  bill_number_pattern?: string;
-  priority: number;
-  enabled: boolean;
-  created_at: string;
-};
-
-export type ExtractionPatternCreate = {
-  name: string;
-  bill_type: BillType;
-  vendor_hint?: string;
-  iban_pattern?: string;
-  amount_pattern?: string;
-  address_pattern?: string;
-  bill_number_pattern?: string;
-  priority?: number;
-};
-
-export type ExtractionPatternUpdate = {
-  name?: string;
-  bill_type?: BillType;
-  vendor_hint?: string;
-  iban_pattern?: string;
-  amount_pattern?: string;
-  address_pattern?: string;
-  bill_number_pattern?: string;
-  priority?: number;
-  enabled?: boolean;
 };
 
 export type ExtractionResult = {

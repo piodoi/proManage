@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
 import AddressWarningDialog from './dialogs/AddressWarningDialog';
-import PatternSelectionDialog from './dialogs/PatternSelectionDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -128,7 +127,6 @@ export default function PropertyBillsView({
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [showAddressWarning, setShowAddressWarning] = useState(false);
-  const [showPatternSelection, setShowPatternSelection] = useState(false);
   const [duplicateConflict, setDuplicateConflict] = useState<{
     billNumber: string;
     existingAmount: number;
@@ -275,7 +273,6 @@ export default function PropertyBillsView({
       
       setPdfResult(null);
       setShowAddressWarning(false);
-      setShowPatternSelection(false);
       if (onBillsChange) {
         onBillsChange();
       }
@@ -295,7 +292,6 @@ export default function PropertyBillsView({
     setDuplicateConflict(null);
     setPdfResult(null);
     setShowAddressWarning(false);
-    setShowPatternSelection(false);
   };
 
   const handleSaveBill = async () => {
@@ -426,18 +422,12 @@ export default function PropertyBillsView({
                     onError(result.supplier_message);
                   }
                   
-                  // Check if pattern was matched
-                  if (!result.matched_pattern_id) {
-                    // No pattern matched - show pattern selection dialog
-                    setShowPatternSelection(true);
+                  // Pattern matched - check if address matches
+                  if (!result.address_matches && result.address_warning) {
+                    setShowAddressWarning(true);
                   } else {
-                    // Pattern matched - check if address matches
-                    if (!result.address_matches && result.address_warning) {
-                      setShowAddressWarning(true);
-                    } else {
-                      // Address matches or no address extracted, proceed to create bill
-                      await createBillFromPdf(result);
-                    }
+                    // Address matches or no address extracted, proceed to create bill
+                    await createBillFromPdf(result);
                   }
                 } catch (err) {
                   handleError(err);
@@ -701,30 +691,6 @@ export default function PropertyBillsView({
         onConfirm={() => {
           if (pdfResult) {
             createBillFromPdf(pdfResult);
-          }
-        }}
-      />
-      <PatternSelectionDialog
-        open={showPatternSelection}
-        onOpenChange={setShowPatternSelection}
-        pdfResult={pdfResult}
-        token={token}
-        onCancel={() => {
-          setShowPatternSelection(false);
-          setPdfResult(null);
-        }}
-        onConfirm={(patternId, supplier) => {
-          if (pdfResult) {
-            // Check address after pattern selection
-            if (!pdfResult.address_matches && pdfResult.address_warning) {
-              // Update pdfResult with selected pattern info for address warning
-              const updatedResult = { ...pdfResult, matched_pattern_id: patternId, matched_pattern_supplier: supplier };
-              setPdfResult(updatedResult);
-              setShowPatternSelection(false);
-              setShowAddressWarning(true);
-            } else {
-              createBillFromPdf(pdfResult, patternId, supplier);
-            }
           }
         }}
       />

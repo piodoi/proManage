@@ -1,5 +1,5 @@
 from app.routes.auth_routes import router as auth_router
-from app.routes.admin_routes import router as admin_router, load_extraction_patterns_from_json
+from app.routes.admin_routes import router as admin_router
 from app.routes.properties_routes import router as properties_router
 from app.routes.suppliers_routes import router as suppliers_router
 from app.routes.renters_routes import router as renters_router
@@ -22,5 +22,4 @@ __all__ = [
     "ebloc_router",
     "sync_router",
     "preferences_router",
-    "load_extraction_patterns_from_json",
 ]
