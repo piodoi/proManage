@@ -38,7 +38,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(levelname)s:%(name)s:%(message)s',
     handlers=[
-        logging.StreamHandler()
+        logging.StreamHandler(sys.stdout)
     ],
     force=True  # Override any existing configuration
 )
@@ -46,6 +46,10 @@ logging.basicConfig(
 # Suppress harmless Windows asyncio connection cleanup errors
 # These occur when clients close connections before server cleanup completes
 logging.getLogger('asyncio').setLevel(logging.WARNING)
+
+# Ensure uvicorn access logs are shown
+logging.getLogger('uvicorn.access').setLevel(logging.INFO)
+logging.getLogger('uvicorn.error').setLevel(logging.INFO)
 
 # Ensure all our loggers are set to INFO level
 logging.getLogger('app').setLevel(logging.INFO)
@@ -60,6 +64,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Dev
+        "http://localhost:5174",  # Dev (alternate port)
         "https://ultramic.ro",  # Production
     ],
     allow_credentials=True,

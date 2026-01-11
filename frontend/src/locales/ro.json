@@ -368,7 +368,8 @@
       "patternName": "Nume Afișat",
       "optionalNewName": "Opțional: nume nou de afișare",
       "copyToAdmin": "Copiază în Admin",
-      "copySuccess": "Modelul a fost copiat cu succes!"
+      "createSupplier": "Creează Furnizor",
+      "copySuccess": "Furnizorul a fost creat cu succes!"
     }
   },
   "settings": {

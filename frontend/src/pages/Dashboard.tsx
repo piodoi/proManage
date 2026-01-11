@@ -391,7 +391,8 @@ function AdminTabsContent({
   }, [adminActiveTab]);
 
   const handleUserPatternSuccess = () => {
-    // Optionally refresh something or show success message
+    // Refresh suppliers list after creating a supplier from user pattern
+    loadSuppliers();
     setUserPatternError('');
   };
 

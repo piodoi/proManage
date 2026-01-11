@@ -375,7 +375,8 @@
       "patternName": "Display Name",
       "optionalNewName": "Optional: new display name",
       "copyToAdmin": "Copy to Admin",
-      "copySuccess": "Pattern copied successfully!"
+      "createSupplier": "Create Supplier",
+      "copySuccess": "Supplier created successfully!"
     }
   },
   "settings": {

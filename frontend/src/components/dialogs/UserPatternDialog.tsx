@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Search, Crown, Copy, AlertCircle, Check, FileText } from 'lucide-react';
+import { Search, Crown, Plus, AlertCircle, Check, FileText } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 import { api, UserPatternInfo } from '../../api';
 
@@ -265,8 +265,8 @@ export default function UserPatternDialog({
                   disabled={copying || !newPatternId.trim() || copySuccess}
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
-                  <Copy className="w-4 h-4 mr-2" />
-                  {copying ? t('common.saving') : t('admin.userPatterns.copyToAdmin')}
+                  <Plus className="w-4 h-4 mr-2" />
+                  {copying ? t('common.saving') : t('admin.userPatterns.createSupplier')}
                 </Button>
               </div>
             </div>

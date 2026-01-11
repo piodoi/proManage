@@ -53,16 +53,16 @@ _db_impl = None
 
 if IS_MYSQL:
     from app.database_mysql import MySQLDatabase
-    print("[Database] 🚀 Using MySQL with TYPED COLUMNS (relational model)")
+    print("[Database] Using MySQL with TYPED COLUMNS (relational model)")
     print("[Database] Features: Foreign keys, indexes, ENUM types, connection pooling")
     _db_impl = MySQLDatabase(DATABASE_URL)
-    print("[Database] ✅ MySQL connection established!")
+    print("[Database] MySQL connection established!")
 elif IS_SQLITE:
     from app.database_sqlite import SQLiteDatabase
-    print("[Database] 🚀 Using SQLite with TYPED COLUMNS (relational model)")
+    print("[Database] Using SQLite with TYPED COLUMNS (relational model)")
     print("[Database] Features: Foreign keys, indexes, WAL mode, optimized queries")
     _db_impl = SQLiteDatabase(DATABASE_URL)
-    print("[Database] ✅ SQLite connection established!")
+    print("[Database] SQLite connection established!")
 else:
     raise ValueError(f"Unsupported database type: {DATABASE_URL}")
 
@@ -85,14 +85,14 @@ class Database:
                     table_count = result.fetchone()[0]
                     print(f"[Database] MySQL: {table_count} tables found")
                     if table_count == 0:
-                        print("[Database] ⚠️  WARNING: No tables found!")
-                        print("[Database] 💡 Run: mysql -u root -p ultrafinu_promanage < scripts/mysql_schema.sql")
+                        print("[Database] WARNING: No tables found!")
+                        print("[Database] Run: mysql -u root -p ultrafinu_promanage < scripts/mysql_schema.sql")
                     elif table_count < 9:
-                        print(f"[Database] ⚠️  WARNING: Only {table_count}/9 tables (incomplete schema?)")
+                        print(f"[Database] WARNING: Only {table_count}/9 tables (incomplete schema?)")
                     else:
-                        print(f"[Database] ✅ MySQL schema is ready!")
+                        print(f"[Database] MySQL schema is ready!")
             except Exception as e:
-                print(f"[Database] ❌ ERROR: {e}")
+                print(f"[Database] ERROR: {e}")
         elif IS_SQLITE:
             try:
                 from sqlalchemy import text
@@ -101,12 +101,12 @@ class Database:
                     table_count = result.fetchone()[0]
                     print(f"[Database] SQLite: {table_count} tables found")
                     if table_count == 0:
-                        print("[Database] ⚠️  WARNING: No tables found!")
-                        print("[Database] 💡 Run: sqlite3 promanage.db < scripts/sqlite_typed_schema.sql")
+                        print("[Database] WARNING: No tables found!")
+                        print("[Database] Run: sqlite3 promanage.db < scripts/sqlite_typed_schema.sql")
                     else:
-                        print(f"[Database] ✅ SQLite schema is ready!")
+                        print(f"[Database] SQLite schema is ready!")
             except Exception as e:
-                print(f"[Database] ⚠️  Schema check: {e}")
+                print(f"[Database] Schema check: {e}")
     
     # ==================== USER OPERATIONS ====================
     def get_user(self, user_id: str) -> Optional[User]:

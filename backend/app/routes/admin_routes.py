@@ -8,12 +8,14 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from app.models import (
-    User, UserCreate, UserUpdate, TokenData, SubscriptionStatus
+    User, UserCreate, UserUpdate, TokenData, SubscriptionStatus,
+    Supplier, BillType
 )
 from app.auth import require_admin
 from app.database import db
 from app.routes.auth_routes import hash_password
 from app.paths import USERDATA_DIR, TEXT_PATTERNS_DIR
+from app.utils.suppliers import save_suppliers_to_json
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -265,8 +267,44 @@ async def copy_user_pattern_to_admin(
     
     logger.info(f"Copied user pattern {request.filename} from {request.user_id} to admin as {safe_id}")
     
+    # Get the display name (use new_name if provided, otherwise from pattern)
+    supplier_name = request.new_name or pattern.get('name', safe_id)
+    
+    # Get bill type from pattern
+    bill_type_str = pattern.get('bill_type', 'utilities')
+    try:
+        bill_type = BillType(bill_type_str)
+    except ValueError:
+        bill_type = BillType.UTILITIES
+    
+    # Check if supplier with same name already exists
+    existing_supplier = db.get_supplier_by_name(supplier_name)
+    if existing_supplier:
+        logger.warning(f"Supplier '{supplier_name}' already exists, skipping supplier creation")
+        return {
+            "status": "success",
+            "pattern_id": safe_id,
+            "supplier_id": existing_supplier.id,
+            "message": f"Pattern copied as '{safe_id}'. Supplier '{supplier_name}' already exists."
+        }
+    
+    # Create a new supplier with the pattern linked
+    supplier = Supplier(
+        name=supplier_name,
+        has_api=False,  # User patterns don't have API integration
+        bill_type=bill_type,
+        extraction_pattern_supplier=safe_id,  # Link to the pattern file
+    )
+    db.save_supplier(supplier)
+    
+    # Sync to JSON file
+    save_suppliers_to_json()
+    
+    logger.info(f"Created supplier '{supplier_name}' with pattern '{safe_id}'")
+    
     return {
         "status": "success",
         "pattern_id": safe_id,
-        "message": f"Pattern copied successfully as '{safe_id}'"
+        "supplier_id": supplier.id,
+        "message": f"Supplier '{supplier_name}' created successfully with pattern '{safe_id}'"
     }

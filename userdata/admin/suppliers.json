@@ -30,6 +30,12 @@
     "extraction_pattern_supplier": "hidroelectrica"
   },
   {
+    "name": "PPC Gaze",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "ppc.gaz"
+  },
+  {
     "name": "Vodafone",
     "bill_type": "telecom",
     "has_api": false,
