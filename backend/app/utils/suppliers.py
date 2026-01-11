@@ -1,16 +1,16 @@
 """Supplier initialization and utility functions."""
 import json
 import logging
-from pathlib import Path
 from app.database import db
 from app.models import Supplier, BillType
+from app.paths import SUPPLIERS_FILE
 
 logger = logging.getLogger(__name__)
 
 
 def save_suppliers_to_json():
     """Save all suppliers from database to suppliers.json file."""
-    suppliers_file = Path(__file__).parent.parent.parent / "extraction_patterns" / "suppliers.json"
+    suppliers_file = SUPPLIERS_FILE
     
     try:
         # Get all suppliers from database
@@ -45,8 +45,8 @@ def save_suppliers_to_json():
 
 
 def load_suppliers_from_json():
-    """Load suppliers from suppliers.json file in extraction_patterns directory."""
-    suppliers_file = Path(__file__).parent.parent.parent / "extraction_patterns" / "suppliers.json"
+    """Load suppliers from suppliers.json file."""
+    suppliers_file = SUPPLIERS_FILE
     
     if not suppliers_file.exists():
         logger.warning(f"Suppliers file not found at {suppliers_file}")

@@ -6,11 +6,11 @@ Supports both SQLite and MySQL with typed columns
 import os
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
-from pathlib import Path
+
+from app.paths import ENV_FILE
 
 # Load .env file BEFORE reading environment variables
-env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=ENV_FILE)
 
 from app.models import (
     User, Property, Renter, Bill, Payment,

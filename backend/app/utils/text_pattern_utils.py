@@ -13,15 +13,12 @@ import re
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-
 import fitz  # PyMuPDF
 
 from app.utils.parsers import parse_amount
+from app.paths import TEXT_PATTERNS_DIR
 
 logger = logging.getLogger(__name__)
-
-# Directory for storing text patterns
-TEXT_PATTERNS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "text_patterns")
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:

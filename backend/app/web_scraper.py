@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 import re
-from pathlib import Path
 import json
 
 from app.utils.parsers import parse_amount as parse_amount_utility
+from app.paths import SCRAPER_DUMPS_DIR, ADMIN_DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -202,11 +202,8 @@ class WebScraper:
         
         # Use absolute path to ensure we're saving in the right place
         # Path(__file__) = backend/app/web_scraper.py
-        # .parent = backend/app
-        # .parent = backend
-        # / "scraper_dumps" = backend/scraper_dumps
-        dump_dir = Path(__file__).parent.parent / "scraper_dumps"
-        dump_dir.mkdir(exist_ok=True)
+        SCRAPER_DUMPS_DIR.mkdir(exist_ok=True)
+        dump_dir = SCRAPER_DUMPS_DIR
         self.dump_counter += 1
         dump_file = dump_dir / f"{self.config.supplier_name.lower()}_{self.dump_counter:02d}_{page_name}.html"
         try:
@@ -656,8 +653,8 @@ class WebScraper:
     def _save_pdf_dump(self, bill: ScrapedBill):
         """Save PDF to file for debugging"""
         try:
-            dump_dir = Path(__file__).parent.parent / "scraper_dumps"
-            dump_dir.mkdir(exist_ok=True)
+            SCRAPER_DUMPS_DIR.mkdir(exist_ok=True)
+            dump_dir = SCRAPER_DUMPS_DIR
             self.dump_counter += 1
             # Sanitize bill number for filename
             bill_num = bill.bill_number or 'unknown'
@@ -706,8 +703,7 @@ class WebScraper:
 
 def load_scraper_config(supplier_name: str) -> Optional[ScraperConfig]:
     """Load scraper configuration from JSON file"""
-    config_dir = Path(__file__).parent.parent / "scraper_configs"
-    config_file = config_dir / f"{supplier_name.lower()}.json"
+    config_file = ADMIN_DATA_DIR / f"{supplier_name.lower()}.json"
     
     if not config_file.exists():
         logger.debug(f"Scraper config not found: {config_file}")

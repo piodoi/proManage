@@ -286,14 +286,6 @@
     "allPatternsLinked": "All patterns are already linked to suppliers"
   },
   "ebloc": {
-    "syncEbloc": "Sync E-Bloc",
-    "syncEblocRo": "Sync E-Bloc.ro",
-    "syncingFrom": "Syncing from Property:",
-    "searching": "Searching for matching E-bloc association...",
-    "multipleMatches": "Multiple matches found. Please select the correct association:",
-    "noMatch": "No exact match found. Please select the correct association:",
-    "selectAssociation": "Select association",
-    "syncDebts": "Sync Debts",
     "configure": "Configure",
     "username": "Username",
     "password": "Password",
@@ -312,8 +304,6 @@
     "importAll": "Import All ({count})",
     "enterUsernamePassword": "Please enter both username and password",
     "noPropertiesFound": "No properties found in your e-bloc account. Please check your credentials.",
-    "failedToSaveCredentials": "Failed to save credentials",
-    "propertiesDiscoveredButFailedToSave": "Properties discovered, but failed to save credentials: {error}. Please configure credentials manually.",
     "failedToDiscover": "Failed to discover properties. Please check your credentials and try again.",
     "unexpectedResponse": "Unexpected response",
     "propertyNotFoundInMemory": "Selected property not found in discovered properties. Please discover properties again."

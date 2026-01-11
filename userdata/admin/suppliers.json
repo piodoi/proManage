@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Digi",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "digi"
+  },
+  {
+    "name": "E-bloc",
+    "bill_type": "ebloc",
+    "has_api": true,
+    "extraction_pattern_supplier": "e-bloc"
+  },
+  {
+    "name": "Engie",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "engie"
+  },
+  {
+    "name": "Engie Gaze",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "engie.gaz"
+  },
+  {
+    "name": "Hidroelectrica",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "hidroelectrica"
+  },
+  {
+    "name": "Vodafone",
+    "bill_type": "telecom",
+    "has_api": false,
+    "extraction_pattern_supplier": "vodafone"
+  }
+]

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,28 +30,6 @@ export default function EblocImportDialog({
   const [discovering, setDiscovering] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
-    if (open && token) {
-      loadEblocConfig();
-    }
-  }, [open, token]);
-
-  const loadEblocConfig = async () => {
-    if (!token) return;
-    try {
-      const config = await api.ebloc.getConfig(token);
-      if (config && config.configured) {
-        setForm(prev => ({
-          ...prev,
-          username: config.username || '',
-          password: config.password || '',
-        }));
-      }
-    } catch (err) {
-      // Config not found, that's okay
-    }
-  };
-
   const handleDiscover = async () => {
     if (!token) return;
     if (!form.username || !form.password) {
@@ -67,17 +45,8 @@ export default function EblocImportDialog({
 
       if (result && result.properties && Array.isArray(result.properties)) {
         if (result.properties.length > 0) {
-          // Save credentials after successful discovery
-          try {
-            await api.ebloc.configure(token, {
-              username: form.username,
-              password: form.password,
-            });
-            setForm(prev => ({ ...prev, password: '' }));
-          } catch (configErr) {
-            const errorMsg = configErr instanceof Error ? configErr.message : t('ebloc.failedToSaveCredentials');
-            onError(t('ebloc.propertiesDiscoveredButFailedToSave', { error: errorMsg }));
-          }
+          // Credentials are not saved (privacy note)
+          setForm(prev => ({ ...prev, password: '' }));
 
           const propertiesWithUrl = result.properties.map(p => ({
             ...p,
