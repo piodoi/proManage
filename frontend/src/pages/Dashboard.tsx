@@ -9,12 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
 import SummaryView from '../components/SummaryView';
 import TextPatternView from '../components/TextPatternView';
+import UserPatternDialog from '../components/dialogs/UserPatternDialog';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
 
@@ -380,12 +381,19 @@ function AdminTabsContent({
     // Default to suppliers if housekeeping was previously saved
     return saved && saved !== 'housekeeping' ? saved : 'suppliers';
   });
+  const [showUserPatternDialog, setShowUserPatternDialog] = useState(false);
+  const [userPatternError, setUserPatternError] = useState('');
 
   useEffect(() => {
     if (adminActiveTab) {
       sessionStorage.setItem('admin-active-tab', adminActiveTab);
     }
   }, [adminActiveTab]);
+
+  const handleUserPatternSuccess = () => {
+    // Optionally refresh something or show success message
+    setUserPatternError('');
+  };
 
   return (
     <div className="space-y-0">
@@ -409,13 +417,22 @@ function AdminTabsContent({
                   <Package className="w-5 h-5" />
                   {t('admin.suppliersManagement')}
                 </CardTitle>
-                <Dialog open={showSupplierCreate} onOpenChange={setShowSupplierCreate}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-emerald-600 hover:bg-emerald-700">
-                      <Plus className="w-4 h-4 mr-2" />
-                      {t('admin.createSupplier')}
-                    </Button>
-                  </DialogTrigger>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="bg-slate-700 text-slate-100 hover:bg-slate-600 border-slate-600"
+                    onClick={() => setShowUserPatternDialog(true)}
+                  >
+                    <FolderSearch className="w-4 h-4 mr-2" />
+                    {t('admin.userPatterns.addFromUserPattern')}
+                  </Button>
+                  <Dialog open={showSupplierCreate} onOpenChange={setShowSupplierCreate}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        {t('admin.createSupplier')}
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
                     <DialogHeader>
                       <DialogTitle className="text-slate-100">{t('admin.createSupplier')}</DialogTitle>
@@ -478,6 +495,7 @@ function AdminTabsContent({
                     </div>
                   </DialogContent>
                 </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 {loadingSuppliers ? (
@@ -917,6 +935,20 @@ function AdminTabsContent({
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* User Pattern Dialog */}
+      <UserPatternDialog
+        token={token}
+        open={showUserPatternDialog}
+        onOpenChange={setShowUserPatternDialog}
+        onSuccess={handleUserPatternSuccess}
+        onError={(error) => setUserPatternError(error)}
+      />
+      {userPatternError && (
+        <div className="fixed bottom-4 right-4 bg-red-900/90 text-red-100 px-4 py-2 rounded-lg shadow-lg">
+          {userPatternError}
+        </div>
+      )}
     </div>
   );
 }

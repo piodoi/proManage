@@ -358,7 +358,25 @@
     "previous": "Previous",
     "next": "Next",
     "update": "Update",
-    "editUser": "Edit User"
+    "editUser": "Edit User",
+    "userPatterns": {
+      "title": "User Patterns",
+      "description": "Browse patterns created by users and add them as supplier extraction patterns",
+      "addFromUserPattern": "Add from User Pattern",
+      "searchPlaceholder": "Search by name, supplier, user...",
+      "noPatterns": "No user patterns found",
+      "noResults": "No patterns match your search",
+      "activeSubscription": "Active subscription",
+      "noSupplier": "No supplier specified",
+      "fields": "fields",
+      "copyAs": "Copy pattern to admin folder as:",
+      "patternId": "Pattern ID (filename)",
+      "patternIdHint": "Used as filename, e.g. 'engie.gaz' becomes 'engie.gaz.json'",
+      "patternName": "Display Name",
+      "optionalNewName": "Optional: new display name",
+      "copyToAdmin": "Copy to Admin",
+      "copySuccess": "Pattern copied successfully!"
+    }
   },
   "settings": {
     "settings": "Settings",

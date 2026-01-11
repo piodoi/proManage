@@ -22,7 +22,7 @@ USERDATA_DIR = PROJECT_ROOT / "userdata"
 # Admin directory within userdata (project_root/userdata/admin/)
 ADMIN_DATA_DIR = USERDATA_DIR / "admin"
 
-# Text patterns directory for bill extraction
+# Text patterns directory for bill extraction (admin patterns)
 TEXT_PATTERNS_DIR = ADMIN_DATA_DIR / "text_patterns"
 
 # Suppliers configuration file
@@ -35,9 +35,21 @@ SCRAPER_DUMPS_DIR = BACKEND_DIR / "scraper_dumps"
 ENV_FILE = BACKEND_DIR / ".env"
 
 
+def get_user_data_dir(user_id: str) -> Path:
+    """Get the data directory for a specific user."""
+    return USERDATA_DIR / user_id
+
+
 def ensure_directories():
     """Create required directories if they don't exist."""
     TEXT_PATTERNS_DIR.mkdir(parents=True, exist_ok=True)
     ADMIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
     SCRAPER_DUMPS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_user_directory(user_id: str) -> Path:
+    """Ensure user data directory exists and return path."""
+    user_dir = get_user_data_dir(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    return user_dir
 

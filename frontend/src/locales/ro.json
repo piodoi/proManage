@@ -351,7 +351,25 @@
     "previous": "Anterior",
     "next": "Următor",
     "update": "Actualizează",
-    "editUser": "Editează Utilizator"
+    "editUser": "Editează Utilizator",
+    "userPatterns": {
+      "title": "Modele Utilizatori",
+      "description": "Răsfoiește modelele create de utilizatori și adaugă-le ca modele de extracție pentru furnizori",
+      "addFromUserPattern": "Adaugă din Model Utilizator",
+      "searchPlaceholder": "Caută după nume, furnizor, utilizator...",
+      "noPatterns": "Nu s-au găsit modele de utilizatori",
+      "noResults": "Niciun model nu corespunde căutării",
+      "activeSubscription": "Abonament activ",
+      "noSupplier": "Niciun furnizor specificat",
+      "fields": "câmpuri",
+      "copyAs": "Copiază modelul în folderul admin ca:",
+      "patternId": "ID Model (nume fișier)",
+      "patternIdHint": "Folosit ca nume fișier, ex. 'engie.gaz' devine 'engie.gaz.json'",
+      "patternName": "Nume Afișat",
+      "optionalNewName": "Opțional: nume nou de afișare",
+      "copyToAdmin": "Copiază în Admin",
+      "copySuccess": "Modelul a fost copiat cu succes!"
+    }
   },
   "settings": {
     "settings": "Setări",

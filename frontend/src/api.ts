@@ -68,6 +68,11 @@ export const api = {
       getProperties: (token: string, id: string) => 
         request<Array<{ property_id: string; property_name: string; property_address: string; property_supplier_id: string }>>(`/admin/suppliers/${id}/properties`, { token }),
     },
+    userPatterns: {
+      list: (token: string) => request<UserPatternInfo[]>('/admin/user-patterns', { token }),
+      copyToAdmin: (token: string, data: { user_id: string; filename: string; new_pattern_id: string; new_name?: string }) =>
+        request<{ status: string; pattern_id: string; message: string }>('/admin/copy-user-pattern', { method: 'POST', body: data, token }),
+    },
   },
 
   properties: {
@@ -468,4 +473,18 @@ export type TextPattern = {
   field_count: number;
   created_at: string;
   updated_at: string;
+};
+
+export type UserPatternInfo = {
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  subscription_tier: number;
+  pattern_id: string;
+  pattern_name: string;
+  supplier?: string;
+  bill_type: BillType;
+  field_count: number;
+  created_at: string;
+  filename: string;
 };

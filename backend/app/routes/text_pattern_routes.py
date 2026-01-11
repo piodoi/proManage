@@ -22,6 +22,7 @@ from app.utils.text_pattern_utils import (
     extract_with_pattern,
     match_pattern_to_pdf,
 )
+from app.paths import ensure_user_directory
 
 router = APIRouter(prefix="/text-patterns", tags=["text-patterns"])
 logger = logging.getLogger(__name__)
@@ -100,7 +101,8 @@ async def save_text_pattern(
     pattern: TextPatternCreate,
     current_user: TokenData = Depends(require_landlord),
 ):
-    """Save a text-based extraction pattern to file."""
+    """Save a text-based extraction pattern to user's folder."""
+    # Generate pattern ID with timestamp prefix for sorting
     pattern_id = f"text_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{pattern.name.replace(' ', '_')}"
     
     # Save field_name, label_text, line_offset, and optional size (no value_text, value_regex)
@@ -127,12 +129,13 @@ async def save_text_pattern(
         "updated_at": datetime.utcnow().isoformat(),
     }
     
-    # Save to file (manually constructed to avoid Pydantic adding optional fields)
-    pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
+    # Save to user's folder (not admin folder)
+    user_dir = ensure_user_directory(current_user.user_id)
+    pattern_file = os.path.join(user_dir, f"{pattern_id}.json")
     with open(pattern_file, 'w', encoding='utf-8') as f:
         json.dump(pattern_dict, f, indent=2, ensure_ascii=False)
     
-    logger.info(f"Saved text pattern to {pattern_file}")
+    logger.info(f"Saved text pattern to user folder: {pattern_file}")
     
     return {"pattern_id": pattern_id, "message": "Pattern saved successfully"}
 
@@ -141,13 +144,22 @@ async def save_text_pattern(
 async def list_text_patterns(
     current_user: TokenData = Depends(require_landlord),
 ):
-    """List all text patterns with their metadata."""
+    """List all text patterns for the current user from their folder."""
     patterns = []
-    if os.path.exists(TEXT_PATTERNS_DIR):
-        for filename in os.listdir(TEXT_PATTERNS_DIR):
+    
+    # Get user's folder
+    user_dir = ensure_user_directory(current_user.user_id)
+    logger.info(f"Listing patterns from user folder: {user_dir}")
+    
+    if os.path.exists(user_dir):
+        files_in_dir = os.listdir(user_dir)
+        logger.info(f"Files in user folder: {files_in_dir}")
+        
+        for filename in files_in_dir:
             if filename.endswith('.json'):
+                logger.info(f"Processing: {filename}")
                 try:
-                    pattern_file = os.path.join(TEXT_PATTERNS_DIR, filename)
+                    pattern_file = os.path.join(user_dir, filename)
                     with open(pattern_file, 'r', encoding='utf-8') as f:
                         pattern = json.load(f)
                         filename_base = filename[:-5]  # Remove .json extension
@@ -162,6 +174,10 @@ async def list_text_patterns(
                         })
                 except Exception as e:
                     logger.warning(f"Error loading pattern {filename}: {e}")
+    else:
+        logger.warning(f"User folder does not exist: {user_dir}")
+    
+    logger.info(f"Returning {len(patterns)} patterns for user {current_user.user_id}")
     
     # Sort by name
     patterns.sort(key=lambda p: p['name'].lower())
