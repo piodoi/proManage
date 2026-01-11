@@ -1,0 +1,90 @@
+# ProManage Docker Compose Configuration
+# Usage:
+#   Development: docker-compose up -d
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: promanage-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Database - use MySQL in production, SQLite for development
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./promanage.db}
+      # JWT Secret - CHANGE IN PRODUCTION!
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      # OAuth (optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - FACEBOOK_APP_ID=${FACEBOOK_APP_ID:-}
+      - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET:-}
+    volumes:
+      # Persist database and user data
+      - ./userdata:/app/userdata
+      - backend-db:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - promanage-network
+
+  # Frontend (nginx serving static files)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
+        - VITE_FACEBOOK_APP_ID=${VITE_FACEBOOK_APP_ID:-}
+    container_name: promanage-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - promanage-network
+
+  # MySQL Database (optional - for production)
+  # Uncomment this section if using MySQL instead of SQLite
+   mysql:
+     image: mysql:8.0
+     container_name: promanage-mysql
+     restart: unless-stopped
+     environment:
+       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+       - MYSQL_DATABASE=promanage
+       - MYSQL_USER=promanage
+       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-promanagepassword}
+     volumes:
+       - mysql-data:/var/lib/mysql
+       - ./backend/scripts/mysql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+     ports:
+       - "3306:3306"
+     healthcheck:
+       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+       interval: 10s
+       timeout: 5s
+       retries: 5
+     networks:
+       - promanage-network
+
+volumes:
+  backend-db:
+  # mysql-data:  # Uncomment if using MySQL
+
+networks:
+  promanage-network:
+    driver: bridge
+

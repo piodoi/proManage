@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+
+# Poetry
+poetry.lock
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+*.egg-info
+dist
+build
+
+# Local files
+.env
+*.db
+*.sqlite
+promanage.db
+
+# Debug files
+debug_html
+scraper_dumps
+
+# Documentation
+*.md
+!DATABASE_MAINTENANCE.md
+
+# Tests
+tests
+**/test_*.py
+

@@ -1,0 +1,44 @@
+# Production overrides for docker-compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  backend:
+    restart: always
+    environment:
+      # Use MySQL in production
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/promanage
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    restart: always
+    build:
+      args:
+        - VITE_API_URL=${PRODUCTION_API_URL}
+
+  mysql:
+    image: mysql:8.0
+    container_name: promanage-mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=promanage
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/scripts/mysql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - promanage-network
+
+volumes:
+  mysql-data:
+
