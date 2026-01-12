@@ -275,10 +275,11 @@ export default function PropertyBillsView({
       
       setPdfResult(null);
       setShowBillConfirm(false);
-      restoreScroll();
       if (onBillsChange) {
         onBillsChange();
       }
+      // Restore scroll after data refresh starts
+      setTimeout(() => restoreScroll(), 100);
     } catch (err) {
       handleError(err);
     }

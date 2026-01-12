@@ -23,7 +23,22 @@ export default function BillConfirmDialog({
   
   const hasAddressWarning = pdfResult && !pdfResult.address_matches && pdfResult.address_warning;
   
-  // Calculate match percentage based on key fields
+  // Check if address contains a "big token" (word with more than 5 letters)
+  // Tokenize on spaces and dots
+  const addressHasBigToken = (address: string | undefined | null): boolean => {
+    if (!address) return false;
+    const words = address.toString().split(/[\s.]+/);
+    return words.some(word => word.replace(/[^a-zA-Z0-9]/g, '').length > 5);
+  };
+  
+  // Count big tokens in address for bonus calculation
+  const countBigTokensInAddress = (address: string | undefined | null): number => {
+    if (!address) return 0;
+    const words = address.toString().split(/[\s.]+/);
+    return words.filter(word => word.replace(/[^a-zA-Z0-9]/g, '').length > 5).length;
+  };
+  
+  // Calculate match percentage based on key fields with address token weighting
   const calculateMatchPercentage = (result: ExtractionResult): { percentage: number; found: number; total: number } => {
     const fields = [
       { name: 'amount', hasValue: result.amount !== undefined && result.amount !== null && result.amount > 0 },
@@ -38,7 +53,25 @@ export default function BillConfirmDialog({
     
     const found = fields.filter(f => f.hasValue).length;
     const total = fields.length;
-    const percentage = Math.round((found / total) * 100);
+    
+    // Base percentage from field count
+    let percentage = Math.round((found / total) * 100);
+    
+    // Check if address has big tokens for confidence boost
+    const addressHasBig = addressHasBigToken(result.address);
+    
+    // If address has at least one big token, ensure minimum 25%
+    if (addressHasBig && percentage < 25) {
+      percentage = 25;
+    }
+    
+    // Bonus: add extra weight based on big tokens in address
+    const bigTokenCount = countBigTokensInAddress(result.address);
+    if (bigTokenCount > 0) {
+      // Add up to 10% bonus based on big token count in address (max 3 = 10%)
+      const bonus = Math.min(bigTokenCount * 3, 10);
+      percentage = Math.min(percentage + bonus, 100);
+    }
     
     return { percentage, found, total };
   };
@@ -58,7 +91,7 @@ export default function BillConfirmDialog({
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-xl">
         <DialogHeader>
           <DialogTitle className="text-slate-100 flex items-center gap-2">
             {hasAddressWarning ? (
@@ -113,6 +146,22 @@ export default function BillConfirmDialog({
                 </div>
               )}
               
+              {/* Address section - between warning and details */}
+              <div className="border border-slate-700 rounded-lg p-4 bg-slate-750/50 space-y-2">
+                {pdfResult.property_address && (
+                  <div className="text-sm">
+                    <span className="text-slate-400">{t('addressWarning.propertyAddress')}</span>
+                    <div className="text-slate-200 mt-0.5">{pdfResult.property_address}</div>
+                  </div>
+                )}
+                <div className="text-sm">
+                  <span className="text-slate-400">{t('addressWarning.extractedAddress')}</span>
+                  <div className={`mt-0.5 ${hasAddress ? 'text-slate-200' : 'text-red-400'}`}>
+                    {hasAddress ? pdfResult.address : t('billConfirm.notFound')}
+                  </div>
+                </div>
+              </div>
+              
               {/* Bill details */}
               <div className="space-y-3 border border-slate-700 rounded-lg p-4 bg-slate-750/50">
                 <div className="text-sm font-medium text-slate-200 border-b border-slate-700 pb-2">
@@ -127,14 +176,6 @@ export default function BillConfirmDialog({
                   </div>
                 )}
                 
-                {/* Bill Type */}
-                {pdfResult.matched_pattern_bill_type && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">{t('bill.billType')}</span>
-                    <span className="text-slate-200">{t(`bill.${pdfResult.matched_pattern_bill_type}`)}</span>
-                  </div>
-                )}
-                
                 {/* Amount - Always show, red if missing */}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">{t('common.amount')}</span>
@@ -143,11 +184,17 @@ export default function BillConfirmDialog({
                   </span>
                 </div>
                 
-                {/* Bill Number */}
-                {pdfResult.bill_number && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">{t('bill.billNumber')}</span>
-                    <span className="text-slate-200">{pdfResult.bill_number}</span>
+                {/* Bill Number and Contract ID on same line */}
+                {(pdfResult.bill_number || pdfResult.contract_id) && (
+                  <div className="flex justify-between text-sm gap-4">
+                    <div className="flex gap-2">
+                      <span className="text-slate-400">{t('bill.billNumber')}:</span>
+                      <span className="text-slate-200">{pdfResult.bill_number || '-'}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-slate-400">{t('billConfirm.contractId')}:</span>
+                      <span className="text-slate-200">{pdfResult.contract_id || '-'}</span>
+                    </div>
                   </div>
                 )}
                 
@@ -158,38 +205,6 @@ export default function BillConfirmDialog({
                     <span className="text-slate-200">{pdfResult.due_date}</span>
                   </div>
                 )}
-                
-                {/* Bill Date */}
-                {pdfResult.bill_date && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">{t('billConfirm.billDate')}</span>
-                    <span className="text-slate-200">{pdfResult.bill_date}</span>
-                  </div>
-                )}
-                
-                {/* Contract ID */}
-                {pdfResult.contract_id && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">{t('billConfirm.contractId')}</span>
-                    <span className="text-slate-200">{pdfResult.contract_id}</span>
-                  </div>
-                )}
-                
-                {/* Address section - Always show extracted address, red if missing */}
-                <div className="border-t border-slate-700 pt-3 mt-3 space-y-2">
-                  {pdfResult.property_address && (
-                    <div className="text-sm">
-                      <span className="text-slate-400">{t('addressWarning.propertyAddress')}</span>
-                      <div className="text-slate-200 mt-0.5">{pdfResult.property_address}</div>
-                    </div>
-                  )}
-                  <div className="text-sm">
-                    <span className="text-slate-400">{t('addressWarning.extractedAddress')}</span>
-                    <div className={`mt-0.5 ${hasAddress ? 'text-slate-200' : 'text-red-400'}`}>
-                      {hasAddress ? pdfResult.address : t('billConfirm.notFound')}
-                    </div>
-                  </div>
-                </div>
               </div>
               
               {/* Confirmation prompt */}

@@ -36,6 +36,12 @@
     "extraction_pattern_supplier": "ppc.gaz"
   },
   {
+    "name": "Telekom",
+    "bill_type": "telecom",
+    "has_api": false,
+    "extraction_pattern_supplier": "telekom"
+  },
+  {
     "name": "Vodafone",
     "bill_type": "telecom",
     "has_api": false,
