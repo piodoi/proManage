@@ -189,8 +189,8 @@ async def parse_bill_pdf(
     logger.setLevel(logging.INFO)
     logger.info(f"[PDF Parse] Starting parse for property {property_id} using text patterns")
     
-    # Use new text pattern extraction system
-    extracted_data, pattern_id, pattern_name, pattern_bill_type = extract_bill_from_pdf_auto(pdf_bytes)
+    # Use new text pattern extraction system (checks both admin and user patterns)
+    extracted_data, pattern_id, pattern_name, pattern_bill_type = extract_bill_from_pdf_auto(pdf_bytes, user_id=current_user.user_id)
     
     if not extracted_data:
         raise HTTPException(status_code=400, detail="Could not extract bill data from PDF. Please ensure the PDF matches a known supplier format.")

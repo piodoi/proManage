@@ -53,6 +53,55 @@ class EmailMonitor:
             return match.group(1)
         return None
     
+    def extract_user_id_from_message(self, msg: Message) -> Optional[str]:
+        """
+        Extract user_id from email message by checking multiple headers.
+        Handles forwarded emails by checking various header locations.
+        
+        Args:
+            msg: Email message object
+            
+        Returns:
+            user_id if found, None otherwise
+        """
+        # Headers to check, in order of preference
+        headers_to_check = [
+            'Delivered-To',      # Gmail's actual delivery address
+            'X-Original-To',     # Common forwarding header
+            'To',                # Standard TO header
+            'X-Forwarded-To',    # Forwarding header
+            'Envelope-To',       # Some servers use this
+        ]
+        
+        for header in headers_to_check:
+            value = msg.get(header, '')
+            if value:
+                logger.debug(f"[Email Monitor] Checking header {header}: {value}")
+                user_id = self.extract_user_id_from_email(value)
+                if user_id:
+                    logger.info(f"[Email Monitor] Found user_id '{user_id}' in header '{header}'")
+                    return user_id
+        
+        # Also check all recipients in case it's a list
+        for header in ['To', 'Cc']:
+            value = msg.get(header, '')
+            if value:
+                # Split by comma for multiple recipients
+                for addr in value.split(','):
+                    user_id = self.extract_user_id_from_email(addr.strip())
+                    if user_id:
+                        logger.info(f"[Email Monitor] Found user_id '{user_id}' in {header} list")
+                        return user_id
+        
+        # Log all headers for debugging
+        logger.warning(f"[Email Monitor] Could not extract user_id from email. Headers checked:")
+        for header in headers_to_check + ['To', 'Cc', 'From', 'Subject']:
+            value = msg.get(header, '')
+            if value:
+                logger.warning(f"[Email Monitor]   {header}: {value[:100]}...")
+        
+        return None
+    
     def connect(self) -> imaplib.IMAP4_SSL:
         """Connect to Gmail IMAP server."""
         if not self.is_configured():
@@ -106,13 +155,11 @@ class EmailMonitor:
                     raw_email = msg_data[0][1]
                     msg = email.message_from_bytes(raw_email)
                     
-                    # Extract TO address
-                    to_address = msg.get('To', '')
-                    
-                    # Extract user_id from TO address
-                    extracted_user_id = self.extract_user_id_from_email(to_address)
+                    # Extract user_id from email headers (checks multiple headers for forwarded emails)
+                    extracted_user_id = self.extract_user_id_from_message(msg)
                     
                     if not extracted_user_id:
+                        logger.warning(f"[Email Monitor] Skipping email {email_id.decode()} - no user_id found in headers")
                         continue
                     
                     # If user_id filter is specified, check if it matches
@@ -133,6 +180,7 @@ class EmailMonitor:
     def extract_pdf_attachments(self, msg: Message) -> List[Tuple[str, bytes]]:
         """
         Extract PDF attachments from email message.
+        Handles nested/forwarded emails by recursively walking through all parts.
         
         Args:
             msg: Email message object
@@ -141,6 +189,7 @@ class EmailMonitor:
             List of tuples: (filename, pdf_bytes)
         """
         from email.header import decode_header
+        from email import message_from_bytes
         import re
         
         attachments = []
@@ -158,8 +207,33 @@ class EmailMonitor:
             if content_maintype == 'multipart':
                 continue
             
+            # Handle nested message/rfc822 (forwarded emails)
+            if content_type == 'message/rfc822':
+                logger.info(f"[Email] Found nested/forwarded email in part {part_num}, extracting attachments...")
+                payload = part.get_payload()
+                if payload:
+                    # payload can be a list of Message objects or a single Message
+                    if isinstance(payload, list):
+                        for nested_msg in payload:
+                            if hasattr(nested_msg, 'walk'):
+                                nested_attachments = self.extract_pdf_attachments(nested_msg)
+                                attachments.extend(nested_attachments)
+                    elif hasattr(payload, 'walk'):
+                        nested_attachments = self.extract_pdf_attachments(payload)
+                        attachments.extend(nested_attachments)
+                    elif isinstance(payload, bytes):
+                        # Try to parse as email message
+                        try:
+                            nested_msg = message_from_bytes(payload)
+                            nested_attachments = self.extract_pdf_attachments(nested_msg)
+                            attachments.extend(nested_attachments)
+                        except Exception as e:
+                            logger.warning(f"[Email] Failed to parse nested message: {e}")
+                continue
+            
             # Try to get filename (handles encoded filenames)
             filename = part.get_filename()
+            raw_filename = filename  # Keep original for logging
             
             # Decode filename if it's encoded (RFC 2047)
             if filename:
@@ -172,9 +246,12 @@ class EmailMonitor:
                         else:
                             decoded_filename += part_text
                     filename = decoded_filename
-                    logger.debug(f"[Email] Decoded filename: {filename}")
+                    if raw_filename != filename:
+                        logger.info(f"[Email] Decoded filename: '{raw_filename}' -> '{filename}'")
+                    else:
+                        logger.debug(f"[Email] Filename: {filename}")
                 except Exception as e:
-                    logger.warning(f"[Email] Failed to decode filename: {e}")
+                    logger.warning(f"[Email] Failed to decode filename '{raw_filename}': {e}")
             
             # Check if it's a PDF by filename OR content type
             is_pdf = False
@@ -358,8 +435,8 @@ class EmailMonitor:
                         try:
                             logger.info(f"[Email Monitor] Processing PDF: {filename} ({len(pdf_data)} bytes)")
                             
-                            # Use text pattern extraction (from text_patterns folder)
-                            extracted_data, pattern_id, pattern_name, pattern_bill_type = extract_bill_from_pdf_auto(pdf_data)
+                            # Use text pattern extraction (from admin and user text_patterns folders)
+                            extracted_data, pattern_id, pattern_name, pattern_bill_type = extract_bill_from_pdf_auto(pdf_data, user_id=extracted_user_id)
                             
                             if not extracted_data:
                                 error_msg = f"No pattern matched for {filename}"
