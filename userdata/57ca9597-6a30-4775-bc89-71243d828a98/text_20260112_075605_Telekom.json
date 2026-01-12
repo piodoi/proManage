@@ -1,0 +1,50 @@
+{
+  "id": "text_20260112_075605_Telekom",
+  "name": "Telekom",
+  "bill_type": "telecom",
+  "supplier": null,
+  "field_patterns": [
+    {
+      "field_name": "amount",
+      "label_text": "Factura curenta",
+      "line_offset": 1
+    },
+    {
+      "field_name": "currency",
+      "label_text": "Lei",
+      "line_offset": 0
+    },
+    {
+      "field_name": "bill_date",
+      "label_text": "Data facturarii:",
+      "line_offset": 0
+    },
+    {
+      "field_name": "due_date",
+      "label_text": "Total de plata pana la data de",
+      "line_offset": 0
+    },
+    {
+      "field_name": "bill_number",
+      "label_text": "Seria   TKRM   nr.",
+      "line_offset": 0
+    },
+    {
+      "field_name": "contract_id",
+      "label_text": "Cod facturare:",
+      "line_offset": 0
+    },
+    {
+      "field_name": "address",
+      "label_text": "Seria   TKRM   nr",
+      "line_offset": 3
+    },
+    {
+      "field_name": "legal_name",
+      "label_text": "TELEKOM ROMANIA MOBILE COMMUNICATIONS SA",
+      "line_offset": -1
+    }
+  ],
+  "created_at": "2026-01-12T07:56:05.420363",
+  "updated_at": "2026-01-12T07:56:05.420370"
+}
