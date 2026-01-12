@@ -57,49 +57,29 @@ class EmailMonitor:
         """
         Extract user_id from email message by checking multiple headers.
         Handles forwarded emails by checking various header locations.
-        
-        Args:
-            msg: Email message object
-            
-        Returns:
-            user_id if found, None otherwise
         """
         # Headers to check, in order of preference
         headers_to_check = [
-            'Delivered-To',      # Gmail's actual delivery address
-            'X-Original-To',     # Common forwarding header
-            'To',                # Standard TO header
-            'X-Forwarded-To',    # Forwarding header
-            'Envelope-To',       # Some servers use this
+            'Delivered-To', 'X-Original-To', 'To', 'X-Forwarded-To', 'Envelope-To'
         ]
         
         for header in headers_to_check:
             value = msg.get(header, '')
             if value:
-                logger.debug(f"[Email Monitor] Checking header {header}: {value}")
                 user_id = self.extract_user_id_from_email(value)
                 if user_id:
-                    logger.info(f"[Email Monitor] Found user_id '{user_id}' in header '{header}'")
                     return user_id
         
         # Also check all recipients in case it's a list
         for header in ['To', 'Cc']:
             value = msg.get(header, '')
             if value:
-                # Split by comma for multiple recipients
                 for addr in value.split(','):
                     user_id = self.extract_user_id_from_email(addr.strip())
                     if user_id:
-                        logger.info(f"[Email Monitor] Found user_id '{user_id}' in {header} list")
                         return user_id
         
-        # Log all headers for debugging
-        logger.warning(f"[Email Monitor] Could not extract user_id from email. Headers checked:")
-        for header in headers_to_check + ['To', 'Cc', 'From', 'Subject']:
-            value = msg.get(header, '')
-            if value:
-                logger.warning(f"[Email Monitor]   {header}: {value[:100]}...")
-        
+        logger.warning(f"[Email Monitor] No user_id found in email headers (Subject: {msg.get('Subject', 'N/A')[:50]})")
         return None
     
     def connect(self) -> imaplib.IMAP4_SSL:
@@ -159,7 +139,6 @@ class EmailMonitor:
                     extracted_user_id = self.extract_user_id_from_message(msg)
                     
                     if not extracted_user_id:
-                        logger.warning(f"[Email Monitor] Skipping email {email_id.decode()} - no user_id found in headers")
                         continue
                     
                     # If user_id filter is specified, check if it matches
@@ -181,27 +160,16 @@ class EmailMonitor:
         """
         Extract PDF attachments from email message.
         Handles nested/forwarded emails by recursively walking through all parts.
-        
-        Args:
-            msg: Email message object
-            
-        Returns:
-            List of tuples: (filename, pdf_bytes)
         """
         from email.header import decode_header
         from email import message_from_bytes
-        import re
         
         attachments = []
-        part_num = 0
         
         for part in msg.walk():
-            part_num += 1
             content_type = part.get_content_type()
             content_maintype = part.get_content_maintype()
             content_disposition = part.get('Content-Disposition')
-            
-            logger.debug(f"[Email] Part {part_num}: type={content_type}, maintype={content_maintype}, disposition={content_disposition}")
             
             # Skip multipart containers
             if content_maintype == 'multipart':
@@ -209,31 +177,24 @@ class EmailMonitor:
             
             # Handle nested message/rfc822 (forwarded emails)
             if content_type == 'message/rfc822':
-                logger.info(f"[Email] Found nested/forwarded email in part {part_num}, extracting attachments...")
                 payload = part.get_payload()
                 if payload:
-                    # payload can be a list of Message objects or a single Message
                     if isinstance(payload, list):
                         for nested_msg in payload:
                             if hasattr(nested_msg, 'walk'):
-                                nested_attachments = self.extract_pdf_attachments(nested_msg)
-                                attachments.extend(nested_attachments)
+                                attachments.extend(self.extract_pdf_attachments(nested_msg))
                     elif hasattr(payload, 'walk'):
-                        nested_attachments = self.extract_pdf_attachments(payload)
-                        attachments.extend(nested_attachments)
+                        attachments.extend(self.extract_pdf_attachments(payload))
                     elif isinstance(payload, bytes):
-                        # Try to parse as email message
                         try:
                             nested_msg = message_from_bytes(payload)
-                            nested_attachments = self.extract_pdf_attachments(nested_msg)
-                            attachments.extend(nested_attachments)
-                        except Exception as e:
-                            logger.warning(f"[Email] Failed to parse nested message: {e}")
+                            attachments.extend(self.extract_pdf_attachments(nested_msg))
+                        except Exception:
+                            pass
                 continue
             
             # Try to get filename (handles encoded filenames)
             filename = part.get_filename()
-            raw_filename = filename  # Keep original for logging
             
             # Decode filename if it's encoded (RFC 2047)
             if filename:
@@ -246,42 +207,30 @@ class EmailMonitor:
                         else:
                             decoded_filename += part_text
                     filename = decoded_filename
-                    if raw_filename != filename:
-                        logger.info(f"[Email] Decoded filename: '{raw_filename}' -> '{filename}'")
-                    else:
-                        logger.debug(f"[Email] Filename: {filename}")
-                except Exception as e:
-                    logger.warning(f"[Email] Failed to decode filename '{raw_filename}': {e}")
+                except Exception:
+                    pass
             
             # Check if it's a PDF by filename OR content type
             is_pdf = False
             
             if filename and filename.lower().endswith('.pdf'):
                 is_pdf = True
-                logger.debug(f"[Email] Found PDF by filename: {filename}")
             elif content_type == 'application/pdf':
                 is_pdf = True
                 if not filename:
-                    filename = f"attachment_{part_num}.pdf"
-                logger.debug(f"[Email] Found PDF by content type: {filename}")
+                    filename = f"attachment.pdf"
             elif content_disposition and 'attachment' in content_disposition.lower():
                 # Check payload for PDF magic bytes (%PDF)
                 payload = part.get_payload(decode=True)
                 if payload and payload[:4] == b'%PDF':
                     is_pdf = True
                     if not filename:
-                        filename = f"attachment_{part_num}.pdf"
-                    logger.info(f"[Email] Found PDF by magic bytes: {filename}")
+                        filename = f"attachment.pdf"
             
             if is_pdf:
                 pdf_data = part.get_payload(decode=True)
                 if pdf_data and len(pdf_data) > 0:
-                    logger.info(f"[Email] Extracted PDF attachment: {filename} ({len(pdf_data)} bytes)")
                     attachments.append((filename, pdf_data))
-                else:
-                    logger.warning(f"[Email] PDF attachment {filename} has no data")
-            elif content_disposition and 'attachment' in content_disposition.lower():
-                logger.debug(f"[Email] Skipping non-PDF attachment: {filename or 'unnamed'} (type: {content_type})")
         
         return attachments
     
