@@ -8,10 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
-import AddressWarningDialog from './dialogs/AddressWarningDialog';
+import BillConfirmDialog from './dialogs/BillConfirmDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { formatDateWithPreferences } from '../lib/utils';
+import { useScrollPreservation } from '../hooks/useScrollPreservation';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -34,6 +35,7 @@ export default function PropertyBillsView({
 }: PropertyBillsViewProps) {
   const { t, language } = useI18n();
   const { preferences } = usePreferences();
+  const { saveScroll, restoreScroll } = useScrollPreservation();
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [propertySuppliers, setPropertySuppliers] = useState<PropertySupplier[]>([]);
@@ -126,7 +128,7 @@ export default function PropertyBillsView({
   }, [renters, editingBill, billForm.renter_id]);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
-  const [showAddressWarning, setShowAddressWarning] = useState(false);
+  const [showBillConfirm, setShowBillConfirm] = useState(false);
   const [duplicateConflict, setDuplicateConflict] = useState<{
     billNumber: string;
     existingAmount: number;
@@ -272,7 +274,8 @@ export default function PropertyBillsView({
       }
       
       setPdfResult(null);
-      setShowAddressWarning(false);
+      setShowBillConfirm(false);
+      restoreScroll();
       if (onBillsChange) {
         onBillsChange();
       }
@@ -291,7 +294,8 @@ export default function PropertyBillsView({
   const handleDuplicateSkip = () => {
     setDuplicateConflict(null);
     setPdfResult(null);
-    setShowAddressWarning(false);
+    setShowBillConfirm(false);
+    restoreScroll();
   };
 
   const handleSaveBill = async () => {
@@ -411,6 +415,9 @@ export default function PropertyBillsView({
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file || !token) return;
+                
+                // Save scroll position before parsing
+                saveScroll();
                 setParsingPdf(true);
                 try {
                   const result = await api.billParser.parse(token, file, propertyId);
@@ -422,15 +429,11 @@ export default function PropertyBillsView({
                     onError(result.supplier_message);
                   }
                   
-                  // Pattern matched - check if address matches
-                  if (!result.address_matches && result.address_warning) {
-                    setShowAddressWarning(true);
-                  } else {
-                    // Address matches or no address extracted, proceed to create bill
-                    await createBillFromPdf(result);
-                  }
+                  // Always show confirmation dialog - user must confirm before adding bill
+                  setShowBillConfirm(true);
                 } catch (err) {
                   handleError(err);
+                  restoreScroll();
                 } finally {
                   setParsingPdf(false);
                   // Reset file input
@@ -680,13 +683,14 @@ export default function PropertyBillsView({
         </Table>
         </CardContent>
       </Card>
-      <AddressWarningDialog
-        open={showAddressWarning}
-        onOpenChange={setShowAddressWarning}
+      <BillConfirmDialog
+        open={showBillConfirm}
+        onOpenChange={setShowBillConfirm}
         pdfResult={pdfResult}
         onCancel={() => {
-          setShowAddressWarning(false);
+          setShowBillConfirm(false);
           setPdfResult(null);
+          restoreScroll();
         }}
         onConfirm={() => {
           if (pdfResult) {

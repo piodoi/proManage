@@ -456,6 +456,17 @@
     "addBillAnyway": "Add Bill Anyway",
     "na": "N/A"
   },
+  "billConfirm": {
+    "title": "Confirm Bill Details",
+    "extractedDetails": "Extracted Bill Details",
+    "supplier": "Supplier",
+    "billDate": "Bill Date",
+    "contractId": "Contract ID",
+    "confirmPrompt": "Do you want to add this bill to the property?",
+    "addBill": "Add Bill",
+    "fieldsMatched": "Fields Matched",
+    "notFound": "Not found"
+  },
   "success": {
     "saved": "Saved successfully",
     "deleted": "Deleted successfully",

@@ -449,6 +449,17 @@
     "addBillAnyway": "Adaugă Factura Oricum",
     "na": "N/A"
   },
+  "billConfirm": {
+    "title": "Confirmă Detaliile Facturii",
+    "extractedDetails": "Detalii Factură Extrase",
+    "supplier": "Furnizor",
+    "billDate": "Data Facturii",
+    "contractId": "ID Contract",
+    "confirmPrompt": "Doriți să adăugați această factură proprietății?",
+    "addBill": "Adaugă Factură",
+    "fieldsMatched": "Câmpuri Găsite",
+    "notFound": "Negăsit"
+  },
   "success": {
     "saved": "Salvat cu succes",
     "deleted": "Șters cu succes",
