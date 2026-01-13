@@ -82,14 +82,14 @@ def load_all_patterns(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
 
 def match_text_patterns(pdf_bytes: bytes, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Match PDF against all text patterns and return matching patterns with scores.
+    Match PDF against all text patterns and return matching patterns with scores and extracted data.
     
     Args:
         pdf_bytes: PDF file as bytes
         user_id: If provided, also check patterns from user's folder
     
     Returns:
-        List of dicts with 'pattern', 'pattern_id', 'matched_fields' count, and 'source'
+        List of dicts with 'pattern', 'pattern_id', 'matched_fields' count, 'source', and 'extracted_data'
     """
     patterns = load_all_patterns(user_id)
     logger.info(f"[Text Pattern] Checking {len(patterns)} patterns against PDF")
@@ -109,18 +109,27 @@ def match_text_patterns(pdf_bytes: bytes, user_id: Optional[str] = None) -> List
         if matched_count > 0:
             match_percentage = (matched_count / len(field_patterns) * 100) if field_patterns else 0
             logger.info(f"[Text Pattern] Pattern '{pattern_name}' ({source}) matched: {match_percentage:.1f}% ({matched_count}/{len(field_patterns)} fields)")
+            
+            # Extract data now to avoid re-processing later
+            try:
+                extracted_data = extract_with_pattern(pdf_bytes, pattern)
+            except Exception as e:
+                logger.warning(f"[Text Pattern] Error extracting with pattern '{pattern_name}': {e}")
+                extracted_data = {}
+            
             matches.append({
                 'pattern': pattern,
                 'pattern_id': pattern_data['pattern_id'],
                 'matched_fields': matched_count,
                 'total_fields': len(field_patterns),
                 'match_percentage': match_percentage,
-                'source': source
+                'source': source,
+                'extracted_data': extracted_data
             })
     
     # Sort by match percentage (descending), then by source (admin first)
-    # This ensures admin patterns take priority when match percentages are equal
-    matches.sort(key=lambda x: (x['match_percentage'], 0 if x['source'] == 'admin' else 1), reverse=True)
+    # With reverse=True, higher values come first, so admin=1, user=0 ensures admin priority
+    matches.sort(key=lambda x: (x['match_percentage'], 1 if x['source'] == 'admin' else 0), reverse=True)
     
     if not matches:
         logger.warning(f"[Text Pattern] No patterns matched the PDF (checked {len(patterns)} patterns)")
@@ -143,7 +152,8 @@ def extract_with_text_pattern(pdf_bytes: bytes, pattern_id: str, user_id: Option
     # Check if this is a user pattern
     if pattern_id.startswith('user_') and user_id:
         actual_pattern_id = pattern_id[5:]  # Remove 'user_' prefix
-        user_patterns_dir = get_user_data_dir(user_id) / "text_patterns"
+        # User patterns are stored directly in user data dir, not in a text_patterns subdirectory
+        user_patterns_dir = get_user_data_dir(user_id)
         pattern_file = os.path.join(user_patterns_dir, f"{actual_pattern_id}.json")
     else:
         pattern_file = os.path.join(TEXT_PATTERNS_DIR, f"{pattern_id}.json")
@@ -172,6 +182,7 @@ def extract_bill_from_pdf_auto(pdf_bytes: bytes, user_id: Optional[str] = None) 
         Tuple of (extracted_data, pattern_id, pattern_name, pattern_bill_type) or (None, None, None, None) if no match
     """
     # Find matching patterns (includes both admin and user patterns)
+    # Data is already extracted during matching, so we don't need to re-extract
     matches = match_text_patterns(pdf_bytes, user_id)
     
     if not matches:
@@ -187,10 +198,6 @@ def extract_bill_from_pdf_auto(pdf_bytes: bytes, user_id: Optional[str] = None) 
     
     logger.info(f"[Text Pattern] Best match: {pattern_name} ({best_match['match_percentage']:.1f}% match, bill_type={pattern_bill_type}, source={source})")
     
-    # Extract data using best pattern
-    try:
-        extracted_data = extract_with_text_pattern(pdf_bytes, pattern_id, user_id)
-        return extracted_data, pattern_id, pattern_name, pattern_bill_type
-    except Exception as e:
-        logger.error(f"[Text Pattern] Error extracting with pattern {pattern_id}: {e}")
-        return None, None, None, None
+    # Return the already-extracted data from matching phase
+    extracted_data = best_match.get('extracted_data', {})
+    return extracted_data, pattern_id, pattern_name, pattern_bill_type
