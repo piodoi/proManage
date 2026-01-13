@@ -52,9 +52,9 @@ def load_all_patterns(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
                 except Exception as e:
                     logger.warning(f"[Text Pattern] Error loading admin pattern {filename}: {e}")
     
-    # Load user patterns if user_id provided
+    # Load user patterns if user_id provided from user's folder, files stay in user's folder not text_patterns like admin patterns
     if user_id:
-        user_patterns_dir = get_user_data_dir(user_id) / "text_patterns"
+        user_patterns_dir = get_user_data_dir(user_id)
         if os.path.exists(user_patterns_dir):
             for filename in os.listdir(user_patterns_dir):
                 if filename.endswith('.json'):
