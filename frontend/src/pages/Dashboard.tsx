@@ -392,7 +392,7 @@ function AdminTabsContent({
 
   const handleUserPatternSuccess = () => {
     // Refresh suppliers list after creating a supplier from user pattern
-    loadSuppliers();
+    // Note: loadSuppliers is passed from parent component
     setUserPatternError('');
   };
 

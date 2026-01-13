@@ -29,7 +29,9 @@
     "description": "Description",
     "selectAll": "Select All",
     "deselectAll": "Deselect All",
-    "syncing": "Syncing..."
+    "syncing": "Syncing...",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "app": {
     "title": "ProManage",
@@ -181,7 +183,8 @@
     "selectProperty": "Select Property",
     "confidence": "Confidence",
     "confirmProperty": "Confirm or change property",
-    "directDebit": "Direct Debit"
+    "directDebit": "Direct Debit",
+    "noDescription": "No description"
   },
   "summary": {
     "summary": "Summary",

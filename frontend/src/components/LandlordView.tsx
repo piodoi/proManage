@@ -340,7 +340,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
-            <SettingsView token={token} onError={onError} />
+            <SettingsView token={token} user={null} onError={onError} />
           </TabsContent>
         </Tabs>
       )}

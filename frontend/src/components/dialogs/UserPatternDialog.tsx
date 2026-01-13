@@ -178,7 +178,7 @@ export default function UserPatternDialog({
                             {pattern.pattern_name}
                           </span>
                           {pattern.subscription_tier > 0 && (
-                            <Crown className="w-4 h-4 text-amber-400 flex-shrink-0" title={t('admin.userPatterns.activeSubscription')} />
+                            <Crown className="w-4 h-4 text-amber-400 flex-shrink-0" />
                           )}
                         </div>
                         <div className="text-sm text-slate-400 truncate">

@@ -259,7 +259,6 @@ export default function PropertyCard({
           <PropertyBillsView
             token={token}
             propertyId={property.id}
-            property={property}
             renters={renters}
             bills={bills}
             onError={onError}

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Bill, Renter, ExtractionResult, Property, BillType, BILL_TYPES, PropertySupplier } from '../api';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { api, Bill, Renter, ExtractionResult, BillType, BILL_TYPES, PropertySupplier } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Receipt, Settings, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import BillConfirmDialog from './dialogs/BillConfirmDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
@@ -17,21 +17,19 @@ import { useScrollPreservation } from '../hooks/useScrollPreservation';
 type PropertyBillsViewProps = {
   token: string | null;
   propertyId: string;
-  property?: Property;  // Optional property object for sync dialog
   renters: Renter[];
   bills: Bill[];
   onError?: (error: string) => void;
   onBillsChange?: () => void;
 };
 
-export default function PropertyBillsView({ 
-  token, 
+export default function PropertyBillsView({
+  token,
   propertyId,
-  property,
-  renters, 
-  bills, 
+  renters,
+  bills,
   onError,
-  onBillsChange 
+  onBillsChange
 }: PropertyBillsViewProps) {
   const { t, language } = useI18n();
   const { preferences } = usePreferences();
@@ -261,9 +259,9 @@ export default function PropertyBillsView({
         } else if (response.action === 'conflict') {
           // Different amount - show conflict dialog
           setDuplicateConflict({
-            billNumber: response.bill_number,
-            existingAmount: response.existing_amount,
-            newAmount: response.new_amount,
+            billNumber: response.bill_number || '',
+            existingAmount: response.existing_amount || 0,
+            newAmount: response.new_amount || 0,
             billData: { ...billData, result, patternId, supplier },
           });
           return; // Don't close dialogs yet - waiting for user decision
@@ -397,6 +395,95 @@ export default function PropertyBillsView({
 
   // Filter bills for this property
   const propertyBills = bills.filter(bill => bill.property_id === propertyId);
+
+  // State for expanded groups
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Toggle group expansion
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupKey)) {
+        newSet.delete(groupKey);
+      } else {
+        newSet.add(groupKey);
+      }
+      return newSet;
+    });
+  };
+
+  // Group bills: renter bills by renter_id, non-renter bills by description
+  // Returns array of { groupKey, latestBill, olderBills, isRenterGroup, renterName }
+  type BillGroup = {
+    groupKey: string;
+    latestBill: Bill;
+    olderBills: Bill[];
+    isRenterGroup: boolean;
+    renterName?: string;
+  };
+
+  const groupedBills = useMemo((): BillGroup[] => {
+    // Separate bills into renter-specific and property-wide
+    const renterBills = propertyBills.filter(bill => bill.renter_id);
+    const propertyWideBills = propertyBills.filter(bill => !bill.renter_id);
+
+    const groups: BillGroup[] = [];
+
+    // Group renter bills by renter_id
+    const renterBillsMap = new Map<string, Bill[]>();
+    renterBills.forEach(bill => {
+      const renterId = bill.renter_id!;
+      if (!renterBillsMap.has(renterId)) {
+        renterBillsMap.set(renterId, []);
+      }
+      renterBillsMap.get(renterId)!.push(bill);
+    });
+
+    // Sort each renter group by due_date descending and create group objects
+    renterBillsMap.forEach((bills, renterId) => {
+      const sortedBills = [...bills].sort((a, b) =>
+        new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
+      );
+      const renter = renters.find(r => r.id === renterId);
+      groups.push({
+        groupKey: `renter-${renterId}`,
+        latestBill: sortedBills[0],
+        olderBills: sortedBills.slice(1),
+        isRenterGroup: true,
+        renterName: renter?.name || renterId,
+      });
+    });
+
+    // Group property-wide bills by description
+    const descriptionBillsMap = new Map<string, Bill[]>();
+    propertyWideBills.forEach(bill => {
+      const description = bill.description || t('bill.noDescription');
+      if (!descriptionBillsMap.has(description)) {
+        descriptionBillsMap.set(description, []);
+      }
+      descriptionBillsMap.get(description)!.push(bill);
+    });
+
+    // Sort each description group by due_date descending and create group objects
+    descriptionBillsMap.forEach((bills, description) => {
+      const sortedBills = [...bills].sort((a, b) =>
+        new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
+      );
+      groups.push({
+        groupKey: `desc-${description}`,
+        latestBill: sortedBills[0],
+        olderBills: sortedBills.slice(1),
+        isRenterGroup: false,
+      });
+    });
+
+    // Sort groups by latest bill due_date descending
+    groups.sort((a, b) =>
+      new Date(b.latestBill.due_date).getTime() - new Date(a.latestBill.due_date).getTime()
+    );
+
+    return groups;
+  }, [propertyBills, renters, t]);
 
   return (
     <>
@@ -626,57 +713,94 @@ export default function PropertyBillsView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {propertyBills.length === 0 ? (
+            {groupedBills.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-slate-500 text-center py-4">
                   {t('bill.noBills')}
                 </TableCell>
               </TableRow>
             ) : (
-              propertyBills.map((bill) => {
-                const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
+              groupedBills.map((group) => {
+                const isExpanded = expandedGroups.has(group.groupKey);
+                const hasOlderBills = group.olderBills.length > 0;
+                
+                // Render function for a single bill row
+                const renderBillRow = (bill: Bill, isGroupHeader: boolean = false) => {
+                  const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
+                  return (
+                    <TableRow key={bill.id} className={`border-slate-700 ${!isGroupHeader ? 'bg-slate-850' : ''}`}>
+                      <TableCell className="text-slate-300">
+                        <div className="flex items-center gap-1">
+                          {isGroupHeader && hasOlderBills && (
+                            <button
+                              onClick={() => toggleGroup(group.groupKey)}
+                              className="p-0.5 hover:bg-slate-700 rounded transition-colors"
+                              title={isExpanded ? t('common.collapse') : t('common.expand')}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-400" />
+                              )}
+                            </button>
+                          )}
+                          {isGroupHeader && hasOlderBills && !isExpanded && (
+                            <span className="text-xs text-emerald-400 font-medium mr-1">
+                              +{group.olderBills.length}
+                            </span>
+                          )}
+                          {renter ? renter.name : t('bill.allProperty')}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-slate-200">{bill.description}</TableCell>
+                      <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
+                      <TableCell className="text-slate-300">{bill.bill_number || '-'}</TableCell>
+                      <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || 'RON'}</TableCell>
+                      <TableCell className="text-slate-300">{formatDateWithPreferences(bill.due_date, preferences.date_format, language)}</TableCell>
+                      <TableCell>
+                        <button
+                          onClick={() => handleStatusClick(bill)}
+                          className={`px-2 py-1 rounded text-xs cursor-pointer transition-all hover:opacity-80 active:scale-95 ${
+                            getEffectiveStatus(bill) === 'paid' ? 'bg-green-900 text-green-200' :
+                            getEffectiveStatus(bill) === 'overdue' ? 'bg-red-900 text-red-200' :
+                            'bg-amber-900 text-amber-200'
+                          } ${pendingStatusChanges[bill.id] ? 'ring-2 ring-offset-1 ring-offset-slate-800 ring-indigo-400' : ''}`}
+                          title={t('bill.clickToToggleStatus')}
+                        >
+                          {t(`bill.status.${getEffectiveStatus(bill)}`)}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            onClick={() => handleEditBill(bill)}
+                            className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
+                            title={t('bill.editBill')}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleDeleteBill(bill.id)}
+                            className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600 h-6 px-2 w-6"
+                            title={t('bill.deleteBill')}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                };
+
                 return (
-                  <TableRow key={bill.id} className="border-slate-700">
-                    <TableCell className="text-slate-300">{renter ? renter.name : t('bill.allProperty')}</TableCell>
-                    <TableCell className="text-slate-200">{bill.description}</TableCell>
-                    <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
-                    <TableCell className="text-slate-300">{bill.bill_number || '-'}</TableCell>
-                    <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || 'RON'}</TableCell>
-                    <TableCell className="text-slate-300">{formatDateWithPreferences(bill.due_date, preferences.date_format, language)}</TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => handleStatusClick(bill)}
-                        className={`px-2 py-1 rounded text-xs cursor-pointer transition-all hover:opacity-80 active:scale-95 ${
-                          getEffectiveStatus(bill) === 'paid' ? 'bg-green-900 text-green-200' :
-                          getEffectiveStatus(bill) === 'overdue' ? 'bg-red-900 text-red-200' :
-                          'bg-amber-900 text-amber-200'
-                        } ${pendingStatusChanges[bill.id] ? 'ring-2 ring-offset-1 ring-offset-slate-800 ring-indigo-400' : ''}`}
-                        title={t('bill.clickToToggleStatus')}
-                      >
-                        {t(`bill.status.${getEffectiveStatus(bill)}`)}
-                      </button>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          onClick={() => handleEditBill(bill)}
-                          className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
-                          title={t('bill.editBill')}
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleDeleteBill(bill.id)}
-                          className="bg-slate-700 text-red-400 hover:bg-slate-600 hover:text-red-200 border border-slate-600 h-6 px-2 w-6"
-                          title={t('bill.deleteBill')}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <React.Fragment key={group.groupKey}>
+                    {/* Latest bill (group header) */}
+                    {renderBillRow(group.latestBill, true)}
+                    {/* Older bills (expanded) */}
+                    {isExpanded && group.olderBills.map(bill => renderBillRow(bill, false))}
+                  </React.Fragment>
                 );
               })
             )}
@@ -705,7 +829,7 @@ export default function PropertyBillsView({
           <DialogHeader>
             <DialogTitle className="text-slate-200">{t('bill.duplicateBillFound')}</DialogTitle>
             <DialogDescription className="text-slate-400">
-              {t('bill.duplicateBillDescription', { billNumber: duplicateConflict?.billNumber })}
+              {t('bill.duplicateBillDescription', { billNumber: duplicateConflict?.billNumber || '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

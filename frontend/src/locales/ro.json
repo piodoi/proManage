@@ -29,7 +29,9 @@
     "description": "Descriere",
     "selectAll": "Selectează Tot",
     "deselectAll": "Deselectează Tot",
-    "syncing": "Se sincronizează..."
+    "syncing": "Se sincronizează...",
+    "expand": "Extinde",
+    "collapse": "Restrânge"
   },
   "app": {
     "title": "ProManage",
@@ -189,7 +191,8 @@
     "selectProperty": "Selectează Proprietate",
     "confidence": "Încredere",
     "confirmProperty": "Confirmă sau schimbă proprietatea",
-    "directDebit": "Debit Direct"
+    "directDebit": "Debit Direct",
+    "noDescription": "Fără descriere"
   },
   "summary": {
     "summary": "Rezumat",
