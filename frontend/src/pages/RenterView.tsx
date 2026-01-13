@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, RenterInfo, RenterBill, RenterBalance } from '../api';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Building2, Receipt, CreditCard, Banknote } from 'lucide-react';
+import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
 
@@ -24,6 +24,75 @@ export default function RenterView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [payingBill, setPayingBill] = useState<RenterBill | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Toggle group expansion
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupKey)) {
+        newSet.delete(groupKey);
+      } else {
+        newSet.add(groupKey);
+      }
+      return newSet;
+    });
+  };
+
+  // Group bills by bill_type for rent, by description for others
+  type BillGroup = {
+    groupKey: string;
+    latestBill: RenterBill;
+    olderBills: RenterBill[];
+  };
+
+  const groupedBills = useMemo((): BillGroup[] => {
+    // Separate rent bills from other bills
+    const rentBills = bills.filter(item => item.bill.bill_type === 'rent');
+    const otherBills = bills.filter(item => item.bill.bill_type !== 'rent');
+
+    const groups: BillGroup[] = [];
+
+    // Group all rent bills together
+    if (rentBills.length > 0) {
+      const sortedRentBills = [...rentBills].sort((a, b) =>
+        new Date(b.bill.due_date).getTime() - new Date(a.bill.due_date).getTime()
+      );
+      groups.push({
+        groupKey: 'type-rent',
+        latestBill: sortedRentBills[0],
+        olderBills: sortedRentBills.slice(1),
+      });
+    }
+
+    // Group other bills by description
+    const descriptionBillsMap = new Map<string, RenterBill[]>();
+    otherBills.forEach(item => {
+      const description = item.bill.description || t('bill.noDescription');
+      if (!descriptionBillsMap.has(description)) {
+        descriptionBillsMap.set(description, []);
+      }
+      descriptionBillsMap.get(description)!.push(item);
+    });
+
+    descriptionBillsMap.forEach((billItems, description) => {
+      const sortedBills = [...billItems].sort((a, b) =>
+        new Date(b.bill.due_date).getTime() - new Date(a.bill.due_date).getTime()
+      );
+      groups.push({
+        groupKey: `desc-${description}`,
+        latestBill: sortedBills[0],
+        olderBills: sortedBills.slice(1),
+      });
+    });
+
+    // Sort groups by latest bill due_date descending
+    groups.sort((a, b) =>
+      new Date(b.latestBill.bill.due_date).getTime() - new Date(a.latestBill.bill.due_date).getTime()
+    );
+
+    return groups;
+  }, [bills, t]);
 
   // Default to Romanian for renters
   useEffect(() => {
@@ -194,72 +263,111 @@ export default function RenterView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {bills.map((item) => (
-                    <TableRow key={item.bill.id} className="border-slate-700">
-                      <TableCell className="text-slate-200">{item.bill.description}</TableCell>
-                      <TableCell className="text-slate-300">{t(`bill.${item.bill.bill_type}`)}</TableCell>
-                      <TableCell className="text-slate-200">
-                        {item.bill.currency && item.bill.currency !== 'RON' ? (
-                          <div>
-                            <div>{item.bill.amount.toFixed(2)} {item.bill.currency}</div>
-                            {balance?.exchange_rates && (
-                              <div className="text-xs text-slate-400">
-                                {(item.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
-                              </div>
+                  {groupedBills.map((group) => {
+                    const isExpanded = expandedGroups.has(group.groupKey);
+                    const hasOlderBills = group.olderBills.length > 0;
+                    // Check if all older bills are paid
+                    const allOlderBillsPaid = group.olderBills.every(item => item.bill.status === 'paid');
+
+                    // Render function for a single bill row
+                    const renderBillRow = (item: RenterBill, isGroupHeader: boolean = false) => (
+                      <TableRow key={item.bill.id} className={`border-slate-700 ${!isGroupHeader ? 'bg-slate-900/50' : ''}`}>
+                        <TableCell className="text-slate-200">
+                          <div className={`flex items-center gap-1 ${!isGroupHeader ? 'pl-6' : ''}`}>
+                            {isGroupHeader && hasOlderBills && (
+                              <button
+                                onClick={() => toggleGroup(group.groupKey)}
+                                className="p-0.5 hover:bg-slate-700 rounded transition-colors"
+                                title={isExpanded ? t('common.collapse') : t('common.expand')}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                                )}
+                              </button>
                             )}
-                          </div>
-                        ) : (
-                          <span>{item.bill.amount.toFixed(2)} RON</span>
-                        )}
-                      </TableCell>
-                      <TableCell className={item.bill.status === 'paid' ? 'text-green-400' : item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
-                        {item.bill.status === 'paid' ? (
-                          '0.00'
-                        ) : item.bill.currency && item.bill.currency !== 'RON' ? (
-                          <div>
-                            <div>{item.remaining.toFixed(2)} {item.bill.currency}</div>
-                            {balance?.exchange_rates && (
-                              <div className="text-xs text-slate-400">
-                                {(item.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span>{item.remaining.toFixed(2)} RON</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-300">
-                        {formatDateWithPreferences(item.bill.due_date, info?.date_format || 'DD/MM/YYYY', language)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          item.bill.status === 'paid' ? 'bg-green-900 text-green-200' :
-                          item.bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
-                          'bg-amber-900 text-amber-200'
-                        }`}>
-                          {t(`bill.status.${item.bill.status}`)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {item.bill.status !== 'paid' && (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => openPayDialog(item)}
-                              className="bg-emerald-600 hover:bg-emerald-700"
-                            >
-                              {t('renter.pay')}
-                            </Button>
-                            {item.is_direct_debit && (
-                              <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
-                                {t('bill.directDebit')}
+                            {isGroupHeader && hasOlderBills && !isExpanded && (
+                              <span className={`text-xs font-medium mr-1 ${allOlderBillsPaid ? 'text-emerald-400' : 'text-red-400'}`}>
+                                +{group.olderBills.length}
                               </span>
                             )}
+                            {item.bill.description}
                           </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-slate-300">{t(`bill.${item.bill.bill_type}`)}</TableCell>
+                        <TableCell className="text-slate-200">
+                          {item.bill.currency && item.bill.currency !== 'RON' ? (
+                            <div>
+                              <div>{item.bill.amount.toFixed(2)} {item.bill.currency}</div>
+                              {balance?.exchange_rates && (
+                                <div className="text-xs text-slate-400">
+                                  {(item.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span>{item.bill.amount.toFixed(2)} RON</span>
+                          )}
+                        </TableCell>
+                        <TableCell className={item.bill.status === 'paid' ? 'text-green-400' : item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
+                          {item.bill.status === 'paid' ? (
+                            '0.00'
+                          ) : item.bill.currency && item.bill.currency !== 'RON' ? (
+                            <div>
+                              <div>{item.remaining.toFixed(2)} {item.bill.currency}</div>
+                              {balance?.exchange_rates && (
+                                <div className="text-xs text-slate-400">
+                                  {(item.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span>{item.remaining.toFixed(2)} RON</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-slate-300">
+                          {formatDateWithPreferences(item.bill.due_date, info?.date_format || 'DD/MM/YYYY', language)}
+                        </TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            item.bill.status === 'paid' ? 'bg-green-900 text-green-200' :
+                            item.bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
+                            'bg-amber-900 text-amber-200'
+                          }`}>
+                            {t(`bill.status.${item.bill.status}`)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {item.bill.status !== 'paid' && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => openPayDialog(item)}
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                              >
+                                {t('renter.pay')}
+                              </Button>
+                              {item.is_direct_debit && (
+                                <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
+                                  {t('bill.directDebit')}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+
+                    return (
+                      <React.Fragment key={group.groupKey}>
+                        {/* Latest bill (group header) */}
+                        {renderBillRow(group.latestBill, true)}
+                        {/* Older bills (expanded) */}
+                        {isExpanded && group.olderBills.map(item => renderBillRow(item, false))}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -267,13 +375,23 @@ export default function RenterView() {
         </Card>
 
         {/* Balance Cards */}
-        {balance && (
+        {balance && (() => {
+          // Filter bills for current month
+          const now = new Date();
+          const currentMonth = now.getMonth();
+          const currentYear = now.getFullYear();
+          const thisMonthBills = bills.filter(b => {
+            const dueDate = new Date(b.bill.due_date);
+            return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
+          });
+
+          return (
           <div className="grid grid-cols-3 gap-4 mb-6">
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm">{t('renter.totalThisMonth') || 'Total This Month'}</p>
                 <p className="text-2xl font-bold text-slate-100">
-                  {bills
+                  {thisMonthBills
                     .reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
                         ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
@@ -288,7 +406,7 @@ export default function RenterView() {
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
                 <p className="text-2xl font-bold text-green-400">
-                  {bills
+                  {thisMonthBills
                     .filter(b => b.bill.status === 'paid')
                     .reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
@@ -356,7 +474,8 @@ export default function RenterView() {
               </CardContent>
             </Card>
           </div>
-        )}
+          );
+        })()}
 
         <Dialog open={!!payingBill} onOpenChange={(open) => !open && setPayingBill(null)}>
           <DialogContent className="bg-slate-800 border-slate-700">

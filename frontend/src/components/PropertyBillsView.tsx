@@ -412,7 +412,7 @@ export default function PropertyBillsView({
     });
   };
 
-  // Group bills: renter bills by renter_id, non-renter bills by description
+  // Group bills: renter rent bills by renter_id, other renter bills by renter+description, non-renter bills by description
   // Returns array of { groupKey, latestBill, olderBills, isRenterGroup, renterName }
   type BillGroup = {
     groupKey: string;
@@ -429,24 +429,53 @@ export default function PropertyBillsView({
 
     const groups: BillGroup[] = [];
 
-    // Group renter bills by renter_id
-    const renterBillsMap = new Map<string, Bill[]>();
+    // Group renter bills: rent bills by renter_id, other bills by renter_id + description
+    const renterRentBillsMap = new Map<string, Bill[]>(); // renter_id -> rent bills
+    const renterOtherBillsMap = new Map<string, Bill[]>(); // renter_id + description -> other bills
+    
     renterBills.forEach(bill => {
       const renterId = bill.renter_id!;
-      if (!renterBillsMap.has(renterId)) {
-        renterBillsMap.set(renterId, []);
+      if (bill.bill_type === 'rent') {
+        // Group rent bills by renter only
+        if (!renterRentBillsMap.has(renterId)) {
+          renterRentBillsMap.set(renterId, []);
+        }
+        renterRentBillsMap.get(renterId)!.push(bill);
+      } else {
+        // Group other renter bills by renter + description
+        const description = bill.description || t('bill.noDescription');
+        const key = `${renterId}::${description}`;
+        if (!renterOtherBillsMap.has(key)) {
+          renterOtherBillsMap.set(key, []);
+        }
+        renterOtherBillsMap.get(key)!.push(bill);
       }
-      renterBillsMap.get(renterId)!.push(bill);
     });
 
-    // Sort each renter group by due_date descending and create group objects
-    renterBillsMap.forEach((bills, renterId) => {
+    // Sort each renter rent group by due_date descending and create group objects
+    renterRentBillsMap.forEach((bills, renterId) => {
       const sortedBills = [...bills].sort((a, b) =>
         new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
       );
       const renter = renters.find(r => r.id === renterId);
       groups.push({
-        groupKey: `renter-${renterId}`,
+        groupKey: `renter-rent-${renterId}`,
+        latestBill: sortedBills[0],
+        olderBills: sortedBills.slice(1),
+        isRenterGroup: true,
+        renterName: renter?.name || renterId,
+      });
+    });
+
+    // Sort each renter other bills group by due_date descending and create group objects
+    renterOtherBillsMap.forEach((bills, key) => {
+      const renterId = key.split('::')[0];
+      const sortedBills = [...bills].sort((a, b) =>
+        new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
+      );
+      const renter = renters.find(r => r.id === renterId);
+      groups.push({
+        groupKey: `renter-other-${key}`,
         latestBill: sortedBills[0],
         olderBills: sortedBills.slice(1),
         isRenterGroup: true,
@@ -465,12 +494,12 @@ export default function PropertyBillsView({
     });
 
     // Sort each description group by due_date descending and create group objects
-    descriptionBillsMap.forEach((bills, description) => {
+    descriptionBillsMap.forEach((bills) => {
       const sortedBills = [...bills].sort((a, b) =>
         new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
       );
       groups.push({
-        groupKey: `desc-${description}`,
+        groupKey: `desc-${sortedBills[0].description || t('bill.noDescription')}`,
         latestBill: sortedBills[0],
         olderBills: sortedBills.slice(1),
         isRenterGroup: false,
@@ -723,14 +752,16 @@ export default function PropertyBillsView({
               groupedBills.map((group) => {
                 const isExpanded = expandedGroups.has(group.groupKey);
                 const hasOlderBills = group.olderBills.length > 0;
+                // Check if all older bills are paid
+                const allOlderBillsPaid = group.olderBills.every(bill => getEffectiveStatus(bill) === 'paid');
                 
                 // Render function for a single bill row
                 const renderBillRow = (bill: Bill, isGroupHeader: boolean = false) => {
                   const renter = bill.renter_id ? renters.find(r => r.id === bill.renter_id) : null;
                   return (
-                    <TableRow key={bill.id} className={`border-slate-700 ${!isGroupHeader ? 'bg-slate-850' : ''}`}>
+                    <TableRow key={bill.id} className={`border-slate-700 ${!isGroupHeader ? 'bg-slate-900/50' : ''}`}>
                       <TableCell className="text-slate-300">
-                        <div className="flex items-center gap-1">
+                        <div className={`flex items-center gap-1 ${!isGroupHeader ? 'pl-6' : ''}`}>
                           {isGroupHeader && hasOlderBills && (
                             <button
                               onClick={() => toggleGroup(group.groupKey)}
@@ -745,7 +776,7 @@ export default function PropertyBillsView({
                             </button>
                           )}
                           {isGroupHeader && hasOlderBills && !isExpanded && (
-                            <span className="text-xs text-emerald-400 font-medium mr-1">
+                            <span className={`text-xs font-medium mr-1 ${allOlderBillsPaid ? 'text-emerald-400' : 'text-red-400'}`}>
                               +{group.olderBills.length}
                             </span>
                           )}
