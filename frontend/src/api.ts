@@ -1,4 +1,15 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// API URL: use env variable, or fallback to localhost for dev
+// For tunneled access, set VITE_API_URL to the backend tunnel URL
+const getApiUrl = () => {
+  // If explicitly set via env, use that
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // Default to localhost for local development
+  return 'http://localhost:8000';
+};
+
+const API_URL = getApiUrl();
 
 type RequestOptions = {
   method?: string;

@@ -9,5 +9,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      // Add your allowed hosts here, e.g.:
+      '.ultramic.ro',
+      '.lhr.life',  // wildcard subdomain
+    ],
+  },
 })
 

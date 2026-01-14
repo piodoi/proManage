@@ -60,18 +60,35 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ProManage API", version="1.0.0")
 
+# Get frontend URL from env, with fallback for dev
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Build CORS origins list
+cors_origins = [
+    FRONTEND_URL,
+    "http://localhost:5173",  # Dev
+    "http://localhost:5174",  # Dev (alternate port)
+]
+# Add additional origins from env (comma-separated)
+extra_origins = os.getenv("CORS_ORIGINS", "")
+if extra_origins:
+    cors_origins.extend([origin.strip() for origin in extra_origins.split(",") if origin.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Dev
-        "http://localhost:5174",  # Dev (alternate port)
-        "https://ultramic.ro",  # Production
-    ],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.lhr\.life",  # Allow all lhr.life subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    max_age=86400,  # ← Cache preflight for 24 hours (86400 seconds)
+    max_age=86400,  # Cache preflight for 24 hours (86400 seconds)
 )
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"[DEBUG] {request.method} {request.url} - Host: {request.headers.get('host')}")
+    response = await call_next(request)
+    return response
 
 # Include all routers
 app.include_router(auth_router)
