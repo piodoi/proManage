@@ -1,12 +1,12 @@
 -- ProManage MySQL Schema with Typed Columns
--- Execute with: mysql -u root -p ultrafinu_promanage < mysql_schema.sql
+-- Execute with: mysql -u root -p promanage < mysql_schema.sql
 
 -- Drop existing tables (in correct order due to foreign keys)
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS bills;
-DROP TABLE IF EXISTS renters;
 DROP TABLE IF EXISTS property_suppliers;
+DROP TABLE IF EXISTS renters;
 DROP TABLE IF EXISTS user_supplier_credentials;
 DROP TABLE IF EXISTS suppliers;
 DROP TABLE IF EXISTS user_preferences;
@@ -74,7 +74,42 @@ CREATE TABLE suppliers (
     INDEX idx_suppliers_pattern (extraction_pattern_supplier)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- BILLS TABLE
+-- USER_SUPPLIER_CREDENTIALS TABLE (for API credentials)
+CREATE TABLE user_supplier_credentials (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    supplier_id VARCHAR(36) NOT NULL,
+    username VARCHAR(255) NULL,
+    password_hash VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+    UNIQUE INDEX idx_usc_user_supplier (user_id, supplier_id),
+    INDEX idx_usc_user (user_id),
+    INDEX idx_usc_supplier (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- PROPERTY_SUPPLIERS TABLE (must be before bills!)
+CREATE TABLE property_suppliers (
+    id VARCHAR(36) PRIMARY KEY,
+    property_id VARCHAR(36) NOT NULL,
+    supplier_id VARCHAR(36) NOT NULL,
+    extraction_pattern_supplier VARCHAR(255) NULL,
+    contract_id VARCHAR(100) NULL,
+    direct_debit BOOLEAN DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+    INDEX idx_ps_property (property_id),
+    INDEX idx_ps_supplier (supplier_id),
+    INDEX idx_ps_contract (contract_id),
+    INDEX idx_ps_extraction_pattern (extraction_pattern_supplier),
+    UNIQUE INDEX idx_ps_property_supplier (property_id, supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- BILLS TABLE (after property_suppliers!)
 CREATE TABLE bills (
     id VARCHAR(36) PRIMARY KEY,
     property_id VARCHAR(36) NOT NULL,
@@ -122,25 +157,6 @@ CREATE TABLE payments (
     INDEX idx_payments_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- PROPERTY_SUPPLIERS TABLE
-CREATE TABLE property_suppliers (
-    id VARCHAR(36) PRIMARY KEY,
-    property_id VARCHAR(36) NOT NULL,
-    supplier_id VARCHAR(36) NOT NULL,
-    extraction_pattern_supplier VARCHAR(255) NULL,
-    contract_id VARCHAR(100) NULL,
-    direct_debit BOOLEAN DEFAULT FALSE,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-    INDEX idx_ps_property (property_id),
-    INDEX idx_ps_supplier (supplier_id),
-    INDEX idx_ps_contract (contract_id),
-    INDEX idx_ps_extraction_pattern (extraction_pattern_supplier),
-    UNIQUE INDEX idx_ps_property_supplier (property_id, supplier_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- USER_PREFERENCES TABLE
 CREATE TABLE user_preferences (
     id VARCHAR(36) PRIMARY KEY,
@@ -169,4 +185,3 @@ CREATE TABLE extraction_patterns (
     INDEX idx_ep_priority (priority),
     INDEX idx_ep_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
