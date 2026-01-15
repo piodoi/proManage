@@ -86,7 +86,8 @@
     "gridView": "Grid View",
     "switchToList": "Switch to List View",
     "switchToGrid": "Switch to Grid View",
-    "selectProperty": "Select Property"
+    "selectProperty": "Select Property",
+    "dragToReorder": "Drag to reorder properties"
   },
   "renter": {
     "renters": "Renters",

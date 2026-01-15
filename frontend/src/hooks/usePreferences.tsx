@@ -14,7 +14,8 @@ const defaultPreferences: Preferences = {
   phone_number: null,
   landlord_name: null,
   personal_email: null,
-  iban: null
+  iban: null,
+  property_order: null
 };
 
 type PreferencesContextType = {
@@ -30,6 +31,7 @@ type PreferencesContextType = {
   setLandlordName: (landlord_name: string | null) => void;
   setPersonalEmail: (personal_email: string | null) => void;
   setIban: (iban: string | null) => void;
+  setPropertyOrder: (property_order: string[] | null) => void;
   savePreferences: (updates: Partial<Preferences>) => void;
 };
 
@@ -119,6 +121,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     setLandlordName: (landlord_name: string | null) => savePreferences({ landlord_name }),
     setPersonalEmail: (personal_email: string | null) => savePreferences({ personal_email }),
     setIban: (iban: string | null) => savePreferences({ iban }),
+    setPropertyOrder: (property_order: string[] | null) => savePreferences({ property_order }),
     savePreferences,
   };
 

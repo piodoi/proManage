@@ -86,7 +86,8 @@
     "gridView": "Vizualizare Grilă",
     "switchToList": "Treci la Vizualizare Listă",
     "switchToGrid": "Treci la Vizualizare Grilă",
-    "selectProperty": "Selectează Proprietate"
+    "selectProperty": "Selectează Proprietate",
+    "dragToReorder": "Trage pentru a reordona proprietățile"
   },
   "renter": {
     "renters": "Chiriași",

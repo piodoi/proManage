@@ -736,6 +736,7 @@ class MySQLDatabase:
     
     def get_user_preferences(self, user_id: str) -> Optional[UserPreferences]:
         """Get user preferences"""
+        import json
         with self.engine.connect() as conn:
             result = conn.execute(
                 text("SELECT * FROM user_preferences WHERE user_id = :user_id"),
@@ -743,6 +744,14 @@ class MySQLDatabase:
             )
             row = result.fetchone()
             if row:
+                # Parse property_order JSON if present
+                property_order = None
+                if hasattr(row, 'property_order') and row.property_order:
+                    try:
+                        property_order = json.loads(row.property_order) if isinstance(row.property_order, str) else row.property_order
+                    except (json.JSONDecodeError, TypeError):
+                        property_order = None
+                
                 return UserPreferences(
                     id=row.id,
                     user_id=row.user_id,
@@ -756,21 +765,29 @@ class MySQLDatabase:
                     landlord_name=row.landlord_name,
                     personal_email=row.personal_email,
                     iban=row.iban,
+                    property_order=property_order,
                     updated_at=row.updated_at.isoformat() if row.updated_at else None
                 )
             return None
     
     def create_user_preferences(self, prefs: UserPreferences) -> UserPreferences:
         """Create or update user preferences"""
+        import json
+        
+        # Serialize property_order to JSON string if present
+        property_order_json = None
+        if prefs.property_order:
+            property_order_json = json.dumps(prefs.property_order)
+        
         with self.engine.connect() as conn:
             conn.execute(
                 text("""
                     INSERT INTO user_preferences (
                         id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
-                        date_format, phone_number, landlord_name, personal_email, iban, updated_at
+                        date_format, phone_number, landlord_name, personal_email, iban, property_order, updated_at
                     ) VALUES (
                         :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
-                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :updated_at
+                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :property_order, :updated_at
                     )
                     ON DUPLICATE KEY UPDATE
                         language = VALUES(language),
@@ -783,6 +800,7 @@ class MySQLDatabase:
                         landlord_name = VALUES(landlord_name),
                         personal_email = VALUES(personal_email),
                         iban = VALUES(iban),
+                        property_order = VALUES(property_order),
                         updated_at = VALUES(updated_at)
                 """),
                 {
@@ -798,6 +816,7 @@ class MySQLDatabase:
                     "landlord_name": prefs.landlord_name,
                     "personal_email": prefs.personal_email,
                     "iban": prefs.iban,
+                    "property_order": property_order_json,
                     "updated_at": datetime.now().isoformat()
                 }
             )

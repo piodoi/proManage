@@ -1,14 +1,14 @@
 """
-SQLite Database Layer with Typed Columns
+PostgreSQL/Neon Database Layer with Typed Columns
 
-This module provides a SQLite-specific database interface that uses typed columns
-instead of the document model (JSON data fields).
+This module provides a PostgreSQL-specific database interface that uses typed columns.
+Optimized for Neon serverless PostgreSQL with connection pooling.
 
 Key features:
 - Uses typed columns (name, address, amount, etc.) instead of JSON 'data' field
-- Compatible with the same interface as MySQLDatabase
 - Optimized indexes for relational queries
-- Simpler data types (no ENUM, uses TEXT with CHECK constraints)
+- Foreign key constraints
+- Compatible with Neon's serverless architecture
 """
 
 import os
@@ -16,7 +16,7 @@ import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import QueuePool
 
 from app.models import (
     User, Property, Renter, Bill, Payment,
@@ -25,30 +25,26 @@ from app.models import (
 )
 
 
-class SQLiteDatabase:
-    """SQLite database operations using typed columns"""
+class PostgreSQLDatabase:
+    """PostgreSQL database operations using typed columns"""
     
     def __init__(self, database_url: str):
-        # SQLite specific configuration
+        # Ensure psycopg2 driver is used if not specified
+        if database_url.startswith('postgresql://') and '+' not in database_url.split('://')[0]:
+            database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+        
         self.engine = create_engine(
             database_url,
-            connect_args={
-                "check_same_thread": False,
-                "timeout": 30.0,
-            },
-            poolclass=StaticPool,  # Single connection pool for SQLite
-            echo=False,
+            poolclass=QueuePool,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+            pool_recycle=300,  # Recycle connections every 5 minutes (good for serverless)
+            echo=False,  # Set to True for SQL debugging
         )
-        
-        # Enable WAL mode and optimizations
-        with self.engine.connect() as conn:
-            conn.execute(text("PRAGMA journal_mode=WAL"))
-            conn.execute(text("PRAGMA synchronous=NORMAL"))
-            conn.execute(text("PRAGMA busy_timeout=30000"))
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-            conn.commit()
-        
-        print(f"[Database] SQLite typed-column engine initialized")
+        # Extract host for logging (hide credentials)
+        host_part = database_url.split('@')[1].split('/')[0] if '@' in database_url else 'localhost'
+        print(f"[Database] PostgreSQL engine initialized: {host_part}")
     
     # ==================== USER OPERATIONS ====================
     
@@ -61,18 +57,7 @@ class SQLiteDatabase:
             )
             row = result.fetchone()
             if row:
-                return User(
-                    id=row.id,
-                    email=row.email,
-                    name=row.name,
-                    role=row.role,
-                    password_hash=row.password_hash,
-                    oauth_provider=row.oauth_provider,
-                    oauth_id=row.oauth_id,
-                    subscription_tier=row.subscription_tier,
-                    subscription_expires=row.subscription_expires,
-                    created_at=row.created_at
-                )
+                return self._row_to_user(row)
             return None
     
     def get_user_by_id(self, user_id: str) -> Optional[User]:
@@ -84,19 +69,23 @@ class SQLiteDatabase:
             )
             row = result.fetchone()
             if row:
-                return User(
-                    id=row.id,
-                    email=row.email,
-                    name=row.name,
-                    role=row.role,
-                    password_hash=row.password_hash,
-                    oauth_provider=row.oauth_provider,
-                    oauth_id=row.oauth_id,
-                    subscription_tier=row.subscription_tier,
-                    subscription_expires=row.subscription_expires,
-                    created_at=row.created_at
-                )
+                return self._row_to_user(row)
             return None
+    
+    def _row_to_user(self, row) -> User:
+        """Convert database row to User model"""
+        return User(
+            id=row.id,
+            email=row.email,
+            name=row.name,
+            role=row.role,
+            password_hash=row.password_hash,
+            oauth_provider=row.oauth_provider,
+            oauth_id=row.oauth_id,
+            subscription_tier=row.subscription_tier,
+            subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires else None,
+            created_at=row.created_at.isoformat() if row.created_at else None
+        )
     
     def create_user(self, user: User) -> User:
         """Create a new user"""
@@ -157,7 +146,7 @@ class SQLiteDatabase:
                     landlord_id=row.landlord_id,
                     address=row.address,
                     name=row.name,
-                    created_at=row.created_at
+                    created_at=row.created_at.isoformat() if row.created_at else None
                 ))
             return properties
     
@@ -175,7 +164,7 @@ class SQLiteDatabase:
                     landlord_id=row.landlord_id,
                     address=row.address,
                     name=row.name,
-                    created_at=row.created_at
+                    created_at=row.created_at.isoformat() if row.created_at else None
                 )
             return None
     
@@ -234,18 +223,7 @@ class SQLiteDatabase:
             )
             renters = []
             for row in result:
-                renters.append(Renter(
-                    id=row.id,
-                    property_id=row.property_id,
-                    name=row.name,
-                    email=row.email,
-                    phone=row.phone,
-                    rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date,
-                    rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
-                    access_token=row.access_token,
-                    created_at=row.created_at
-                ))
+                renters.append(self._row_to_renter(row))
             return renters
     
     def get_renter_by_id(self, renter_id: str) -> Optional[Renter]:
@@ -257,18 +235,7 @@ class SQLiteDatabase:
             )
             row = result.fetchone()
             if row:
-                return Renter(
-                    id=row.id,
-                    property_id=row.property_id,
-                    name=row.name,
-                    email=row.email,
-                    phone=row.phone,
-                    rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date,
-                    rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
-                    access_token=row.access_token,
-                    created_at=row.created_at
-                )
+                return self._row_to_renter(row)
             return None
     
     def get_renter_by_token(self, access_token: str) -> Optional[Renter]:
@@ -280,19 +247,23 @@ class SQLiteDatabase:
             )
             row = result.fetchone()
             if row:
-                return Renter(
-                    id=row.id,
-                    property_id=row.property_id,
-                    name=row.name,
-                    email=row.email,
-                    phone=row.phone,
-                    rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date,
-                    rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
-                    access_token=row.access_token,
-                    created_at=row.created_at
-                )
+                return self._row_to_renter(row)
             return None
+    
+    def _row_to_renter(self, row) -> Renter:
+        """Convert database row to Renter model"""
+        return Renter(
+            id=row.id,
+            property_id=row.property_id,
+            name=row.name,
+            email=row.email,
+            phone=row.phone,
+            rent_day=row.rent_day,
+            start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
+            rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
+            access_token=row.access_token,
+            created_at=row.created_at.isoformat() if row.created_at else None
+        )
     
     def create_renter(self, renter: Renter) -> Renter:
         """Create a new renter"""
@@ -388,7 +359,6 @@ class SQLiteDatabase:
     def create_bill(self, bill: Bill) -> Bill:
         """Create a new bill"""
         with self.engine.connect() as conn:
-            # Convert renter_id='all' to None
             renter_id = bill.renter_id if bill.renter_id and bill.renter_id != 'all' else None
             
             conn.execute(
@@ -432,11 +402,9 @@ class SQLiteDatabase:
         if not updates:
             return self.get_bill_by_id(bill_id)
         
-        # Handle renter_id='all' -> None conversion
         if 'renter_id' in updates and updates['renter_id'] == 'all':
             updates['renter_id'] = None
         
-        # Handle payment_details JSON serialization
         if 'payment_details' in updates and updates['payment_details']:
             updates['payment_details'] = json.dumps(updates['payment_details'])
         
@@ -477,8 +445,8 @@ class SQLiteDatabase:
             description=row.description,
             amount=float(row.amount) if row.amount else 0,
             currency=row.currency,
-            due_date=row.due_date,
-            bill_date=row.bill_date,
+            due_date=row.due_date.isoformat() if row.due_date else None,
+            bill_date=row.bill_date.isoformat() if row.bill_date else None,
             legal_name=row.legal_name,
             iban=row.iban,
             bill_number=row.bill_number,
@@ -486,7 +454,7 @@ class SQLiteDatabase:
             contract_id=row.contract_id,
             payment_details=payment_details,
             status=row.status,
-            created_at=row.created_at
+            created_at=row.created_at.isoformat() if row.created_at else None
         )
     
     # ==================== PAYMENT OPERATIONS ====================
@@ -507,7 +475,7 @@ class SQLiteDatabase:
                     method=row.method,
                     status=row.status,
                     commission=float(row.commission) if row.commission else 0,
-                    created_at=row.created_at
+                    created_at=row.created_at.isoformat() if row.created_at else None
                 ))
             return payments
     
@@ -546,7 +514,7 @@ class SQLiteDatabase:
                     has_api=bool(row.has_api),
                     bill_type=row.bill_type,
                     extraction_pattern_supplier=row.extraction_pattern_supplier,
-                    created_at=row.created_at
+                    created_at=row.created_at.isoformat() if row.created_at else None
                 ))
             return suppliers
     
@@ -565,7 +533,7 @@ class SQLiteDatabase:
                     has_api=bool(row.has_api),
                     bill_type=row.bill_type,
                     extraction_pattern_supplier=row.extraction_pattern_supplier,
-                    created_at=row.created_at
+                    created_at=row.created_at.isoformat() if row.created_at else None
                 )
             return None
     
@@ -580,7 +548,7 @@ class SQLiteDatabase:
                 {
                     "id": supplier.id,
                     "name": supplier.name,
-                    "has_api": 1 if supplier.has_api else 0,
+                    "has_api": supplier.has_api,
                     "bill_type": supplier.bill_type or "utilities",
                     "extraction_pattern_supplier": supplier.extraction_pattern_supplier,
                     "created_at": supplier.created_at or datetime.now().isoformat()
@@ -604,7 +572,7 @@ class SQLiteDatabase:
                 {
                     "id": supplier.id,
                     "name": supplier.name,
-                    "has_api": 1 if supplier.has_api else 0,
+                    "has_api": supplier.has_api,
                     "bill_type": supplier.bill_type or "utilities",
                     "extraction_pattern_supplier": supplier.extraction_pattern_supplier
                 }
@@ -613,7 +581,7 @@ class SQLiteDatabase:
         return supplier
     
     def delete_supplier(self, supplier_id: str) -> bool:
-        """Delete supplier - foreign keys will handle cascading or set null"""
+        """Delete supplier"""
         with self.engine.connect() as conn:
             conn.execute(
                 text("DELETE FROM suppliers WHERE id = :id"),
@@ -640,8 +608,8 @@ class SQLiteDatabase:
                     extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
-                    created_at=row.created_at,
-                    updated_at=row.updated_at
+                    created_at=row.created_at.isoformat() if row.created_at else None,
+                    updated_at=row.updated_at.isoformat() if row.updated_at else None
                 ))
             return suppliers
     
@@ -664,53 +632,40 @@ class SQLiteDatabase:
                     extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
-                    created_at=row.created_at,
-                    updated_at=row.updated_at
+                    created_at=row.created_at.isoformat() if row.created_at else None,
+                    updated_at=row.updated_at.isoformat() if row.updated_at else None
                 )
             return None
     
     def create_property_supplier(self, ps: PropertySupplier) -> PropertySupplier:
-        """Create property-supplier relationship"""
+        """Create property-supplier relationship (upsert)"""
         with self.engine.connect() as conn:
-            try:
-                conn.execute(
-                    text("""
-                        INSERT INTO property_suppliers (
-                            id, property_id, supplier_id, extraction_pattern_supplier, contract_id, direct_debit, created_at, updated_at
-                        ) VALUES (
-                            :id, :property_id, :supplier_id, :extraction_pattern_supplier, :contract_id, :direct_debit, :created_at, :updated_at
-                        )
-                    """),
-                    {
-                        "id": ps.id,
-                        "property_id": ps.property_id,
-                        "supplier_id": ps.supplier_id,
-                        "extraction_pattern_supplier": ps.extraction_pattern_supplier,
-                        "contract_id": ps.contract_id,
-                        "direct_debit": 1 if ps.direct_debit else 0,
-                        "created_at": ps.created_at or datetime.now().isoformat(),
-                        "updated_at": datetime.now().isoformat()
-                    }
-                )
-            except:
-                # Update if exists
-                conn.execute(
-                    text("""
-                        UPDATE property_suppliers
-                        SET extraction_pattern_supplier = :extraction_pattern_supplier,
-                            contract_id = :contract_id, 
-                            direct_debit = :direct_debit, updated_at = :updated_at
-                        WHERE property_id = :property_id AND supplier_id = :supplier_id
-                    """),
-                    {
-                        "property_id": ps.property_id,
-                        "supplier_id": ps.supplier_id,
-                        "extraction_pattern_supplier": ps.extraction_pattern_supplier,
-                        "contract_id": ps.contract_id,
-                        "direct_debit": 1 if ps.direct_debit else 0,
-                        "updated_at": datetime.now().isoformat()
-                    }
-                )
+            conn.execute(
+                text("""
+                    INSERT INTO property_suppliers (
+                        id, property_id, supplier_id, extraction_pattern_supplier, 
+                        contract_id, direct_debit, created_at, updated_at
+                    ) VALUES (
+                        :id, :property_id, :supplier_id, :extraction_pattern_supplier,
+                        :contract_id, :direct_debit, :created_at, :updated_at
+                    )
+                    ON CONFLICT (property_id, supplier_id) DO UPDATE SET
+                        extraction_pattern_supplier = EXCLUDED.extraction_pattern_supplier,
+                        contract_id = EXCLUDED.contract_id,
+                        direct_debit = EXCLUDED.direct_debit,
+                        updated_at = EXCLUDED.updated_at
+                """),
+                {
+                    "id": ps.id,
+                    "property_id": ps.property_id,
+                    "supplier_id": ps.supplier_id,
+                    "extraction_pattern_supplier": ps.extraction_pattern_supplier,
+                    "contract_id": ps.contract_id,
+                    "direct_debit": ps.direct_debit,
+                    "created_at": ps.created_at or datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat()
+                }
+            )
             conn.commit()
         return ps
     
@@ -719,12 +674,7 @@ class SQLiteDatabase:
         if not updates:
             return None
         
-        # Add updated_at
         updates['updated_at'] = datetime.now().isoformat()
-        
-        # Handle boolean conversion
-        if 'direct_debit' in updates:
-            updates['direct_debit'] = 1 if updates['direct_debit'] else 0
         
         set_clause = ", ".join([f"{k} = :{k}" for k in updates.keys()])
         with self.engine.connect() as conn:
@@ -734,7 +684,6 @@ class SQLiteDatabase:
             )
             conn.commit()
             
-            # Fetch and return updated record
             result = conn.execute(
                 text("SELECT * FROM property_suppliers WHERE id = :id"),
                 {"id": ps_id}
@@ -745,10 +694,11 @@ class SQLiteDatabase:
                     id=row.id,
                     property_id=row.property_id,
                     supplier_id=row.supplier_id,
+                    extraction_pattern_supplier=getattr(row, 'extraction_pattern_supplier', None),
                     contract_id=row.contract_id,
                     direct_debit=bool(row.direct_debit),
-                    created_at=row.created_at,
-                    updated_at=row.updated_at
+                    created_at=row.created_at.isoformat() if row.created_at else None,
+                    updated_at=row.updated_at.isoformat() if row.updated_at else None
                 )
             return None
     
@@ -786,12 +736,12 @@ class SQLiteDatabase:
                     personal_email=row.personal_email,
                     iban=row.iban,
                     property_order=property_order,
-                    updated_at=row.updated_at
+                    updated_at=row.updated_at.isoformat() if row.updated_at else None
                 )
             return None
     
     def create_user_preferences(self, prefs: UserPreferences) -> UserPreferences:
-        """Create or update user preferences"""
+        """Create or update user preferences (upsert)"""
         import json
         
         # Serialize property_order to JSON string if present
@@ -800,60 +750,46 @@ class SQLiteDatabase:
             property_order_json = json.dumps(prefs.property_order)
         
         with self.engine.connect() as conn:
-            try:
-                conn.execute(
-                    text("""
-                        INSERT INTO user_preferences (
-                            id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
-                            date_format, phone_number, landlord_name, personal_email, iban, property_order, updated_at
-                        ) VALUES (
-                            :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
-                            :date_format, :phone_number, :landlord_name, :personal_email, :iban, :property_order, :updated_at
-                        )
-                    """),
-                    {
-                        "id": prefs.id,
-                        "user_id": prefs.user_id,
-                        "language": prefs.language or "en",
-                        "view_mode": prefs.view_mode or "list",
-                        "rent_warning_days": prefs.rent_warning_days or 5,
-                        "rent_currency": prefs.rent_currency or "EUR",
-                        "bill_currency": prefs.bill_currency or "RON",
-                        "date_format": prefs.date_format or "DD/MM/YYYY",
-                        "phone_number": prefs.phone_number,
-                        "landlord_name": prefs.landlord_name,
-                        "personal_email": prefs.personal_email,
-                        "iban": prefs.iban,
-                        "property_order": property_order_json,
-                        "updated_at": datetime.now().isoformat()
-                    }
-                )
-            except:
-                # Update if exists
-                conn.execute(
-                    text("""
-                        UPDATE user_preferences
-                        SET language = :language, view_mode = :view_mode, rent_warning_days = :rent_warning_days,
-                            rent_currency = :rent_currency, bill_currency = :bill_currency, date_format = :date_format,
-                            phone_number = :phone_number, landlord_name = :landlord_name, personal_email = :personal_email,
-                            iban = :iban, property_order = :property_order, updated_at = :updated_at
-                        WHERE user_id = :user_id
-                    """),
-                    {
-                        "user_id": prefs.user_id,
-                        "language": prefs.language or "en",
-                        "view_mode": prefs.view_mode or "list",
-                        "rent_warning_days": prefs.rent_warning_days or 5,
-                        "rent_currency": prefs.rent_currency or "EUR",
-                        "bill_currency": prefs.bill_currency or "RON",
-                        "date_format": prefs.date_format or "DD/MM/YYYY",
-                        "phone_number": prefs.phone_number,
-                        "landlord_name": prefs.landlord_name,
-                        "personal_email": prefs.personal_email,
-                        "iban": prefs.iban,
-                        "property_order": property_order_json,
-                        "updated_at": datetime.now().isoformat()
-                    }
-                )
+            conn.execute(
+                text("""
+                    INSERT INTO user_preferences (
+                        id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
+                        date_format, phone_number, landlord_name, personal_email, iban, property_order, updated_at
+                    ) VALUES (
+                        :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
+                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :property_order, :updated_at
+                    )
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        language = EXCLUDED.language,
+                        view_mode = EXCLUDED.view_mode,
+                        rent_warning_days = EXCLUDED.rent_warning_days,
+                        rent_currency = EXCLUDED.rent_currency,
+                        bill_currency = EXCLUDED.bill_currency,
+                        date_format = EXCLUDED.date_format,
+                        phone_number = EXCLUDED.phone_number,
+                        landlord_name = EXCLUDED.landlord_name,
+                        personal_email = EXCLUDED.personal_email,
+                        iban = EXCLUDED.iban,
+                        property_order = EXCLUDED.property_order,
+                        updated_at = EXCLUDED.updated_at
+                """),
+                {
+                    "id": prefs.id,
+                    "user_id": prefs.user_id,
+                    "language": prefs.language or "en",
+                    "view_mode": prefs.view_mode or "list",
+                    "rent_warning_days": prefs.rent_warning_days or 5,
+                    "rent_currency": prefs.rent_currency or "EUR",
+                    "bill_currency": prefs.bill_currency or "RON",
+                    "date_format": prefs.date_format or "DD/MM/YYYY",
+                    "phone_number": prefs.phone_number,
+                    "landlord_name": prefs.landlord_name,
+                    "personal_email": prefs.personal_email,
+                    "iban": prefs.iban,
+                    "property_order": property_order_json,
+                    "updated_at": datetime.now().isoformat()
+                }
+            )
             conn.commit()
         return prefs
+

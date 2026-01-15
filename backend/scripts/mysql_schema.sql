@@ -171,6 +171,7 @@ CREATE TABLE user_preferences (
     landlord_name VARCHAR(255) NULL,
     personal_email VARCHAR(255) NULL,
     iban VARCHAR(50) NULL,
+    property_order TEXT NULL COMMENT 'JSON array of property IDs for display order preference',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_prefs_user (user_id)

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
 import uuid
@@ -368,4 +368,5 @@ class UserPreferences(BaseModel):
     landlord_name: Optional[str] = None  # Landlord's name for rent bills and payments
     personal_email: Optional[str] = None  # Personal email for notifications
     iban: Optional[str] = None  # IBAN for rent payments
+    property_order: Optional[List[str]] = None  # Ordered list of property IDs for display preference
     updated_at: datetime = Field(default_factory=datetime.utcnow)

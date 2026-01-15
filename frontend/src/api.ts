@@ -114,6 +114,7 @@ export const api = {
 
   bills: {
     list: (token: string) => request<Bill[]>('/bills', { token }),
+    listByProperty: (token: string, propertyId: string) => request<Bill[]>(`/bills/property/${propertyId}`, { token }),
     create: (token: string, data: BillCreate) => request<Bill>('/bills', { method: 'POST', body: data, token }),
     get: (token: string, id: string) => request<Bill>(`/bills/${id}`, { token }),
     update: (token: string, id: string, data: BillUpdate) => request<Bill>(`/bills/${id}`, { method: 'PUT', body: data, token }),
@@ -380,6 +381,7 @@ export type Preferences = {
   landlord_name?: string | null;
   personal_email?: string | null;
   iban?: string | null;
+  property_order?: string[] | null;  // Ordered list of property IDs for display preference
 };
 
 export type AuthResponse = {

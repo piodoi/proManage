@@ -163,6 +163,7 @@ CREATE TABLE user_preferences (
     landlord_name TEXT,
     personal_email TEXT,
     iban TEXT,
+    property_order TEXT,  -- JSON array of property IDs for display order preference
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

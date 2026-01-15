@@ -56,6 +56,21 @@ async def list_bills(current_user: TokenData = Depends(require_landlord)):
     return [calculate_bill_status(bill) for bill in bills]
 
 
+@router.get("/property/{property_id}")
+async def list_bills_by_property(property_id: str, current_user: TokenData = Depends(require_landlord)):
+    """Get all bills for a specific property. Used for sequential loading."""
+    prop = db.get_property(property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    bills = db.list_bills(property_id=property_id)
+    # Calculate and update status for all bills
+    return [calculate_bill_status(bill) for bill in bills]
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_bill(data: BillCreate, current_user: TokenData = Depends(require_landlord)):
     prop = db.get_property(data.property_id)
