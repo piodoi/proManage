@@ -11,7 +11,6 @@ DROP TABLE IF EXISTS suppliers CASCADE;
 DROP TABLE IF EXISTS user_preferences CASCADE;
 DROP TABLE IF EXISTS properties CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS extraction_patterns CASCADE;
 
 -- USERS TABLE
 CREATE TABLE users (
@@ -165,13 +164,5 @@ CREATE TABLE user_preferences (
 );
 CREATE INDEX idx_prefs_user ON user_preferences(user_id);
 
--- EXTRACTION_PATTERNS TABLE (legacy, kept for backward compatibility)
-CREATE TABLE extraction_patterns (
-    id VARCHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    priority INT DEFAULT 0,
-    data TEXT NOT NULL
-);
-CREATE INDEX idx_ep_priority ON extraction_patterns(priority);
-CREATE INDEX idx_ep_name ON extraction_patterns(name);
+-- NOTE: extraction_patterns table has been removed - patterns are now stored as JSON files
 

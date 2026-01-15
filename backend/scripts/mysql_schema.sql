@@ -12,7 +12,6 @@ DROP TABLE IF EXISTS suppliers;
 DROP TABLE IF EXISTS user_preferences;
 DROP TABLE IF EXISTS properties;
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS extraction_patterns;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- USERS TABLE
@@ -177,12 +176,4 @@ CREATE TABLE user_preferences (
     INDEX idx_prefs_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- EXTRACTION_PATTERNS TABLE (legacy, kept for backward compatibility)
-CREATE TABLE extraction_patterns (
-    id VARCHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    priority INT DEFAULT 0,
-    data TEXT NOT NULL,
-    INDEX idx_ep_priority (priority),
-    INDEX idx_ep_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- NOTE: extraction_patterns table has been removed - patterns are now stored as JSON files
