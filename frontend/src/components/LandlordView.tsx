@@ -33,7 +33,7 @@ type PropertyWithBills = {
 export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
   const { user } = useAuth();
   const { t } = useI18n();
-  const { preferences, setPropertyOrder, setViewMode } = usePreferences();
+  const { preferences, loading: preferencesLoading, setPropertyOrder, setViewMode } = usePreferences();
   const { saveScroll, restoreScroll } = useScrollPreservation();
   const [propertiesWithBills, setPropertiesWithBills] = useState<PropertyWithBills[]>([]);
   const [renters, setRenters] = useState<Record<string, Renter[]>>({});
@@ -51,9 +51,12 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
 
+  // Wait for preferences to load before loading data (so property_order is available)
   useEffect(() => {
-    loadData();
-  }, [token]);
+    if (!preferencesLoading) {
+      loadData();
+    }
+  }, [token, preferencesLoading]);
 
   const handleError = (err: unknown) => {
     const message = err instanceof Error ? err.message : t('errors.generic');
