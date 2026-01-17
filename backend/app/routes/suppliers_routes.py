@@ -10,6 +10,7 @@ from app.models import (
 from app.auth import require_landlord, require_admin
 from app.database import db
 from app.utils.suppliers import initialize_suppliers, save_suppliers_to_json
+from app.limits import check_can_add_supplier
 
 router = APIRouter(tags=["suppliers"])
 logger = logging.getLogger(__name__)
@@ -248,6 +249,17 @@ async def create_property_supplier(
     # User isolation: all users (including admins) can only access their own properties
     if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check subscription limit for suppliers
+    user = db.get_user(current_user.user_id)
+    if user and current_user.role != UserRole.ADMIN:
+        # Count total suppliers across all user's properties
+        user_properties = db.list_properties(landlord_id=current_user.user_id)
+        total_suppliers = sum(len(db.list_property_suppliers(p.id)) for p in user_properties)
+        
+        can_add, message = check_can_add_supplier(user.subscription_tier, total_suppliers)
+        if not can_add:
+            raise HTTPException(status_code=403, detail=message)
     
     # Handle pattern-based suppliers (supplier_id = "0")
     is_pattern_supplier = data.supplier_id == "0"

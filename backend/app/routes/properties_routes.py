@@ -6,22 +6,9 @@ from app.models import (
 )
 from app.auth import require_landlord
 from app.database import db
+from app.limits import check_can_add_property
 
 router = APIRouter(prefix="/properties", tags=["properties"])
-
-
-def check_subscription(user_id: str) -> bool:
-    user = db.get_user(user_id)
-    if not user:
-        return False
-    property_count = db.count_properties(user_id)
-    if property_count < 1:
-        return True
-    if user.subscription_tier == 0:
-        return False
-    if user.subscription_expires and user.subscription_expires < datetime.utcnow():
-        return False
-    return True
 
 
 @router.get("")
@@ -33,12 +20,15 @@ async def list_properties(current_user: TokenData = Depends(require_landlord)):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_property(data: PropertyCreate, current_user: TokenData = Depends(require_landlord)):
     existing_count = db.count_properties(current_user.user_id)
-    # Admins have implied subscription - skip check for them
-    if current_user.role != UserRole.ADMIN and existing_count >= 1 and not check_subscription(current_user.user_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Active subscription required to add more than one property",
-        )
+    
+    # Check subscription limits for properties
+    if current_user.role != UserRole.ADMIN:
+        user = db.get_user(current_user.user_id)
+        if user:
+            can_add, message = check_can_add_property(user.subscription_tier, existing_count)
+            if not can_add:
+                raise HTTPException(status_code=403, detail=message)
+    
     prop = Property(landlord_id=current_user.user_id, address=data.address, name=data.name)
     db.save_property(prop)
     return prop

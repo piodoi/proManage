@@ -162,6 +162,23 @@ export const api = {
     status: (token: string) => request<SubscriptionStatus>('/subscription/status', { token }),
   },
 
+  stripe: {
+    config: (token: string) => request<StripeConfig>('/stripe/config', { token }),
+    createCheckout: (token: string, quantity: number, successUrl: string, cancelUrl: string) => 
+      request<StripeCheckoutSession>('/stripe/create-checkout-session', { 
+        method: 'POST', 
+        body: { quantity, success_url: successUrl, cancel_url: cancelUrl }, 
+        token 
+      }),
+    createPortal: (token: string, returnUrl: string) => 
+      request<StripePortalSession>('/stripe/create-portal-session', { 
+        method: 'POST', 
+        body: { return_url: returnUrl }, 
+        token 
+      }),
+    subscription: (token: string) => request<StripeSubscription>('/stripe/subscription', { token }),
+  },
+
   preferences: {
     get: (token: string) => request<Preferences>('/preferences', { token }),
     save: (token: string, data: Partial<Preferences>) => request<Preferences>('/preferences', { method: 'POST', body: data, token }),
@@ -447,9 +464,59 @@ export type EmailProcessResult = {
 export type SubscriptionStatus = {
   status: 'active' | 'expired' | 'none';
   expires?: string;
+  subscription_tier: number;
+  is_free_tier: boolean;
+  
+  // Current usage
   property_count: number;
-  needs_subscription: boolean;
+  supplier_count: number;
+  renter_count: number;
+  
+  // Limits based on tier
+  limits: {
+    max_properties: number;
+    max_suppliers: number;
+    max_suppliers_per_property: number;
+    max_renters: number;
+    max_renters_per_property: number;
+    email_sync_enabled: boolean;
+  };
+  
+  // Action permissions
   can_add_property: boolean;
+  can_add_supplier: boolean;
+  can_add_renter: boolean;
+  can_use_email_sync: boolean;
+  
+  // Deprecated
+  needs_subscription?: boolean;
+};
+
+export type StripeConfig = {
+  public_key: string;
+  enabled: boolean;
+  price_id: string;
+};
+
+export type StripeCheckoutSession = {
+  session_id: string;
+  url: string;
+};
+
+export type StripePortalSession = {
+  url: string;
+};
+
+export type StripeSubscription = {
+  has_subscription: boolean;
+  stripe_enabled: boolean;
+  subscription_tier: number;
+  subscription_id?: string;
+  status?: string;
+  quantity?: number;
+  current_period_end?: number;
+  cancel_at_period_end?: boolean;
+  error?: string;
 };
 
 export type ExtractionResult = {

@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import ConfirmEmail from './pages/ConfirmEmail';
 import { I18nProvider, useI18n } from './lib/i18n';
 import { PreferencesProvider } from './hooks/usePreferences.tsx';
+import { SubscriptionProvider } from './hooks/useSubscription.tsx';
 import './App.css';
 
 type AuthContextType = {
@@ -76,23 +77,25 @@ function App() {
     <I18nProvider>
       <AuthContext.Provider value={{ user, token, login, logout }}>
         <PreferencesProvider>
-          <BrowserRouter>
-            <Routes>
-                        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-                        <Route path="/confirm-email" element={<ConfirmEmail />} />
-                        <Route path="/renter/:token" element={<RenterView />} />
-              <Route
-                path="/*"
-                element={
-                  user ? (
-                    <Dashboard />
-                  ) : (
-                    <Navigate to="/login" />
-                  )
-                }
-              />
-            </Routes>
-          </BrowserRouter>
+          <SubscriptionProvider token={token}>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+                <Route path="/confirm-email" element={<ConfirmEmail />} />
+                <Route path="/renter/:token" element={<RenterView />} />
+                <Route
+                  path="/*"
+                  element={
+                    user ? (
+                      <Dashboard />
+                    ) : (
+                      <Navigate to="/login" />
+                    )
+                  }
+                />
+              </Routes>
+            </BrowserRouter>
+          </SubscriptionProvider>
         </PreferencesProvider>
       </AuthContext.Provider>
     </I18nProvider>

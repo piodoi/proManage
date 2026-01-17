@@ -5,6 +5,7 @@ from app.models import (
 )
 from app.auth import require_landlord
 from app.database import db
+from app.limits import check_can_add_renter
 
 router = APIRouter(tags=["renters"])
 
@@ -28,6 +29,18 @@ async def create_renter(
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check subscription limit for renters
+    user = db.get_user(current_user.user_id)
+    if user and current_user.role != UserRole.ADMIN:
+        # Count total renters across all user's properties
+        user_properties = db.list_properties(landlord_id=current_user.user_id)
+        total_renters = sum(len(db.list_renters(p.id)) for p in user_properties)
+        
+        can_add, message = check_can_add_renter(user.subscription_tier, total_renters)
+        if not can_add:
+            raise HTTPException(status_code=403, detail=message)
+    
     renter = Renter(
         property_id=property_id, 
         name=data.name, 

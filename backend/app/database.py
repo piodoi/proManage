@@ -93,8 +93,8 @@ class Database:
                     if table_count == 0:
                         print("[Database] WARNING: No tables found!")
                         print("[Database] Run: mysql -u root -p ultrafinu_promanage < scripts/mysql_schema.sql")
-                    elif table_count < 9:
-                        print(f"[Database] WARNING: Only {table_count}/9 tables (incomplete schema?)")
+                    elif table_count < 8:
+                        print(f"[Database] WARNING: Only {table_count}/8 tables (incomplete schema?)")
                     else:
                         print(f"[Database] MySQL schema is ready!")
             except Exception as e:
@@ -109,8 +109,8 @@ class Database:
                     if table_count == 0:
                         print("[Database] WARNING: No tables found!")
                         print("[Database] Run the schema using Neon MCP or: psql $DATABASE_URL < scripts/postgresql_schema.sql")
-                    elif table_count < 9:
-                        print(f"[Database] WARNING: Only {table_count}/9 tables (incomplete schema?)")
+                    elif table_count < 8:
+                        print(f"[Database] WARNING: Only {table_count}/8 tables (incomplete schema?)")
                     else:
                         print(f"[Database] PostgreSQL schema is ready!")
             except Exception as e:

@@ -21,6 +21,7 @@ from app.routes import (
 )
 from app.routes.subscription_routes import router as subscription_router
 from app.routes.text_pattern_routes import router as text_pattern_router
+from app.routes.stripe_routes import router as stripe_router
 from app.utils.suppliers import initialize_suppliers
 
 load_dotenv()
@@ -104,6 +105,7 @@ app.include_router(sync_router)
 app.include_router(subscription_router)
 app.include_router(preferences_router)
 app.include_router(text_pattern_router)
+app.include_router(stripe_router)
 
 
 @app.on_event("startup")

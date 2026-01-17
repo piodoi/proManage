@@ -3,11 +3,12 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from app.models import Bill, BillType, TokenData
+from app.models import Bill, BillType, TokenData, UserRole
 from app.auth import require_landlord
 from app.database import db
 from app.email_scraper import extract_bill_info, match_address_to_property
 from app.email_monitor import email_monitor
+from app.limits import check_email_sync_allowed
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,17 @@ async def sync_email_bills(current_user: TokenData = Depends(require_landlord)):
     Fetches unread emails sent to proManage.bill+{user_id}@gmail.com,
     extracts PDF attachments, matches them against text patterns,
     and creates bills automatically.
+    
+    Requires paid subscription.
     """
+    # Check subscription for email sync feature (admins bypass)
+    if current_user.role != UserRole.ADMIN:
+        user = db.get_user(current_user.user_id)
+        if user:
+            can_sync, message = check_email_sync_allowed(user.subscription_tier)
+            if not can_sync:
+                raise HTTPException(status_code=403, detail=message)
+    
     if not email_monitor.is_configured():
         raise HTTPException(
             status_code=503,
