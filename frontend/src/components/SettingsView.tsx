@@ -6,19 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, AlertCircle, User, Copy, Check, Crown, Zap, Building2, Users, FileText, CheckCircle2, XCircle, Loader2, CreditCard, Plus, Minus } from 'lucide-react';
+import { Mail, AlertCircle, User, Copy, Check, Crown, Zap, Building2, Users, FileText, CheckCircle2, Loader2, CreditCard, Plus, Minus, Lock } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { validateIban, formatIban } from '../utils/iban';
-import { formatDateWithPreferences } from '../lib/utils';
 
 type SettingsViewProps = {
   token: string | null;
   user: ApiUser | null;
   onError?: (error: string) => void;
+  forceTab?: string;  // Force a specific tab to be active
+  hideTabBar?: boolean; // Hide the tab bar (useful when embedding as main tab)
+  onNavigateToSubscription?: () => void; // Callback to navigate to main subscription tab
 };
 
-export default function SettingsView({ token, user, onError }: SettingsViewProps) {
+export default function SettingsView({ token, user, onError, forceTab, hideTabBar = false, onNavigateToSubscription }: SettingsViewProps) {
   const { t, language } = useI18n();
   const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
@@ -35,8 +37,15 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
   const [propertyQuantity, setPropertyQuantity] = useState<number>(1);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
-    return sessionStorage.getItem('settingsActiveTab') || 'subscription';
+    return forceTab || sessionStorage.getItem('settingsActiveTab') || 'personal';
   });
+
+  // Update active tab when forceTab changes
+  useEffect(() => {
+    if (forceTab) {
+      setActiveTab(forceTab);
+    }
+  }, [forceTab]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -222,39 +231,58 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
   return (
     <div className="space-y-0">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
-          <TabsTrigger value="subscription" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-            {t('settings.subscriptionStatus')}
-          </TabsTrigger>
-          <TabsTrigger value="personal" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-            {t('settings.personalDetails')}
-          </TabsTrigger>
-          <TabsTrigger value="rent-bills" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-            {t('settings.rentWarning')}
-          </TabsTrigger>
-          <TabsTrigger value="email" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-            {t('settings.emailBillImport')}
-          </TabsTrigger>
-        </TabsList>
+        {!hideTabBar && (
+          <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
+            <TabsTrigger value="personal" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+              {t('settings.personalDetails')}
+            </TabsTrigger>
+            <TabsTrigger value="rent-bills" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+              {t('settings.rentWarning')}
+            </TabsTrigger>
+            <TabsTrigger value="email" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+              {t('settings.emailBillImport')}
+            </TabsTrigger>
+          </TabsList>
+        )}
 
-        <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
+        <div className={`bg-slate-800 border border-slate-700 ${hideTabBar ? 'rounded-lg' : 'border-t-0 rounded-b-lg'}`}>
           <TabsContent value="subscription" className="m-0 p-6 space-y-6">
             {/* Current Plan Card */}
             <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700">
               <CardHeader className="pb-3">
-                <CardTitle className="text-slate-100 flex items-center gap-2">
-                  {subscription?.is_free_tier ? (
-                    <>
-                      <Zap className="w-5 h-5 text-slate-400" />
-                      {t('settings.freeTier')}
-                    </>
-                  ) : (
-                    <>
-                      <Crown className="w-5 h-5 text-amber-400" />
-                      {t('settings.paidTier')}
-                    </>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-slate-100 flex items-center gap-2">
+                    {subscription?.is_free_tier ? (
+                      <>
+                        <Zap className="w-5 h-5 text-slate-400" />
+                        {t('settings.freeTier')}
+                      </>
+                    ) : (
+                      <>
+                        <Crown className="w-5 h-5 text-amber-400" />
+                        {t('settings.paidTier')}
+                      </>
+                    )}
+                  </CardTitle>
+                  {/* Email Sync Status - Compact inline */}
+                  {subscription && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-400 text-sm">{t('settings.emailSyncFeature')}:</span>
+                      {subscription.limits.email_sync_enabled ? (
+                        <span className="flex items-center gap-1 text-emerald-400 text-sm">
+                          <CheckCircle2 className="w-4 h-4" />
+                          {t('settings.available')}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-slate-500 text-sm">
+                          <Lock className="w-4 h-4" />
+                          Pro
+                        </span>
+                      )}
+                    </div>
                   )}
-                </CardTitle>
+                </div>
               </CardHeader>
               <CardContent>
                 {subscription && (
@@ -338,25 +366,6 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
                           {subscription.limits.max_renters_per_property} {t('settings.perPropertyLimit')}
                         </p>
                       </div>
-                    </div>
-                    
-                    {/* Email Sync Feature */}
-                    <div className="flex items-center justify-between bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                      <div className="flex items-center gap-3">
-                        <Mail className="w-5 h-5 text-slate-400" />
-                        <span className="text-slate-300">{t('settings.emailSyncFeature')}</span>
-                      </div>
-                      {subscription.limits.email_sync_enabled ? (
-                        <div className="flex items-center gap-2 text-emerald-400">
-                          <CheckCircle2 className="w-5 h-5" />
-                          <span>{t('settings.available')}</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-slate-500">
-                          <XCircle className="w-5 h-5" />
-                          <span className="text-sm">{t('settings.notAvailable')}</span>
-                        </div>
-                      )}
                     </div>
                     
                     {/* Active Subscription Details */}
@@ -456,7 +465,7 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
             )}
 
             {/* Add More Properties Card (for paid users) */}
-            {!subscription?.is_free_tier && stripeConfig?.enabled && (
+            {subscription && !subscription.is_free_tier && stripeConfig?.enabled && (
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
@@ -680,45 +689,59 @@ export default function SettingsView({ token, user, onError }: SettingsViewProps
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {subscription && !subscription.can_use_email_sync && (
-                  <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4 mb-4">
-                    <div className="flex items-center gap-3">
-                      <Crown className="w-5 h-5 text-amber-400" />
-                      <p className="text-amber-300">{t('settings.notAvailable')}</p>
+                {subscription && !subscription.can_use_email_sync ? (
+                  /* Show upgrade prompt for free tier */
+                  <div className="space-y-4">
+                    <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-6 text-center">
+                      <Lock className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                      <h3 className="text-amber-300 font-medium text-lg mb-2">{t('settings.emailSyncFeature')}</h3>
+                      <p className="text-slate-400 text-sm mb-4">
+                        {t('settings.upgradeToProDesc')}
+                      </p>
+                      <Button
+                        onClick={() => onNavigateToSubscription?.()}
+                        className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
+                      >
+                        <Crown className="w-4 h-4 mr-2" />
+                        {t('settings.subscribeForEmailSync')}
+                      </Button>
                     </div>
                   </div>
+                ) : (
+                  /* Show email config for paid tier */
+                  <>
+                    <p className="text-slate-400 text-sm">
+                      {t('settings.emailConfigDesc')}
+                    </p>
+                    <div>
+                      <Label className="text-slate-300">{t('settings.emailAddressLabel')}</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Input
+                          type="text"
+                          value={user ? `proManage.bill+${user.id}@gmail.com` : ''}
+                          readOnly
+                          className="bg-slate-700 border-slate-600 text-slate-100 font-mono"
+                        />
+                        <Button
+                          onClick={handleCopyEmail}
+                          className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2"
+                        >
+                          {emailCopied ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              {t('settings.emailCopied')}
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              {t('settings.copyEmail')}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
                 )}
-                <p className="text-slate-400 text-sm">
-                  {t('settings.emailConfigDesc')}
-                </p>
-                <div>
-                  <Label className="text-slate-300">{t('settings.emailAddressLabel')}</Label>
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      type="text"
-                      value={user ? `proManage.bill+${user.id}@gmail.com` : ''}
-                      readOnly
-                      className="bg-slate-700 border-slate-600 text-slate-100 font-mono"
-                    />
-                    <Button
-                      onClick={handleCopyEmail}
-                      className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2"
-                      disabled={!subscription?.can_use_email_sync}
-                    >
-                      {emailCopied ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          {t('settings.emailCopied')}
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          {t('settings.copyEmail')}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>

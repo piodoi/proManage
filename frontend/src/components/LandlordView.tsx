@@ -2,15 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { useAuth } from '../App';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Building2, Settings, List, Grid, RefreshCw, GripVertical, Loader2 } from 'lucide-react';
-import SettingsView from './SettingsView';
+import { List, Grid, RefreshCw, GripVertical, Loader2 } from 'lucide-react';
 import PropertyCard from './PropertyCard';
 import PropertyDialog from './dialogs/PropertyDialog';
 import EblocImportDialog from './dialogs/EblocImportDialog';
 import AllPropertiesSyncDialog from './dialogs/AllPropertiesSyncDialog';
-import SummaryView from './SummaryView';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
@@ -21,6 +18,7 @@ type LandlordViewProps = {
   token: string | null;
   onError?: (error: string) => void;
   hideSettings?: boolean;
+  onNavigateToSubscription?: () => void;
 };
 
 type PropertyWithBills = {
@@ -30,7 +28,7 @@ type PropertyWithBills = {
   billsLoaded: boolean;
 };
 
-export default function LandlordView({ token, onError, hideSettings = false }: LandlordViewProps) {
+export default function LandlordView({ token, onError, hideSettings = false, onNavigateToSubscription }: LandlordViewProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { preferences, loading: preferencesLoading, setPropertyOrder, setViewMode } = usePreferences();
@@ -45,6 +43,13 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
   const [showAllPropertiesSync, setShowAllPropertiesSync] = useState(false);
   const viewMode = (preferences.view_mode as 'list' | 'grid') || 'list';
   const { exchangeRates } = useExchangeRates();
+  
+  // Navigate to subscription tab (use parent callback if available)
+  const navigateToSubscription = () => {
+    if (onNavigateToSubscription) {
+      onNavigateToSubscription();
+    }
+  };
   
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -278,6 +283,8 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
               onDelete={handleDeleteProperty}
               onDataChange={() => refreshPropertyBills(pwb.property.id)}
               onError={setError}
+              subscription={subscription}
+              onUpgradeClick={navigateToSubscription}
             />
           </div>
         </div>
@@ -324,8 +331,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
         </div>
       )}
 
-      {hideSettings ? (
-        <div className="space-y-4">
+      <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Button
@@ -361,6 +367,8 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 }}
                 onSuccess={() => loadData(true)}
                 onError={setError}
+                subscription={subscription}
+                onUpgradeClick={navigateToSubscription}
               />
               <PropertyDialog
                 token={token}
@@ -374,6 +382,7 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
                 onSuccess={() => loadData(true)}
                 onError={setError}
                 canAddProperty={user?.role === 'admin' || (subscription ? subscription.can_add_property : false)}
+                onUpgradeClick={navigateToSubscription}
               />
             </div>
           </div>
@@ -392,105 +401,10 @@ export default function LandlordView({ token, onError, hideSettings = false }: L
             }}
             onSuccess={() => loadData(true)}
             onError={setError}
+            subscription={subscription}
+            onUpgradeClick={navigateToSubscription}
           />
-        </div>
-      ) : (
-        <Tabs defaultValue="summary" className="space-y-4">
-          <TabsList className="bg-slate-800 border border-slate-700">
-            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700">
-              <FileText className="w-4 h-4 mr-2" />
-              {t('summary.summary')}
-            </TabsTrigger>
-            <TabsTrigger value="properties" className="data-[state=active]:bg-slate-700">
-              <Building2 className="w-4 h-4 mr-2" />
-              {t('property.properties')}
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700">
-              <Settings className="w-4 h-4 mr-2" />
-              {t('settings.settings')}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="summary" className="space-y-4">
-            <SummaryView />
-          </TabsContent>
-
-          <TabsContent value="properties" className="space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-                  className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
-                  title={viewMode === 'list' ? t('property.switchToGrid') : t('property.switchToList')}
-                >
-                  {viewMode === 'list' ? <Grid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
-                  {viewMode === 'list' ? t('property.gridView') : t('property.listView')}
-                </Button>
-                <Button
-                  onClick={() => {
-                    saveScroll();
-                    setShowAllPropertiesSync(true);
-                  }}
-                  className="bg-emerald-600 text-white hover:bg-emerald-700 border border-emerald-700"
-                  title={t('supplier.syncAllProperties')}
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  {t('supplier.syncBills')}
-                </Button>
-              </div>
-              <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
-              <div className="flex gap-2">
-                <EblocImportDialog
-                  token={token}
-                  open={showEblocDiscover}
-                  onOpenChange={(open) => {
-                    if (open) {
-                      saveScroll();
-                    }
-                    setShowEblocDiscover(open);
-                  }}
-                  onSuccess={() => loadData(true)}
-                  onError={setError}
-                />
-                <PropertyDialog
-                  token={token}
-                  open={showPropertyForm}
-                  onOpenChange={(open) => {
-                    if (open) {
-                      saveScroll();
-                    }
-                    setShowPropertyForm(open);
-                  }}
-                  onSuccess={() => loadData(true)}
-                  onError={setError}
-                  canAddProperty={user?.role === 'admin' || (subscription ? subscription.can_add_property : false)}
-                />
-              </div>
-            </div>
-
-            {renderPropertiesContent()}
-            
-            <AllPropertiesSyncDialog
-              token={token}
-              properties={propertiesWithBills.map(pwb => pwb.property)}
-              open={showAllPropertiesSync}
-              onOpenChange={(open) => {
-                if (open) {
-                  saveScroll();
-                }
-                setShowAllPropertiesSync(open);
-              }}
-              onSuccess={() => loadData(true)}
-              onError={setError}
-            />
-          </TabsContent>
-
-          <TabsContent value="settings" className="space-y-4">
-            <SettingsView token={token} user={null} onError={onError} />
-          </TabsContent>
-        </Tabs>
-      )}
-
+      </div>
     </>
   );
 }

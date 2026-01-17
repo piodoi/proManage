@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { api } from '../../api';
+import { api, SubscriptionStatus } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
-import { Building2 } from 'lucide-react';
+import { Building2, Crown } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
 type EblocImportDialogProps = {
@@ -15,6 +15,8 @@ type EblocImportDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   onError: (error: string) => void;
+  subscription?: SubscriptionStatus | null;
+  onUpgradeClick?: () => void;
 };
 
 export default function EblocImportDialog({
@@ -23,12 +25,25 @@ export default function EblocImportDialog({
   onOpenChange,
   onSuccess,
   onError,
+  subscription,
+  onUpgradeClick,
 }: EblocImportDialogProps) {
   const { t } = useI18n();
   const [form, setForm] = useState({ username: '', password: '', selectedPropertyId: '' });
   const [discoveredProperties, setDiscoveredProperties] = useState<Array<{ page_id: string; name: string; address: string; url: string }>>([]);
   const [discovering, setDiscovering] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importSelectedHovered, setImportSelectedHovered] = useState(false);
+  const [importAllHovered, setImportAllHovered] = useState(false);
+  
+  // Calculate how many properties can still be added
+  const canAddProperty = subscription?.can_add_property ?? true;
+  const remainingSlots = subscription 
+    ? subscription.limits.max_properties - subscription.property_count 
+    : Infinity;
+  
+  const importSelectedNeedsUpgrade = !canAddProperty && onUpgradeClick;
+  const importAllNeedsUpgrade = discoveredProperties.length > 1 && remainingSlots < discoveredProperties.length && onUpgradeClick;
 
   const handleDiscover = async () => {
     if (!token) return;
@@ -238,8 +253,24 @@ export default function EblocImportDialog({
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={handleImportSelected}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => {
+                    if (importSelectedNeedsUpgrade) {
+                      onOpenChange(false);
+                      // Small delay to ensure dialog closes before navigation
+                      setTimeout(() => onUpgradeClick!(), 100);
+                    } else {
+                      handleImportSelected();
+                    }
+                  }}
+                  onMouseEnter={() => setImportSelectedHovered(true)}
+                  onMouseLeave={() => setImportSelectedHovered(false)}
+                  className={`flex-1 ${
+                    importSelectedNeedsUpgrade 
+                      ? (importSelectedHovered 
+                          ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
+                          : "bg-emerald-600 hover:bg-emerald-700")
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
                   disabled={importing || !form.selectedPropertyId}
                 >
                   {importing ? (
@@ -247,20 +278,46 @@ export default function EblocImportDialog({
                       <Spinner className="w-4 h-4 mr-2" />
                       {t('ebloc.importing')}
                     </>
+                  ) : importSelectedNeedsUpgrade && importSelectedHovered ? (
+                    <>
+                      <Crown className="w-4 h-4 mr-2" />
+                      {t('settings.upgradeToProTitle')}
+                    </>
                   ) : (
                     t('ebloc.importSelected')
                   )}
                 </Button>
                 {discoveredProperties.length > 1 && (
                   <Button
-                    onClick={handleImportAll}
-                    className="flex-1 bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 disabled:opacity-50"
+                    onClick={() => {
+                      if (importAllNeedsUpgrade) {
+                        onOpenChange(false);
+                        // Small delay to ensure dialog closes before navigation
+                        setTimeout(() => onUpgradeClick!(), 100);
+                      } else {
+                        handleImportAll();
+                      }
+                    }}
+                    onMouseEnter={() => setImportAllHovered(true)}
+                    onMouseLeave={() => setImportAllHovered(false)}
+                    className={`flex-1 ${
+                      importAllNeedsUpgrade 
+                        ? (importAllHovered 
+                            ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
+                            : "bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600")
+                        : "bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
+                    } disabled:opacity-50`}
                     disabled={importing}
                   >
                     {importing ? (
                       <>
                         <Spinner className="w-4 h-4 mr-2" />
                         {t('ebloc.importing')}
+                      </>
+                    ) : importAllNeedsUpgrade && importAllHovered ? (
+                      <>
+                        <Crown className="w-4 h-4 mr-2" />
+                        {t('settings.upgradeToProTitle')}
                       </>
                     ) : (
                       t('ebloc.importAll', { count: discoveredProperties.length })

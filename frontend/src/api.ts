@@ -170,10 +170,10 @@ export const api = {
         body: { quantity, success_url: successUrl, cancel_url: cancelUrl }, 
         token 
       }),
-    createPortal: (token: string, returnUrl: string) => 
+    createPortal: (token: string, returnUrl: string, checkoutQuantity: number = 1) => 
       request<StripePortalSession>('/stripe/create-portal-session', { 
         method: 'POST', 
-        body: { return_url: returnUrl }, 
+        body: { return_url: returnUrl, checkout_quantity: checkoutQuantity }, 
         token 
       }),
     subscription: (token: string) => request<StripeSubscription>('/stripe/subscription', { token }),
@@ -505,6 +505,7 @@ export type StripeCheckoutSession = {
 
 export type StripePortalSession = {
   url: string;
+  type?: 'portal' | 'checkout';  // 'checkout' when no subscription exists
 };
 
 export type StripeSubscription = {

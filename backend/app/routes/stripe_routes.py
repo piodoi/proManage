@@ -40,8 +40,9 @@ class CheckoutRequest(BaseModel):
     cancel_url: str
 
 
-class PortalRequest(BaseModel):
+class PortalOrCheckoutRequest(BaseModel):
     return_url: str
+    checkout_quantity: Optional[int] = 1  # Used if we need to create a new subscription
 
 
 @router.get("/config")
@@ -127,10 +128,11 @@ async def create_checkout_session(
 
 @router.post("/create-portal-session")
 async def create_portal_session(
-    data: PortalRequest,
+    data: PortalOrCheckoutRequest,
     current_user: TokenData = Depends(require_auth)
 ):
-    """Create a Stripe Customer Portal session to manage subscription."""
+    """Create a Stripe Customer Portal session to manage subscription.
+    If no subscription exists, creates a checkout session instead."""
     if not stripe:
         raise HTTPException(status_code=503, detail="Stripe is not configured")
     
@@ -142,9 +144,80 @@ async def create_portal_session(
         # Find customer by email
         customers = stripe.Customer.list(email=user.email, limit=1)
         if not customers.data:
-            raise HTTPException(status_code=404, detail="No subscription found. Please subscribe first.")
+            # No customer found - create a checkout session instead
+            if not STRIPE_PRICE_ID:
+                raise HTTPException(status_code=503, detail="Stripe price not configured")
+            
+            # Create new customer
+            customer = stripe.Customer.create(
+                email=user.email,
+                name=user.name,
+                metadata={"user_id": user.id}
+            )
+            
+            # Create checkout session
+            session = stripe.checkout.Session.create(
+                customer=customer.id,
+                payment_method_types=["card"],
+                line_items=[{
+                    "price": STRIPE_PRICE_ID,
+                    "quantity": data.checkout_quantity or 1,
+                }],
+                mode="subscription",
+                success_url=data.return_url + "?subscription_success=true",
+                cancel_url=data.return_url + "?subscription_cancelled=true",
+                metadata={
+                    "user_id": user.id,
+                    "quantity": str(data.checkout_quantity or 1),
+                },
+                subscription_data={
+                    "metadata": {
+                        "user_id": user.id,
+                    }
+                }
+            )
+            
+            logger.info(f"[Stripe] Created checkout session for new user {user.id}")
+            return {
+                "url": session.url,
+                "type": "checkout",
+            }
         
         customer_id = customers.data[0].id
+        
+        # Check if customer has any subscriptions
+        subscriptions = stripe.Subscription.list(customer=customer_id, limit=1)
+        if not subscriptions.data:
+            # Customer exists but no subscription - create checkout session
+            if not STRIPE_PRICE_ID:
+                raise HTTPException(status_code=503, detail="Stripe price not configured")
+            
+            session = stripe.checkout.Session.create(
+                customer=customer_id,
+                payment_method_types=["card"],
+                line_items=[{
+                    "price": STRIPE_PRICE_ID,
+                    "quantity": data.checkout_quantity or 1,
+                }],
+                mode="subscription",
+                success_url=data.return_url + "?subscription_success=true",
+                cancel_url=data.return_url + "?subscription_cancelled=true",
+                metadata={
+                    "user_id": user.id,
+                    "quantity": str(data.checkout_quantity or 1),
+                },
+                subscription_data={
+                    "metadata": {
+                        "user_id": user.id,
+                    }
+                }
+            )
+            
+            logger.info(f"[Stripe] Created checkout session for existing customer {user.id}")
+            return {
+                "url": session.url,
+                "type": "checkout",
+            }
         
         # Create portal session
         session = stripe.billing_portal.Session.create(
@@ -156,6 +229,7 @@ async def create_portal_session(
         
         return {
             "url": session.url,
+            "type": "portal",
         }
         
     except HTTPException:

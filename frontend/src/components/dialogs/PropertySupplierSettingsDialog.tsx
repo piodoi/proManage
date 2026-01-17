@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, Property, Supplier, PropertySupplier, TextPattern } from '../../api';
+import { api, Property, Supplier, PropertySupplier, TextPattern, SubscriptionStatus } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, FileText } from 'lucide-react';
+import { Plus, Trash2, FileText, Crown } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
 type PropertySupplierSettingsDialogProps = {
@@ -17,6 +17,8 @@ type PropertySupplierSettingsDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   onError: (error: string) => void;
+  subscription?: SubscriptionStatus | null;
+  onUpgradeClick?: () => void;
 };
 
 export default function PropertySupplierSettingsDialog({
@@ -26,6 +28,8 @@ export default function PropertySupplierSettingsDialog({
   onOpenChange,
   onSuccess,
   onError,
+  subscription,
+  onUpgradeClick,
 }: PropertySupplierSettingsDialogProps) {
   const { t } = useI18n();
   const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
@@ -40,6 +44,12 @@ export default function PropertySupplierSettingsDialog({
   const [patternContractId, setPatternContractId] = useState<string>('');
   const [patternDirectDebit, setPatternDirectDebit] = useState<boolean>(false);
   const prevOpenRef = useRef(open);
+  const [addSupplierHovered, setAddSupplierHovered] = useState(false);
+  const [addPatternHovered, setAddPatternHovered] = useState(false);
+  
+  // Check if user can add more suppliers
+  const canAddSupplier = subscription?.can_add_supplier ?? true;
+  const supplierNeedsUpgrade = !canAddSupplier && onUpgradeClick;
 
   // Load suppliers and property suppliers when dialog opens
   useEffect(() => {
@@ -214,8 +224,8 @@ export default function PropertySupplierSettingsDialog({
             {/* Add Supplier Section */}
             <div className="space-y-2">
               <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-end">
-                  <div className="flex-1 min-w-0">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                  <div className="w-full sm:w-1/4">
                     <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.addSupplierToProperty')}</Label>
                     <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
                       <SelectTrigger className="w-full bg-slate-700 border-slate-600 text-slate-100">
@@ -230,7 +240,7 @@ export default function PropertySupplierSettingsDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="w-full sm:w-1/4">
                     <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.contractId') || 'Contract ID'}</Label>
                     <Input
                       type="text"
@@ -240,7 +250,7 @@ export default function PropertySupplierSettingsDialog({
                       className="w-full bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-500"
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="sm:w-auto">
                     <Label className="text-slate-300 text-sm mb-1 block text-center">{t('supplier.directDebit') || 'Direct debit'}</Label>
                     <div className="flex items-center justify-center h-10">
                       <Checkbox
@@ -251,14 +261,42 @@ export default function PropertySupplierSettingsDialog({
                       />
                     </div>
                   </div>
-                  <Button
-                    onClick={handleAddSupplier}
-                    disabled={!selectedSupplierId}
-                    className="bg-emerald-600 hover:bg-emerald-700 sm:flex-shrink-0"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    {t('common.add')}
-                  </Button>
+                  <div className="w-full sm:w-1/4">
+                    {supplierNeedsUpgrade ? (
+                      <Button
+                        type="button"
+                        className={`w-full transition-colors duration-200 ${
+                          addSupplierHovered 
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600' 
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                        onMouseEnter={() => setAddSupplierHovered(true)}
+                        onMouseLeave={() => setAddSupplierHovered(false)}
+                        onClick={onUpgradeClick}
+                      >
+                        {addSupplierHovered ? (
+                          <>
+                            <Crown className="w-4 h-4 mr-1" />
+                            {t('settings.upgradeToProTitle') || 'Upgrade to Pro'}
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4 mr-1" />
+                            {t('common.add')}
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleAddSupplier}
+                        disabled={!selectedSupplierId}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        {t('common.add')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -266,8 +304,8 @@ export default function PropertySupplierSettingsDialog({
             {/* Add From Pattern Section */}
             <div className="space-y-2 border-t border-slate-600 pt-4">
               <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-end">
-                  <div className="flex-1 min-w-0">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                  <div className="w-full sm:w-1/4">
                     <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.addFromPatternLabel')}</Label>
                     <Select value={selectedPatternId} onValueChange={setSelectedPatternId}>
                       <SelectTrigger className="w-full bg-slate-700 border-slate-600 text-slate-100">
@@ -289,7 +327,7 @@ export default function PropertySupplierSettingsDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="w-full sm:w-1/4">
                     <Label className="text-slate-300 text-sm mb-1 block">{t('supplier.contractId') || 'Contract ID'}</Label>
                     <Input
                       type="text"
@@ -299,7 +337,7 @@ export default function PropertySupplierSettingsDialog({
                       className="w-full bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-500"
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="sm:w-auto">
                     <Label className="text-slate-300 text-sm mb-1 block text-center">{t('supplier.directDebit') || 'Direct debit'}</Label>
                     <div className="flex items-center justify-center h-10">
                       <Checkbox
@@ -310,14 +348,42 @@ export default function PropertySupplierSettingsDialog({
                       />
                     </div>
                   </div>
-                  <Button
-                    onClick={handleAddFromPattern}
-                    disabled={!selectedPatternId || availablePatterns.length === 0}
-                    className="bg-indigo-600 hover:bg-indigo-700 sm:flex-shrink-0"
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    {t('supplier.addFromPattern')}
-                  </Button>
+                  <div className="w-full sm:w-1/4">
+                    {supplierNeedsUpgrade ? (
+                      <Button
+                        type="button"
+                        className={`w-full transition-colors duration-200 ${
+                          addPatternHovered 
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600' 
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                        onMouseEnter={() => setAddPatternHovered(true)}
+                        onMouseLeave={() => setAddPatternHovered(false)}
+                        onClick={onUpgradeClick}
+                      >
+                        {addPatternHovered ? (
+                          <>
+                            <Crown className="w-4 h-4 mr-1" />
+                            {t('settings.upgradeToProTitle') || 'Upgrade to Pro'}
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-4 h-4 mr-1" />
+                            {t('supplier.addFromPattern')}
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleAddFromPattern}
+                        disabled={!selectedPatternId || availablePatterns.length === 0}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        <FileText className="w-4 h-4 mr-1" />
+                        {t('supplier.addFromPattern')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
               {/* Info message about creating new patterns */}

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Plus, Crown } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
 type PropertyDialogProps = {
@@ -13,6 +13,7 @@ type PropertyDialogProps = {
   onSuccess: () => void;
   onError: (error: string) => void;
   canAddProperty: boolean;
+  onUpgradeClick?: () => void;  // Callback to navigate to subscription
 };
 
 export default function PropertyDialog({
@@ -22,9 +23,13 @@ export default function PropertyDialog({
   onSuccess,
   onError,
   canAddProperty,
+  onUpgradeClick,
 }: PropertyDialogProps) {
   const { t } = useI18n();
   const [form, setForm] = useState({ name: '', address: '' });
+  const [isHovered, setIsHovered] = useState(false);
+  
+  const needsUpgrade = !canAddProperty && onUpgradeClick;
 
   const handleSubmit = async () => {
     if (!token) return;
@@ -39,17 +44,42 @@ export default function PropertyDialog({
     }
   };
 
+  const handleTriggerClick = (e: React.MouseEvent) => {
+    if (needsUpgrade) {
+      e.preventDefault();
+      e.stopPropagation();
+      onUpgradeClick!();
+    } else {
+      onOpenChange(true);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          className="bg-emerald-600 hover:bg-emerald-700"
-          disabled={!canAddProperty}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          {t('property.addProperty')}
-        </Button>
-      </DialogTrigger>
+      <Button
+        type="button"
+        className={needsUpgrade 
+          ? (isHovered 
+              ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700" 
+              : "bg-emerald-600 hover:bg-emerald-700")
+          : "bg-emerald-600 hover:bg-emerald-700"
+        }
+        onClick={handleTriggerClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {needsUpgrade && isHovered ? (
+          <>
+            <Crown className="w-4 h-4 mr-2" />
+            {t('settings.upgradeToProTitle')}
+          </>
+        ) : (
+          <>
+            <Plus className="w-4 h-4 mr-2" />
+            {t('property.addProperty')}
+          </>
+        )}
+      </Button>
       <DialogContent className="bg-slate-800 border-slate-700">
         <DialogHeader>
           <DialogTitle className="text-slate-100">{t('property.addProperty')}</DialogTitle>

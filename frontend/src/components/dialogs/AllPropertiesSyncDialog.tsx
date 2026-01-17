@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, Property } from '../../api';
+import { api, Property, SubscriptionStatus } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,7 +8,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '../../lib/i18n';
 import { usePreferences } from '../../hooks/usePreferences';
 import DiscoveredBillItem, { type DiscoveredBill } from '../supplierSync/DiscoveredBillItem';
-import { CheckCircle2, Mail, Users } from 'lucide-react';
+import { CheckCircle2, Mail, Users, Crown, Lock } from 'lucide-react';
 
 type AllPropertiesSyncDialogProps = {
   token: string | null;
@@ -17,6 +17,8 @@ type AllPropertiesSyncDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   onError: (error: string) => void;
+  subscription?: SubscriptionStatus | null;
+  onUpgradeClick?: () => void;
 };
 
 type Stage = 'selection' | 'syncing' | 'bills';
@@ -28,6 +30,8 @@ export default function AllPropertiesSyncDialog({
   onOpenChange,
   onSuccess,
   onError,
+  subscription,
+  onUpgradeClick,
 }: AllPropertiesSyncDialogProps) {
   const { t } = useI18n();
   usePreferences(); // Initialize preferences context
@@ -35,6 +39,10 @@ export default function AllPropertiesSyncDialog({
   const [refreshRentBills, setRefreshRentBills] = useState(true);
   const [syncEmailBills, setSyncEmailBills] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [isStartHovered, setIsStartHovered] = useState(false);
+  
+  // Check if email sync requires upgrade
+  const emailSyncNeedsUpgrade = syncEmailBills && subscription && !subscription.can_use_email_sync;
   const [discoveredBills, setDiscoveredBills] = useState<DiscoveredBill[]>([]);
   const [selectedBillIds, setSelectedBillIds] = useState<Set<string>>(new Set());
   const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
@@ -388,7 +396,11 @@ export default function AllPropertiesSyncDialog({
                 </div>
 
                 {/* Email Bills Option */}
-                <div className="flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border border-slate-600">
+                <div className={`flex items-center space-x-3 p-3 bg-slate-700 rounded-lg border ${
+                  subscription && !subscription.can_use_email_sync 
+                    ? 'border-amber-600/50' 
+                    : 'border-slate-600'
+                }`}>
                   <Checkbox
                     id="sync-email-bills"
                     checked={syncEmailBills}
@@ -399,6 +411,12 @@ export default function AllPropertiesSyncDialog({
                       <div className="flex items-center gap-2">
                         <Mail className="w-4 h-4" />
                         {t('supplier.syncEmailBills')}
+                        {subscription && !subscription.can_use_email_sync && (
+                          <span className="flex items-center gap-1 text-xs text-amber-400">
+                            <Lock className="w-3 h-3" />
+                            Pro
+                          </span>
+                        )}
                       </div>
                     </Label>
                     <div className="text-xs text-slate-400 mt-1">
@@ -417,11 +435,33 @@ export default function AllPropertiesSyncDialog({
                   {t('common.cancel')}
                 </Button>
                 <Button
-                  onClick={handleStartSync}
+                  onClick={() => {
+                    if (emailSyncNeedsUpgrade && onUpgradeClick) {
+                      onOpenChange(false);
+                      // Small delay to ensure dialog closes before navigation
+                      setTimeout(() => onUpgradeClick(), 100);
+                    } else {
+                      handleStartSync();
+                    }
+                  }}
+                  onMouseEnter={() => setIsStartHovered(true)}
+                  onMouseLeave={() => setIsStartHovered(false)}
                   disabled={!refreshRentBills && !syncEmailBills}
-                  className="bg-emerald-600 hover:bg-emerald-700"
+                  className={emailSyncNeedsUpgrade 
+                    ? (isStartHovered 
+                        ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
+                        : "bg-emerald-600 hover:bg-emerald-700")
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                  }
                 >
-                  {t('supplier.startSync')}
+                  {emailSyncNeedsUpgrade && isStartHovered ? (
+                    <>
+                      <Crown className="w-4 h-4 mr-2" />
+                      {t('settings.upgradeToProTitle')}
+                    </>
+                  ) : (
+                    t('supplier.startSync')
+                  )}
                 </Button>
               </div>
             </div>

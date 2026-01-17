@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
@@ -262,6 +262,10 @@ export default function Dashboard() {
               <Settings className="w-4 h-4 mr-2" />
               {t('settings.settings')}
             </TabsTrigger>
+            <TabsTrigger value="subscription" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+              <Crown className="w-4 h-4 mr-2" />
+              {t('settings.subscriptions')}
+            </TabsTrigger>
             <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <FileText className="w-4 h-4 mr-2" />
               {t('tools.tools')}
@@ -280,11 +284,15 @@ export default function Dashboard() {
             </TabsContent>
 
             <TabsContent value="property" className="m-0 p-6 space-y-4">
-              <LandlordView token={token} onError={setError} hideSettings />
+              <LandlordView token={token} onError={setError} hideSettings onNavigateToSubscription={() => setActiveTab('subscription')} />
             </TabsContent>
 
             <TabsContent value="settings" className="m-0 p-6 space-y-4">
-              <SettingsView token={token} user={user} onError={setError} />
+              <SettingsView token={token} user={user} onError={setError} onNavigateToSubscription={() => setActiveTab('subscription')} />
+            </TabsContent>
+
+            <TabsContent value="subscription" className="m-0 p-6 space-y-4">
+              <SettingsView token={token} user={user} onError={setError} forceTab="subscription" hideTabBar />
             </TabsContent>
 
             <TabsContent value="tools" className="m-0 p-6 space-y-4">

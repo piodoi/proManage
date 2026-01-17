@@ -253,11 +253,16 @@ async def create_property_supplier(
     # Check subscription limit for suppliers
     user = db.get_user(current_user.user_id)
     if user and current_user.role != UserRole.ADMIN:
-        # Count total suppliers across all user's properties
-        user_properties = db.list_properties(landlord_id=current_user.user_id)
-        total_suppliers = sum(len(db.list_property_suppliers(p.id)) for p in user_properties)
+        if user.subscription_tier == 0:
+            # Free tier: check total suppliers across all properties
+            user_properties = db.list_properties(landlord_id=current_user.user_id)
+            total_suppliers = sum(len(db.list_property_suppliers(p.id)) for p in user_properties)
+            can_add, message = check_can_add_supplier(user.subscription_tier, total_suppliers)
+        else:
+            # Paid tier: check suppliers on this specific property
+            current_property_suppliers = len(db.list_property_suppliers(property_id))
+            can_add, message = check_can_add_supplier(user.subscription_tier, current_property_suppliers)
         
-        can_add, message = check_can_add_supplier(user.subscription_tier, total_suppliers)
         if not can_add:
             raise HTTPException(status_code=403, detail=message)
     

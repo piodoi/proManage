@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, Property, Renter, Bill } from '../api';
+import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -23,6 +23,8 @@ type PropertyCardProps = {
   onDelete: (propertyId: string) => void;
   onDataChange: () => void;
   onError: (error: string) => void;
+  subscription?: SubscriptionStatus | null;
+  onUpgradeClick?: () => void;
 };
 
 export default function PropertyCard({
@@ -34,6 +36,8 @@ export default function PropertyCard({
   onDelete,
   onDataChange,
   onError,
+  subscription,
+  onUpgradeClick,
 }: PropertyCardProps) {
   const { t, language } = useI18n();
   const { preferences } = usePreferences();
@@ -151,6 +155,12 @@ export default function PropertyCard({
                 }, 100);
               }}
               onError={onError}
+              subscription={subscription}
+              onUpgradeClick={() => {
+                setShowSupplierSettings(false);
+                // Small delay to ensure dialog closes before navigation
+                setTimeout(() => onUpgradeClick?.(), 100);
+              }}
             />
             <RenterDialog
               token={token}
