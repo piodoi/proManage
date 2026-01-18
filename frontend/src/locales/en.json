@@ -31,7 +31,10 @@
     "deselectAll": "Deselect All",
     "syncing": "Syncing...",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "comingSoon": "Coming soon"
   },
   "app": {
     "title": "ProManage",
@@ -127,6 +130,11 @@
     "iban": "IBAN",
     "billNumber": "Bill Number",
     "reference": "Reference",
+    "beneficiary": "Beneficiary",
+    "bankTransferNote": "Use these details to make a bank transfer",
+    "payViaSupplier": "Pay via Supplier Portal",
+    "payWithStripe": "Pay with Stripe",
+    "paymentComingSoon": "Payment integration will be available soon",
     "noBills": "No bills yet.",
     "paid": "Paid",
     "remaining": "Remaining",

@@ -31,7 +31,10 @@
     "deselectAll": "Deselectează Tot",
     "syncing": "Se sincronizează...",
     "expand": "Extinde",
-    "collapse": "Restrânge"
+    "collapse": "Restrânge",
+    "copy": "Copiază",
+    "copied": "Copiat!",
+    "comingSoon": "În curând"
   },
   "app": {
     "title": "ProManage",
@@ -127,6 +130,11 @@
     "iban": "IBAN",
     "billNumber": "Număr Factură",
     "reference": "Referință",
+    "beneficiary": "Beneficiar",
+    "bankTransferNote": "Folosește aceste detalii pentru a face un transfer bancar",
+    "payViaSupplier": "Plătește prin Portalul Furnizorului",
+    "payWithStripe": "Plătește cu Stripe",
+    "paymentComingSoon": "Integrarea plăților va fi disponibilă în curând",
     "noBills": "Nicio factură încă.",
     "paid": "Plătit",
     "remaining": "Rămas",

@@ -354,7 +354,10 @@ export type Bill = {
   currency?: string;  // Currency for the bill: "EUR", "RON", or "USD"
   due_date: string;
   iban?: string;
+  legal_name?: string;  // Legal name of the supplier/company for payment
   bill_number?: string;
+  contract_id?: string;  // Contract/client ID for payment reference
+  payment_details?: Record<string, unknown>;  // Additional payment details
   property_supplier_id?: string;  // Reference to PropertySupplier.id (links to property-supplier relationship)
   status: 'pending' | 'paid' | 'overdue';
   created_at: string;
@@ -432,6 +435,8 @@ export type RenterInfo = {
   renter: { id: string; name: string };
   property: { id: string; name: string; address: string } | null;
   date_format?: string;
+  landlord_iban?: string | null;  // Landlord's IBAN for rent payments
+  landlord_name?: string | null;  // Landlord's name for rent payments
 };
 
 export type RenterBill = {
