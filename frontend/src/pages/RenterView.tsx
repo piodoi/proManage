@@ -224,7 +224,7 @@ export default function RenterView() {
         iban: bill.bill.iban,
         ibanCurrency: null,
         beneficiary: bill.bill.legal_name,
-        reference: paymentDetails.contract_id,
+        reference: bill.bill.contract_id || bill.bill.bill_number || bill.bill.id,
         reference2: paymentDetails?.client_code || null,
       };
     }
