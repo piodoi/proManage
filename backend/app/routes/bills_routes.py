@@ -5,6 +5,7 @@ import logging
 import sys
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query
+from fastapi.responses import FileResponse
 from app.models import (
     Bill, BillCreate, BillUpdate, TokenData, UserRole, BillType, BillStatus, PropertySupplier
 )
@@ -13,7 +14,7 @@ from app.database import db
 from app.text_pattern_extractor import extract_bill_from_pdf_auto
 from app.utils.suppliers import initialize_suppliers
 from app.routes.sync_routes import resolve_property_supplier_id
-from app.paths import delete_bill_pdf
+from app.paths import delete_bill_pdf, bill_pdf_exists, get_bill_pdf_path
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -47,14 +48,21 @@ def calculate_bill_status(bill: Bill) -> Bill:
     return bill
 
 
+def bill_to_dict_with_pdf(bill: Bill, user_id: str) -> dict:
+    """Convert bill to dict and add has_pdf field."""
+    bill_dict = bill.model_dump() if hasattr(bill, 'model_dump') else bill.__dict__.copy()
+    bill_dict['has_pdf'] = bill_pdf_exists(user_id, bill.id)
+    return bill_dict
+
+
 @router.get("")
 async def list_bills(current_user: TokenData = Depends(require_landlord)):
     # User isolation: all users (including admins) only see bills for their own properties
     landlord_properties = {prop.id for prop in db.list_properties(landlord_id=current_user.user_id)}
     bills = [b for b in db.list_bills() if b.property_id in landlord_properties]
     
-    # Calculate and update status for all bills
-    return [calculate_bill_status(bill) for bill in bills]
+    # Calculate and update status for all bills, then add has_pdf field
+    return [bill_to_dict_with_pdf(calculate_bill_status(bill), current_user.user_id) for bill in bills]
 
 
 @router.get("/property/{property_id}")
@@ -68,8 +76,8 @@ async def list_bills_by_property(property_id: str, current_user: TokenData = Dep
         raise HTTPException(status_code=403, detail="Access denied")
     
     bills = db.list_bills(property_id=property_id)
-    # Calculate and update status for all bills
-    return [calculate_bill_status(bill) for bill in bills]
+    # Calculate and update status for all bills, then add has_pdf field
+    return [bill_to_dict_with_pdf(calculate_bill_status(bill), current_user.user_id) for bill in bills]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -181,6 +189,35 @@ async def delete_bill(bill_id: str, current_user: TokenData = Depends(require_la
     
     db.delete_bill(bill_id)
     return {"status": "deleted"}
+
+
+@router.get("/{bill_id}/pdf")
+async def download_bill_pdf(bill_id: str, current_user: TokenData = Depends(require_landlord)):
+    """Download PDF file for a bill (landlord view)."""
+    bill = db.get_bill(bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    prop = db.get_property(bill.property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    # User isolation: all users (including admins) can only access their own properties
+    if prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if PDF exists
+    if not bill_pdf_exists(current_user.user_id, bill_id):
+        raise HTTPException(status_code=404, detail="PDF not available for this bill")
+    
+    pdf_path = get_bill_pdf_path(current_user.user_id, bill_id)
+    
+    # Generate a filename for download
+    filename = f"bill_{bill.bill_number or bill_id}.pdf"
+    
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=filename
+    )
 
 
 @router.post("/parse-pdf")

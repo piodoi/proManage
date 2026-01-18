@@ -186,7 +186,8 @@
     "confidence": "Confidence",
     "confirmProperty": "Confirm or change property",
     "directDebit": "Direct Debit",
-    "noDescription": "No description"
+    "noDescription": "No description",
+    "downloadPdf": "Download PDF"
   },
   "summary": {
     "summary": "Summary",

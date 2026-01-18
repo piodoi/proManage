@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import BillConfirmDialog from './dialogs/BillConfirmDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
@@ -804,7 +804,17 @@ export default function PropertyBillsView({
                         </button>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 justify-end">
+                          {bill.has_pdf && token && (
+                            <Button
+                              size="sm"
+                              onClick={() => api.bills.downloadPdf(token, bill.id).catch(handleError)}
+                              className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-6 px-2 w-6"
+                              title={t('bill.downloadPdf') || 'Download PDF'}
+                            >
+                              <FileText className="w-3 h-3" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             onClick={() => handleEditBill(bill)}

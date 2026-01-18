@@ -65,22 +65,23 @@ export default function RenterView() {
       });
     }
 
-    // Group other bills by description
+    // Group other bills by description (case-insensitive)
     const descriptionBillsMap = new Map<string, RenterBill[]>();
     otherBills.forEach(item => {
       const description = item.bill.description || t('bill.noDescription');
-      if (!descriptionBillsMap.has(description)) {
-        descriptionBillsMap.set(description, []);
+      const key = description.toLowerCase();
+      if (!descriptionBillsMap.has(key)) {
+        descriptionBillsMap.set(key, []);
       }
-      descriptionBillsMap.get(description)!.push(item);
+      descriptionBillsMap.get(key)!.push(item);
     });
 
-    descriptionBillsMap.forEach((billItems, description) => {
+    descriptionBillsMap.forEach((billItems) => {
       const sortedBills = [...billItems].sort((a, b) =>
         new Date(b.bill.due_date).getTime() - new Date(a.bill.due_date).getTime()
       );
       groups.push({
-        groupKey: `desc-${description}`,
+        groupKey: `desc-${sortedBills[0].bill.description || t('bill.noDescription')}`,
         latestBill: sortedBills[0],
         olderBills: sortedBills.slice(1),
       });

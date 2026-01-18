@@ -119,6 +119,21 @@ export const api = {
     get: (token: string, id: string) => request<Bill>(`/bills/${id}`, { token }),
     update: (token: string, id: string, data: BillUpdate) => request<Bill>(`/bills/${id}`, { method: 'PUT', body: data, token }),
     delete: (token: string, id: string) => request<{ status: string }>(`/bills/${id}`, { method: 'DELETE', token }),
+    downloadPdf: async (token: string, billId: string): Promise<void> => {
+      // Fetch PDF with auth header and open in new tab
+      const response = await fetch(`${API_URL}/bills/${billId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Download failed' }));
+        throw new Error(error.detail || 'Download failed');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Clean up the URL after a delay
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    },
   },
 
   renter: {
@@ -343,6 +358,12 @@ export type Bill = {
   property_supplier_id?: string;  // Reference to PropertySupplier.id (links to property-supplier relationship)
   status: 'pending' | 'paid' | 'overdue';
   created_at: string;
+  has_pdf?: boolean;  // Whether a PDF file is available for download
+};
+
+// Helper function to get PDF download URL for landlord view
+export const getBillPdfUrl = (token: string, billId: string): string => {
+  return `${API_URL}/bills/${billId}/pdf`;
 };
 
 export type BillCreate = {
