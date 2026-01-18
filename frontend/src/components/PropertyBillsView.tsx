@@ -442,9 +442,9 @@ export default function PropertyBillsView({
         }
         renterRentBillsMap.get(renterId)!.push(bill);
       } else {
-        // Group other renter bills by renter + description
+        // Group other renter bills by renter + description (case-insensitive)
         const description = bill.description || t('bill.noDescription');
-        const key = `${renterId}::${description}`;
+        const key = `${renterId}::${description.toLowerCase()}`;
         if (!renterOtherBillsMap.has(key)) {
           renterOtherBillsMap.set(key, []);
         }
@@ -483,14 +483,16 @@ export default function PropertyBillsView({
       });
     });
 
-    // Group property-wide bills by description
+    // Group property-wide bills by description (case-insensitive for non-rent bills)
     const descriptionBillsMap = new Map<string, Bill[]>();
     propertyWideBills.forEach(bill => {
       const description = bill.description || t('bill.noDescription');
-      if (!descriptionBillsMap.has(description)) {
-        descriptionBillsMap.set(description, []);
+      // Use lowercase key for case-insensitive grouping (non-rent bills)
+      const key = description.toLowerCase();
+      if (!descriptionBillsMap.has(key)) {
+        descriptionBillsMap.set(key, []);
       }
-      descriptionBillsMap.get(description)!.push(bill);
+      descriptionBillsMap.get(key)!.push(bill);
     });
 
     // Sort each description group by due_date descending and create group objects
