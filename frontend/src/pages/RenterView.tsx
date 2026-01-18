@@ -148,8 +148,9 @@ export default function RenterView() {
   const getPaymentInfo = (bill: RenterBill | null) => {
     if (!bill) return null;
     
-    // For rent bills, use landlord's IBAN and name from preferences
-    if (bill.bill.bill_type === 'rent') {
+    // For rent bills or direct debit bills, use landlord's IBAN and name from preferences
+    // (landlord pays direct debit bills, so renter pays landlord)
+    if (bill.bill.bill_type === 'rent' || bill.is_direct_debit) {
       if (info?.landlord_iban && info?.landlord_name) {
         return {
           iban: info.landlord_iban,
@@ -170,6 +171,16 @@ export default function RenterView() {
     }
     
     return null;
+  };
+
+  // Calculate RON amount from foreign currency
+  const getAmountInRon = (amount: number, currency: string | undefined) => {
+    if (!currency || currency === 'RON' || !balance?.exchange_rates) {
+      return null;
+    }
+    const ronRate = balance.exchange_rates.RON || 4.97;
+    const currencyRate = balance.exchange_rates[currency as keyof typeof balance.exchange_rates] || 1;
+    return (amount * ronRate / currencyRate).toFixed(2);
   };
 
   if (loading) {
@@ -548,6 +559,27 @@ export default function RenterView() {
                 </p>
               </div>
 
+              {/* Bill Number - shown before payment details */}
+              {payingBill?.bill.bill_number && (
+                <div className="space-y-1">
+                  <p className="text-slate-500 text-xs uppercase">{t('renter.billNumber') || 'Bill Number'}</p>
+                  <div className="flex items-center justify-between bg-slate-900 border border-slate-700 rounded px-3 py-2">
+                    <span className="text-slate-200 font-mono text-sm">{payingBill.bill.bill_number}</span>
+                    <button
+                      onClick={() => copyToClipboard(payingBill.bill.bill_number || '', 'billNumber')}
+                      className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                      title={t('common.copy') || 'Copy'}
+                    >
+                      {copiedField === 'billNumber' ? (
+                        <Check className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Bank Transfer Details */}
               {(() => {
                 const paymentInfo = getPaymentInfo(payingBill);
@@ -601,20 +633,63 @@ export default function RenterView() {
                       <div className="space-y-1">
                         <p className="text-slate-500 text-xs uppercase">{t('common.amount')}</p>
                         <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
-                          <span className="text-emerald-400 font-mono text-sm font-bold">
-                            {payingBill?.remaining.toFixed(2)} {payingBill?.bill.currency || 'RON'}
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(payingBill?.remaining.toFixed(2) || '', 'amount')}
-                            className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-                            title={t('common.copy') || 'Copy'}
-                          >
-                            {copiedField === 'amount' ? (
-                              <Check className="w-4 h-4 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </button>
+                          {payingBill?.bill.currency && payingBill.bill.currency !== 'RON' ? (
+                            <>
+                              {/* Original currency amount with copy button */}
+                              <div className="flex items-center gap-1">
+                                <span className="text-emerald-400 font-mono text-sm font-bold">
+                                  {payingBill.remaining.toFixed(2)} {payingBill.bill.currency}
+                                </span>
+                                <button
+                                  onClick={() => copyToClipboard(payingBill.remaining.toFixed(2), 'amount')}
+                                  className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                                  title={`${t('common.copy') || 'Copy'} ${payingBill.bill.currency}`}
+                                >
+                                  {copiedField === 'amount' ? (
+                                    <Check className="w-4 h-4 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                              {/* RON equivalent with copy button */}
+                              {getAmountInRon(payingBill.remaining, payingBill.bill.currency) && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-slate-400 font-mono text-sm">
+                                    / {getAmountInRon(payingBill.remaining, payingBill.bill.currency)} RON
+                                  </span>
+                                  <button
+                                    onClick={() => copyToClipboard(getAmountInRon(payingBill.remaining, payingBill.bill.currency) || '', 'amountRon')}
+                                    className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                                    title={`${t('common.copy') || 'Copy'} RON`}
+                                  >
+                                    {copiedField === 'amountRon' ? (
+                                      <Check className="w-4 h-4 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-emerald-400 font-mono text-sm font-bold">
+                                {payingBill?.remaining.toFixed(2)} RON
+                              </span>
+                              <button
+                                onClick={() => copyToClipboard(payingBill?.remaining.toFixed(2) || '', 'amount')}
+                                className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                                title={t('common.copy') || 'Copy'}
+                              >
+                                {copiedField === 'amount' ? (
+                                  <Check className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-4 h-4" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       
@@ -636,6 +711,27 @@ export default function RenterView() {
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Reference 2 - Contract ID */}
+                      {payingBill?.bill.contract_id && (
+                        <div className="space-y-1">
+                          <p className="text-slate-500 text-xs uppercase">{t('renter.reference2') || 'Reference 2'}</p>
+                          <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                            <span className="text-slate-200 font-mono text-sm truncate mr-2">{payingBill.bill.contract_id}</span>
+                            <button
+                              onClick={() => copyToClipboard(payingBill.bill.contract_id || '', 'reference2')}
+                              className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex-shrink-0"
+                              title={t('common.copy') || 'Copy'}
+                            >
+                              {copiedField === 'reference2' ? (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       
                       <p className="text-xs text-slate-500 text-center mt-2">
                         {t('renter.bankTransferNote') || 'Use these details to make a bank transfer'}

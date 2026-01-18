@@ -421,7 +421,9 @@ export type Preferences = {
   phone_number?: string | null;
   landlord_name?: string | null;
   personal_email?: string | null;
-  iban?: string | null;
+  iban?: string | null;  // RON IBAN
+  iban_eur?: string | null;  // EUR IBAN
+  iban_usd?: string | null;  // USD IBAN
   property_order?: string[] | null;  // Ordered list of property IDs for display preference
 };
 

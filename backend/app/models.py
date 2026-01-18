@@ -367,6 +367,8 @@ class UserPreferences(BaseModel):
     phone_number: Optional[str] = None  # User's phone number with country code for WhatsApp
     landlord_name: Optional[str] = None  # Landlord's name for rent bills and payments
     personal_email: Optional[str] = None  # Personal email for notifications
-    iban: Optional[str] = None  # IBAN for rent payments
+    iban: Optional[str] = None  # IBAN for RON rent payments
+    iban_eur: Optional[str] = None  # IBAN for EUR rent payments
+    iban_usd: Optional[str] = None  # IBAN for USD rent payments
     property_order: Optional[List[str]] = None  # Ordered list of property IDs for display preference
     updated_at: datetime = Field(default_factory=datetime.utcnow)

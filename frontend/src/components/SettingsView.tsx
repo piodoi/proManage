@@ -22,7 +22,7 @@ type SettingsViewProps = {
 
 export default function SettingsView({ token, user, onError, forceTab, hideTabBar = false, onNavigateToSubscription }: SettingsViewProps) {
   const { t, language } = useI18n();
-  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban } = usePreferences();
+  const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban, setIbanEur, setIbanUsd } = usePreferences();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(null);
   const [stripeSubscription, setStripeSubscription] = useState<StripeSubscription | null>(null);
@@ -32,7 +32,11 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
   const [landlordNameInput, setLandlordNameInput] = useState<string>('');
   const [personalEmailInput, setPersonalEmailInput] = useState<string>('');
   const [ibanInput, setIbanInput] = useState<string>('');
+  const [ibanEurInput, setIbanEurInput] = useState<string>('');
+  const [ibanUsdInput, setIbanUsdInput] = useState<string>('');
   const [ibanError, setIbanError] = useState<string>('');
+  const [ibanEurError, setIbanEurError] = useState<string>('');
+  const [ibanUsdError, setIbanUsdError] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [propertyQuantity, setPropertyQuantity] = useState<number>(1);
   const [isSubscribing, setIsSubscribing] = useState(false);
@@ -124,18 +128,28 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
     setIbanInput(preferences.iban || '');
   }, [preferences.iban]);
 
+  useEffect(() => {
+    setIbanEurInput(preferences.iban_eur || '');
+  }, [preferences.iban_eur]);
+
+  useEffect(() => {
+    setIbanUsdInput(preferences.iban_usd || '');
+  }, [preferences.iban_usd]);
+
   // Check if there are unsaved changes
   useEffect(() => {
     const phoneChanged = (phoneNumberInput.trim() || null) !== (preferences.phone_number || null);
     const landlordChanged = (landlordNameInput.trim() || null) !== (preferences.landlord_name || null);
     const emailChanged = (personalEmailInput.trim() || null) !== (preferences.personal_email || null);
     const ibanChanged = (ibanInput.replace(/\s+/g, '').trim() || null) !== (preferences.iban || null);
+    const ibanEurChanged = (ibanEurInput.replace(/\s+/g, '').trim() || null) !== (preferences.iban_eur || null);
+    const ibanUsdChanged = (ibanUsdInput.replace(/\s+/g, '').trim() || null) !== (preferences.iban_usd || null);
     
-    setHasUnsavedChanges(phoneChanged || landlordChanged || emailChanged || ibanChanged);
-  }, [phoneNumberInput, landlordNameInput, personalEmailInput, ibanInput, preferences.phone_number, preferences.landlord_name, preferences.personal_email, preferences.iban]);
+    setHasUnsavedChanges(phoneChanged || landlordChanged || emailChanged || ibanChanged || ibanEurChanged || ibanUsdChanged);
+  }, [phoneNumberInput, landlordNameInput, personalEmailInput, ibanInput, ibanEurInput, ibanUsdInput, preferences.phone_number, preferences.landlord_name, preferences.personal_email, preferences.iban, preferences.iban_eur, preferences.iban_usd]);
 
   const handleSavePersonalDetails = () => {
-    // Validate IBAN if provided
+    // Validate RON IBAN if provided
     if (ibanInput.trim()) {
       const cleanedIban = ibanInput.replace(/\s+/g, '');
       if (!validateIban(cleanedIban)) {
@@ -147,6 +161,32 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
       setIban(null);
     }
     setIbanError('');
+    
+    // Validate EUR IBAN if provided
+    if (ibanEurInput.trim()) {
+      const cleanedIban = ibanEurInput.replace(/\s+/g, '');
+      if (!validateIban(cleanedIban)) {
+        setIbanEurError(t('settings.invalidIban') || 'Invalid IBAN format');
+        return;
+      }
+      setIbanEur(cleanedIban);
+    } else {
+      setIbanEur(null);
+    }
+    setIbanEurError('');
+    
+    // Validate USD IBAN if provided
+    if (ibanUsdInput.trim()) {
+      const cleanedIban = ibanUsdInput.replace(/\s+/g, '');
+      if (!validateIban(cleanedIban)) {
+        setIbanUsdError(t('settings.invalidIban') || 'Invalid IBAN format');
+        return;
+      }
+      setIbanUsd(cleanedIban);
+    } else {
+      setIbanUsd(null);
+    }
+    setIbanUsdError('');
     
     setPhoneNumber(phoneNumberInput.trim() || null);
     setLandlordName(landlordNameInput.trim() || null);
@@ -161,6 +201,16 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
     setIbanError('');
   };
 
+  const handleIbanEurChange = (value: string) => {
+    setIbanEurInput(value);
+    setIbanEurError('');
+  };
+
+  const handleIbanUsdChange = (value: string) => {
+    setIbanUsdInput(value);
+    setIbanUsdError('');
+  };
+
   const handleIbanBlur = () => {
     if (ibanInput.trim()) {
       const cleanedIban = ibanInput.replace(/\s+/g, '');
@@ -170,6 +220,30 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
         // Format the IBAN for display
         setIbanInput(formatIban(cleanedIban));
         setIbanError('');
+      }
+    }
+  };
+
+  const handleIbanEurBlur = () => {
+    if (ibanEurInput.trim()) {
+      const cleanedIban = ibanEurInput.replace(/\s+/g, '');
+      if (!validateIban(cleanedIban)) {
+        setIbanEurError(t('settings.invalidIban') || 'Invalid IBAN format');
+      } else {
+        setIbanEurInput(formatIban(cleanedIban));
+        setIbanEurError('');
+      }
+    }
+  };
+
+  const handleIbanUsdBlur = () => {
+    if (ibanUsdInput.trim()) {
+      const cleanedIban = ibanUsdInput.replace(/\s+/g, '');
+      if (!validateIban(cleanedIban)) {
+        setIbanUsdError(t('settings.invalidIban') || 'Invalid IBAN format');
+      } else {
+        setIbanUsdInput(formatIban(cleanedIban));
+        setIbanUsdError('');
       }
     }
   };
@@ -510,7 +584,8 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                 <p className="text-slate-400 text-sm">
                   {t('settings.personalDetailsDesc')}
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Name, Email, Phone on the same row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label className="text-slate-300">{t('settings.landlordName')}</Label>
                     <Input
@@ -537,8 +612,6 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                       {t('settings.personalEmailHelp')}
                     </p>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-slate-300">{t('settings.phoneNumberLabel')}</Label>
                     <Input
@@ -552,8 +625,11 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                       {t('settings.phoneNumberHelp')}
                     </p>
                   </div>
+                </div>
+                {/* 3 IBANs on the same row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label className="text-slate-300">{t('settings.iban')}</Label>
+                    <Label className="text-slate-300">{t('settings.ibanRon')}</Label>
                     <Input
                       type="text"
                       value={ibanInput}
@@ -569,6 +645,44 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                     )}
                     <p className="text-xs text-slate-500 mt-1">
                       {t('settings.ibanHelp')}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">{t('settings.ibanEur')}</Label>
+                    <Input
+                      type="text"
+                      value={ibanEurInput}
+                      onChange={(e) => handleIbanEurChange(e.target.value)}
+                      onBlur={handleIbanEurBlur}
+                      className={`bg-slate-700 border-slate-600 text-slate-100 mt-1 ${ibanEurError ? 'border-red-500' : ''}`}
+                      placeholder={t('settings.ibanPlaceholder')}
+                    />
+                    {ibanEurError && (
+                      <p className="text-xs text-red-400 mt-1">
+                        {ibanEurError}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500 mt-1">
+                      {t('settings.ibanEurHelp')}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">{t('settings.ibanUsd')}</Label>
+                    <Input
+                      type="text"
+                      value={ibanUsdInput}
+                      onChange={(e) => handleIbanUsdChange(e.target.value)}
+                      onBlur={handleIbanUsdBlur}
+                      className={`bg-slate-700 border-slate-600 text-slate-100 mt-1 ${ibanUsdError ? 'border-red-500' : ''}`}
+                      placeholder={t('settings.ibanPlaceholder')}
+                    />
+                    {ibanUsdError && (
+                      <p className="text-xs text-red-400 mt-1">
+                        {ibanUsdError}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500 mt-1">
+                      {t('settings.ibanUsdHelp')}
                     </p>
                   </div>
                 </div>
