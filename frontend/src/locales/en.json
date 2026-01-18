@@ -358,6 +358,8 @@
     "subscription": "Subscription",
     "off": "Off",
     "on": "On",
+    "tier": "Tier",
+    "paidTierProperties": "number of properties",
     "showingUsers": "Showing {from} to {to} of {total} users",
     "previous": "Previous",
     "next": "Next",

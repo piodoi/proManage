@@ -351,6 +351,8 @@
     "subscription": "Abonament",
     "off": "Oprit",
     "on": "Pornit",
+    "tier": "Nivel",
+    "paidTierProperties": "număr de proprietăți",
     "showingUsers": "Afișează {from} până la {to} din {total} utilizatori",
     "previous": "Anterior",
     "next": "Următor",

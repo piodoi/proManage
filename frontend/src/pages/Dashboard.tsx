@@ -30,7 +30,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord', password: '' });
+  const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord', password: '', subscription_tier: 0 });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -89,7 +89,7 @@ export default function Dashboard() {
     try {
       await api.admin.createUser(token, formData);
       setShowCreate(false);
-      setFormData({ email: '', name: '', role: 'landlord', password: '' });
+      setFormData({ email: '', name: '', role: 'landlord', password: '', subscription_tier: 0 });
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user');
@@ -99,17 +99,18 @@ export default function Dashboard() {
   const handleUpdate = async () => {
     if (!token || !editUser) return;
     try {
-      const updateData: { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string } = {
+      const updateData: { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string; subscription_tier?: number } = {
         email: formData.email,
         name: formData.name,
         role: formData.role,
+        subscription_tier: formData.subscription_tier,
       };
       if (formData.password) {
         updateData.password = formData.password;
       }
       await api.admin.updateUser(token, editUser.id, updateData);
       setEditUser(null);
-      setFormData({ email: '', name: '', role: 'landlord', password: '' });
+      setFormData({ email: '', name: '', role: 'landlord', password: '', subscription_tier: 0 });
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update user');
@@ -138,7 +139,7 @@ export default function Dashboard() {
 
   const openEdit = (user: User) => {
     setEditUser(user);
-    setFormData({ email: user.email, name: user.name, role: user.role, password: '' });
+    setFormData({ email: user.email, name: user.name, role: user.role, password: '', subscription_tier: user.subscription_tier ?? 0 });
   };
 
   const loadSuppliers = async () => {
@@ -779,20 +780,13 @@ function AdminTabsContent({
                             </span>
                           </TableCell>
                           <TableCell>
-                            {user.role === 'landlord' && (
-                              <Select
-                                value={((user.subscription_tier ?? 0) > 0 ? '1' : '0')}
-                                onValueChange={(v) => handleSubscription(user.id, parseInt(v, 10))}
-                              >
-                                <SelectTrigger className="w-20 h-8 bg-slate-700 border-slate-600 text-slate-100">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-700 border-slate-600">
-                                  <SelectItem value="0">{t('admin.off')}</SelectItem>
-                                  <SelectItem value="1">{t('admin.on')}</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
+                            <Input
+                              type="number"
+                              min="0"
+                              value={user.subscription_tier ?? 0}
+                              onChange={(e) => handleSubscription(user.id, parseInt(e.target.value, 10) || 0)}
+                              className="w-16 h-8 bg-slate-700 border-slate-600 text-slate-100 text-center"
+                            />
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
@@ -934,6 +928,20 @@ function AdminTabsContent({
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">{t('admin.subscription')} ({t('admin.tier')})</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formData.subscription_tier}
+                      onChange={(e) => setFormData({ ...formData, subscription_tier: parseInt(e.target.value, 10) || 0 })}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                      placeholder="0 = free, 1+ = paid tier"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      0 = {t('settings.freeTier')}, 1+ = {t('admin.paidTierProperties')}
+                    </p>
                   </div>
                   <Button onClick={handleUpdate} className="w-full bg-emerald-600 hover:bg-emerald-700">
                     {t('admin.update')}
