@@ -735,6 +735,8 @@ class PostgreSQLDatabase:
                     landlord_name=row.landlord_name,
                     personal_email=row.personal_email,
                     iban=row.iban,
+                    iban_eur=getattr(row, 'iban_eur', None),
+                    iban_usd=getattr(row, 'iban_usd', None),
                     property_order=property_order,
                     updated_at=row.updated_at.isoformat() if row.updated_at else None
                 )
@@ -754,10 +756,10 @@ class PostgreSQLDatabase:
                 text("""
                     INSERT INTO user_preferences (
                         id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
-                        date_format, phone_number, landlord_name, personal_email, iban, property_order, updated_at
+                        date_format, phone_number, landlord_name, personal_email, iban, iban_eur, iban_usd, property_order, updated_at
                     ) VALUES (
                         :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
-                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :property_order, :updated_at
+                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :iban_eur, :iban_usd, :property_order, :updated_at
                     )
                     ON CONFLICT (user_id) DO UPDATE SET
                         language = EXCLUDED.language,
@@ -770,6 +772,8 @@ class PostgreSQLDatabase:
                         landlord_name = EXCLUDED.landlord_name,
                         personal_email = EXCLUDED.personal_email,
                         iban = EXCLUDED.iban,
+                        iban_eur = EXCLUDED.iban_eur,
+                        iban_usd = EXCLUDED.iban_usd,
                         property_order = EXCLUDED.property_order,
                         updated_at = EXCLUDED.updated_at
                 """),
@@ -786,6 +790,8 @@ class PostgreSQLDatabase:
                     "landlord_name": prefs.landlord_name,
                     "personal_email": prefs.personal_email,
                     "iban": prefs.iban,
+                    "iban_eur": prefs.iban_eur,
+                    "iban_usd": prefs.iban_usd,
                     "property_order": property_order_json,
                     "updated_at": datetime.now().isoformat()
                 }

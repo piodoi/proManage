@@ -23,6 +23,8 @@ class PreferencesUpdate(BaseModel):
     landlord_name: Optional[str] = None
     personal_email: Optional[str] = None
     iban: Optional[str] = None
+    iban_eur: Optional[str] = None
+    iban_usd: Optional[str] = None
     property_order: Optional[list] = None  # Ordered list of property IDs
 
 
@@ -67,6 +69,8 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
             "landlord_name": None,
             "personal_email": None,
             "iban": None,
+            "iban_eur": None,
+            "iban_usd": None,
             "property_order": None
         }
     return {
@@ -80,6 +84,8 @@ async def get_preferences(current_user: TokenData = Depends(require_auth)):
         "landlord_name": preferences.landlord_name,
         "personal_email": preferences.personal_email,
         "iban": preferences.iban,
+        "iban_eur": preferences.iban_eur,
+        "iban_usd": preferences.iban_usd,
         "property_order": preferences.property_order
     }
 
@@ -115,6 +121,10 @@ async def save_preferences(
             existing.personal_email = data.personal_email
         if data.iban is not None:
             existing.iban = data.iban
+        if data.iban_eur is not None:
+            existing.iban_eur = data.iban_eur
+        if data.iban_usd is not None:
+            existing.iban_usd = data.iban_usd
         if data.property_order is not None:
             existing.property_order = data.property_order
         preferences = existing
@@ -132,11 +142,13 @@ async def save_preferences(
             landlord_name=data.landlord_name,
             personal_email=data.personal_email,
             iban=data.iban,
+            iban_eur=data.iban_eur,
+            iban_usd=data.iban_usd,
             property_order=data.property_order
         )
     
     db.save_user_preferences(preferences)
-    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}, phone_number={'*' * 4 if preferences.phone_number else None}, landlord_name={preferences.landlord_name}, personal_email={'*' * 4 if preferences.personal_email else None}, iban={'*' * 4 if preferences.iban else None}, property_order={len(preferences.property_order) if preferences.property_order else 0} items")
+    logger.info(f"[Preferences] Saved preferences for user {current_user.user_id}: language={preferences.language}, view_mode={preferences.view_mode}, rent_warning_days={preferences.rent_warning_days}, rent_currency={preferences.rent_currency}, bill_currency={preferences.bill_currency}, phone_number={'*' * 4 if preferences.phone_number else None}, landlord_name={preferences.landlord_name}, personal_email={'*' * 4 if preferences.personal_email else None}, iban={'*' * 4 if preferences.iban else None}, iban_eur={'*' * 4 if preferences.iban_eur else None}, iban_usd={'*' * 4 if preferences.iban_usd else None}, property_order={len(preferences.property_order) if preferences.property_order else 0} items")
     
     return {
         "language": preferences.language,
@@ -149,6 +161,8 @@ async def save_preferences(
         "landlord_name": preferences.landlord_name,
         "personal_email": preferences.personal_email,
         "iban": preferences.iban,
+        "iban_eur": preferences.iban_eur,
+        "iban_usd": preferences.iban_usd,
         "property_order": preferences.property_order
     }
 

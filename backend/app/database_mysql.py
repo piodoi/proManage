@@ -765,6 +765,8 @@ class MySQLDatabase:
                     landlord_name=row.landlord_name,
                     personal_email=row.personal_email,
                     iban=row.iban,
+                    iban_eur=getattr(row, 'iban_eur', None),
+                    iban_usd=getattr(row, 'iban_usd', None),
                     property_order=property_order,
                     updated_at=row.updated_at.isoformat() if row.updated_at else None
                 )
@@ -784,10 +786,10 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO user_preferences (
                         id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
-                        date_format, phone_number, landlord_name, personal_email, iban, property_order, updated_at
+                        date_format, phone_number, landlord_name, personal_email, iban, iban_eur, iban_usd, property_order, updated_at
                     ) VALUES (
                         :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
-                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :property_order, :updated_at
+                        :date_format, :phone_number, :landlord_name, :personal_email, :iban, :iban_eur, :iban_usd, :property_order, :updated_at
                     )
                     ON DUPLICATE KEY UPDATE
                         language = VALUES(language),
@@ -800,6 +802,8 @@ class MySQLDatabase:
                         landlord_name = VALUES(landlord_name),
                         personal_email = VALUES(personal_email),
                         iban = VALUES(iban),
+                        iban_eur = VALUES(iban_eur),
+                        iban_usd = VALUES(iban_usd),
                         property_order = VALUES(property_order),
                         updated_at = VALUES(updated_at)
                 """),
@@ -816,6 +820,8 @@ class MySQLDatabase:
                     "landlord_name": prefs.landlord_name,
                     "personal_email": prefs.personal_email,
                     "iban": prefs.iban,
+                    "iban_eur": prefs.iban_eur,
+                    "iban_usd": prefs.iban_usd,
                     "property_order": property_order_json,
                     "updated_at": datetime.now().isoformat()
                 }

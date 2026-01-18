@@ -785,6 +785,8 @@ class SQLiteDatabase:
                     landlord_name=row.landlord_name,
                     personal_email=row.personal_email,
                     iban=row.iban,
+                    iban_eur=getattr(row, 'iban_eur', None),
+                    iban_usd=getattr(row, 'iban_usd', None),
                     property_order=property_order,
                     updated_at=row.updated_at
                 )
@@ -805,10 +807,10 @@ class SQLiteDatabase:
                     text("""
                         INSERT INTO user_preferences (
                             id, user_id, language, view_mode, rent_warning_days, rent_currency, bill_currency,
-                            date_format, phone_number, landlord_name, personal_email, iban, property_order, updated_at
+                            date_format, phone_number, landlord_name, personal_email, iban, iban_eur, iban_usd, property_order, updated_at
                         ) VALUES (
                             :id, :user_id, :language, :view_mode, :rent_warning_days, :rent_currency, :bill_currency,
-                            :date_format, :phone_number, :landlord_name, :personal_email, :iban, :property_order, :updated_at
+                            :date_format, :phone_number, :landlord_name, :personal_email, :iban, :iban_eur, :iban_usd, :property_order, :updated_at
                         )
                     """),
                     {
@@ -824,6 +826,8 @@ class SQLiteDatabase:
                         "landlord_name": prefs.landlord_name,
                         "personal_email": prefs.personal_email,
                         "iban": prefs.iban,
+                        "iban_eur": prefs.iban_eur,
+                        "iban_usd": prefs.iban_usd,
                         "property_order": property_order_json,
                         "updated_at": datetime.now().isoformat()
                     }
@@ -836,7 +840,7 @@ class SQLiteDatabase:
                         SET language = :language, view_mode = :view_mode, rent_warning_days = :rent_warning_days,
                             rent_currency = :rent_currency, bill_currency = :bill_currency, date_format = :date_format,
                             phone_number = :phone_number, landlord_name = :landlord_name, personal_email = :personal_email,
-                            iban = :iban, property_order = :property_order, updated_at = :updated_at
+                            iban = :iban, iban_eur = :iban_eur, iban_usd = :iban_usd, property_order = :property_order, updated_at = :updated_at
                         WHERE user_id = :user_id
                     """),
                     {
@@ -851,6 +855,8 @@ class SQLiteDatabase:
                         "landlord_name": prefs.landlord_name,
                         "personal_email": prefs.personal_email,
                         "iban": prefs.iban,
+                        "iban_eur": prefs.iban_eur,
+                        "iban_usd": prefs.iban_usd,
                         "property_order": property_order_json,
                         "updated_at": datetime.now().isoformat()
                     }
