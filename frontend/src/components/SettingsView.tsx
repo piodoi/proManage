@@ -11,6 +11,16 @@ import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { validateIban, formatIban } from '../utils/iban';
 
+// Cache lifetime for subscription data (15 minutes in milliseconds)
+const SUBSCRIPTION_CACHE_LIFETIME = 15 * 60 * 1000;
+
+// Cache keys for sessionStorage
+const SUBSCRIPTION_CACHE_KEY = 'subscription_cache';
+const SUBSCRIPTION_CACHE_TIME_KEY = 'subscription_cache_time';
+const STRIPE_CONFIG_CACHE_KEY = 'stripe_config_cache';
+const STRIPE_SUB_CACHE_KEY = 'stripe_sub_cache';
+const STRIPE_CACHE_TIME_KEY = 'stripe_cache_time';
+
 type SettingsViewProps = {
   token: string | null;
   user: ApiUser | null;
@@ -20,12 +30,49 @@ type SettingsViewProps = {
   onNavigateToSubscription?: () => void; // Callback to navigate to main subscription tab
 };
 
+// Helper to check if cache is still valid
+const isCacheValid = (cacheTimeKey: string): boolean => {
+  const cacheTime = sessionStorage.getItem(cacheTimeKey);
+  if (!cacheTime) return false;
+  const elapsed = Date.now() - parseInt(cacheTime, 10);
+  return elapsed < SUBSCRIPTION_CACHE_LIFETIME;
+};
+
+// Helper to get cached data
+const getCachedData = <T,>(cacheKey: string, cacheTimeKey: string): T | null => {
+  if (!isCacheValid(cacheTimeKey)) return null;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (!cached) return null;
+  try {
+    return JSON.parse(cached) as T;
+  } catch {
+    return null;
+  }
+};
+
+// Helper to set cached data
+const setCachedData = <T,>(cacheKey: string, cacheTimeKey: string, data: T): void => {
+  sessionStorage.setItem(cacheKey, JSON.stringify(data));
+  sessionStorage.setItem(cacheTimeKey, Date.now().toString());
+};
+
 export default function SettingsView({ token, user, onError, forceTab, hideTabBar = false, onNavigateToSubscription }: SettingsViewProps) {
   const { t, language } = useI18n();
   const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban, setIbanEur, setIbanUsd } = usePreferences();
-  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
-  const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(null);
-  const [stripeSubscription, setStripeSubscription] = useState<StripeSubscription | null>(null);
+  
+  // Initialize state from cache if available
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(() =>
+    getCachedData<SubscriptionStatus>(SUBSCRIPTION_CACHE_KEY, SUBSCRIPTION_CACHE_TIME_KEY)
+  );
+  const [subscriptionLoading, setSubscriptionLoading] = useState(() =>
+    !getCachedData<SubscriptionStatus>(SUBSCRIPTION_CACHE_KEY, SUBSCRIPTION_CACHE_TIME_KEY)
+  );
+  const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(() =>
+    getCachedData<StripeConfig>(STRIPE_CONFIG_CACHE_KEY, STRIPE_CACHE_TIME_KEY)
+  );
+  const [stripeSubscription, setStripeSubscription] = useState<StripeSubscription | null>(() =>
+    getCachedData<StripeSubscription>(STRIPE_SUB_CACHE_KEY, STRIPE_CACHE_TIME_KEY)
+  );
   const [emailCopied, setEmailCopied] = useState(false);
   const [rentWarningDaysInput, setRentWarningDaysInput] = useState<string>('');
   const [phoneNumberInput, setPhoneNumberInput] = useState<string>('');
@@ -60,10 +107,10 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('subscription_success') === 'true') {
-      // Reload subscription data
+      // Force reload subscription data (bypass cache)
       if (token) {
-        loadSubscription();
-        loadStripeData();
+        loadSubscription(true);
+        loadStripeData(true);
       }
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
@@ -73,20 +120,48 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
     }
   }, []);
 
-  const loadSubscription = useCallback(async () => {
+  const loadSubscription = useCallback(async (forceRefresh = false) => {
     if (!token) return;
+    
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && isCacheValid(SUBSCRIPTION_CACHE_TIME_KEY)) {
+      const cached = getCachedData<SubscriptionStatus>(SUBSCRIPTION_CACHE_KEY, SUBSCRIPTION_CACHE_TIME_KEY);
+      if (cached) {
+        setSubscription(cached);
+        setSubscriptionLoading(false);
+        return;
+      }
+    }
+    
+    setSubscriptionLoading(true);
     try {
       const sub = await api.subscription.status(token);
       setSubscription(sub);
+      // Save to cache
+      setCachedData(SUBSCRIPTION_CACHE_KEY, SUBSCRIPTION_CACHE_TIME_KEY, sub);
     } catch (err) {
       if (onError) {
         onError(err instanceof Error ? err.message : t('settings.loadSubscriptionError'));
       }
+    } finally {
+      setSubscriptionLoading(false);
     }
   }, [token, onError, t]);
 
-  const loadStripeData = useCallback(async () => {
+  const loadStripeData = useCallback(async (forceRefresh = false) => {
     if (!token) return;
+    
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && isCacheValid(STRIPE_CACHE_TIME_KEY)) {
+      const cachedConfig = getCachedData<StripeConfig>(STRIPE_CONFIG_CACHE_KEY, STRIPE_CACHE_TIME_KEY);
+      const cachedSub = getCachedData<StripeSubscription>(STRIPE_SUB_CACHE_KEY, STRIPE_CACHE_TIME_KEY);
+      if (cachedConfig && cachedSub) {
+        setStripeConfig(cachedConfig);
+        setStripeSubscription(cachedSub);
+        return;
+      }
+    }
+    
     try {
       const [config, stripeSub] = await Promise.all([
         api.stripe.config(token),
@@ -94,6 +169,9 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
       ]);
       setStripeConfig(config);
       setStripeSubscription(stripeSub);
+      // Save to cache
+      setCachedData(STRIPE_CONFIG_CACHE_KEY, STRIPE_CACHE_TIME_KEY, config);
+      setCachedData(STRIPE_SUB_CACHE_KEY, STRIPE_CACHE_TIME_KEY, stripeSub);
     } catch (err) {
       console.error('Failed to load Stripe data:', err);
     }
@@ -326,7 +404,12 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-slate-100 flex items-center gap-2">
-                    {subscription?.is_free_tier ? (
+                    {subscriptionLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                        <span className="text-slate-400">{t('common.loading')}...</span>
+                      </>
+                    ) : subscription?.is_free_tier ? (
                       <>
                         <Zap className="w-5 h-5 text-slate-400" />
                         {t('settings.freeTier')}
@@ -339,7 +422,7 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                     )}
                   </CardTitle>
                   {/* Email Sync Status - Compact inline */}
-                  {subscription && (
+                  {subscription && !subscriptionLoading && (
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4 text-slate-400" />
                       <span className="text-slate-400 text-sm">{t('settings.emailSyncFeature')}:</span>
@@ -359,7 +442,27 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                 </div>
               </CardHeader>
               <CardContent>
-                {subscription && (
+                {/* Loading skeleton for stats */}
+                {subscriptionLoading && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 animate-pulse">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-4 h-4 bg-slate-600 rounded" />
+                            <div className="h-4 w-24 bg-slate-600 rounded" />
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <div className="h-8 w-8 bg-slate-600 rounded" />
+                            <div className="h-4 w-12 bg-slate-700 rounded" />
+                          </div>
+                          <div className="mt-2 h-1.5 bg-slate-700 rounded-full" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {subscription && !subscriptionLoading && (
                   <div className="space-y-4">
                     {/* Usage Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -476,7 +579,7 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
             </Card>
 
             {/* Upgrade Card (for free tier users) */}
-            {subscription?.is_free_tier && stripeConfig?.enabled && (
+            {!subscriptionLoading && subscription?.is_free_tier && stripeConfig?.enabled && (
               <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/20 border-amber-700/50">
                 <CardHeader>
                   <CardTitle className="text-amber-300 flex items-center gap-2">
@@ -539,7 +642,7 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
             )}
 
             {/* Add More Properties Card (for paid users) */}
-            {subscription && !subscription.is_free_tier && stripeConfig?.enabled && (
+            {!subscriptionLoading && subscription && !subscription.is_free_tier && stripeConfig?.enabled && (
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
