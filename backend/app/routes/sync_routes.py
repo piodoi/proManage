@@ -1,11 +1,13 @@
 """Sync routes for email and rent bill synchronization."""
 import logging
+import base64
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.models import TokenData
 from app.auth import require_landlord
 from app.database import db
+from app.paths import save_bill_pdf
 
 
 def get_default_bill_currency(user_id: str) -> str:
@@ -365,6 +367,16 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
             db.save_bill(bill)
             bills_created += 1
             logger.info(f"[Save Bills] Created bill: {description}, amount={bill.amount}, property={property_id}")
+            
+            # Save PDF file if pdf_data_base64 is provided
+            pdf_data_base64 = bill_data.get("pdf_data_base64")
+            if pdf_data_base64:
+                try:
+                    pdf_data = base64.b64decode(pdf_data_base64)
+                    pdf_path = save_bill_pdf(current_user.user_id, bill.id, pdf_data)
+                    logger.info(f"[Save Bills] Saved PDF for bill {bill.id} at {pdf_path}")
+                except Exception as pdf_err:
+                    logger.error(f"[Save Bills] Failed to save PDF for bill {bill.id}: {pdf_err}")
             
         except Exception as e:
             error_msg = f"Error saving bill: {str(e)}"

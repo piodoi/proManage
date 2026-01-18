@@ -418,6 +418,12 @@ export type RenterBill = {
   paid_amount: number;
   remaining: number;
   is_direct_debit: boolean;  // Whether this bill's supplier has direct_debit enabled
+  has_pdf: boolean;  // Whether a PDF file is available for download
+};
+
+// Helper function to get PDF download URL for renter view
+export const getRenterBillPdfUrl = (renterToken: string, billId: string): string => {
+  return `${API_URL}/renter/${renterToken}/bill/${billId}/pdf`;
 };
 
 export type RenterBalance = {

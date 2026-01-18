@@ -140,6 +140,7 @@
     "whatsAppMessage": "Salut! Link-ul cu situatia facturilo la zi: {link}",
     "dueDay": "Zi scadență",
     "start": "Început",
+    "downloadPdf": "Descarcă PDF",
     "amountToPay": "Sumă de Plătit",
     "getBankDetails": "Obține Detalii Bancare",
     "payNow": "Plătește Acum",

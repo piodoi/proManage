@@ -53,3 +53,42 @@ def ensure_user_directory(user_id: str) -> Path:
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
+
+def get_user_bills_dir(user_id: str) -> Path:
+    """Get the bills directory for a specific user."""
+    return get_user_data_dir(user_id) / "bills"
+
+
+def ensure_user_bills_directory(user_id: str) -> Path:
+    """Ensure user bills directory exists and return path."""
+    bills_dir = get_user_bills_dir(user_id)
+    bills_dir.mkdir(parents=True, exist_ok=True)
+    return bills_dir
+
+
+def get_bill_pdf_path(user_id: str, bill_id: str) -> Path:
+    """Get the path for a bill's PDF file."""
+    return get_user_bills_dir(user_id) / f"{bill_id}.pdf"
+
+
+def save_bill_pdf(user_id: str, bill_id: str, pdf_data: bytes) -> Path:
+    """Save PDF data for a bill and return the file path."""
+    ensure_user_bills_directory(user_id)
+    pdf_path = get_bill_pdf_path(user_id, bill_id)
+    pdf_path.write_bytes(pdf_data)
+    return pdf_path
+
+
+def delete_bill_pdf(user_id: str, bill_id: str) -> bool:
+    """Delete PDF file for a bill. Returns True if file was deleted, False if not found."""
+    pdf_path = get_bill_pdf_path(user_id, bill_id)
+    if pdf_path.exists():
+        pdf_path.unlink()
+        return True
+    return False
+
+
+def bill_pdf_exists(user_id: str, bill_id: str) -> bool:
+    """Check if a PDF file exists for a bill."""
+    return get_bill_pdf_path(user_id, bill_id).exists()
+

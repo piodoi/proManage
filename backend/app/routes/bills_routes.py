@@ -13,6 +13,7 @@ from app.database import db
 from app.text_pattern_extractor import extract_bill_from_pdf_auto
 from app.utils.suppliers import initialize_suppliers
 from app.routes.sync_routes import resolve_property_supplier_id
+from app.paths import delete_bill_pdf
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -172,6 +173,12 @@ async def delete_bill(bill_id: str, current_user: TokenData = Depends(require_la
     # User isolation: all users (including admins) can only access their own properties
     if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Delete associated PDF file if it exists
+    pdf_deleted = delete_bill_pdf(current_user.user_id, bill_id)
+    if pdf_deleted:
+        logger.info(f"[Bill Delete] Deleted PDF file for bill {bill_id}")
+    
     db.delete_bill(bill_id)
     return {"status": "deleted"}
 

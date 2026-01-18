@@ -3,9 +3,11 @@ import os
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from app.models import Payment, PaymentCreate, PaymentMethod, PaymentStatus, BillStatus, TokenData, Bill
 from app.database import db
 from app.utils.currency import get_exchange_rates, convert_currency
+from app.paths import get_bill_pdf_path, bill_pdf_exists
 
 router = APIRouter(prefix="/renter", tags=["renter-public"])
 
@@ -74,6 +76,10 @@ async def renter_bills(token: str):
     # Only filter out bills with a specific renter_id that doesn't match
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
     
+    # Get property to find landlord_id for PDF path lookup
+    prop = db.get_property(renter.property_id)
+    landlord_id = prop.landlord_id if prop else None
+    
     # Get property suppliers to check direct_debit status (keyed by PropertySupplier.id)
     property_suppliers = db.list_property_suppliers(renter.property_id)
     direct_debit_by_property_supplier = {ps.id: ps.direct_debit for ps in property_suppliers}
@@ -97,11 +103,17 @@ async def renter_bills(token: str):
         if bill.property_supplier_id and bill.property_supplier_id in direct_debit_by_property_supplier:
             is_direct_debit = direct_debit_by_property_supplier[bill.property_supplier_id]
         
+        # Check if PDF is available for this bill
+        has_pdf = False
+        if landlord_id:
+            has_pdf = bill_pdf_exists(landlord_id, bill.id)
+        
         result.append({
             "bill": bill,
             "paid_amount": paid_amount,
             "remaining": bill.amount - paid_amount,
             "is_direct_debit": is_direct_debit,
+            "has_pdf": has_pdf,
         })
     
     return result
@@ -213,3 +225,47 @@ async def renter_pay(token: str, data: PaymentCreate):
             "reference": f"Bill {bill.bill_number or bill.id}",
         }
     return response
+
+
+@router.get("/{token}/bill/{bill_id}/pdf")
+async def download_bill_pdf(token: str, bill_id: str):
+    """
+    Download PDF file for a bill.
+    
+    Renters can download PDFs for bills that belong to their property.
+    """
+    renter = db.get_renter_by_token(token)
+    if not renter:
+        raise HTTPException(status_code=404, detail="Invalid access token")
+    
+    # Get the bill and verify it belongs to the renter's property
+    bill = db.get_bill(bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    if bill.property_id != renter.property_id:
+        raise HTTPException(status_code=403, detail="Bill does not belong to this renter's property")
+    
+    # Check if renter has access to this bill (renter_id is None, 'all', or matches)
+    if bill.renter_id is not None and bill.renter_id != 'all' and bill.renter_id != renter.id:
+        raise HTTPException(status_code=403, detail="Access denied to this bill")
+    
+    # Get the property to find the landlord (user_id for the PDF path)
+    prop = db.get_property(bill.property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Check if PDF exists
+    if not bill_pdf_exists(prop.landlord_id, bill_id):
+        raise HTTPException(status_code=404, detail="PDF not available for this bill")
+    
+    pdf_path = get_bill_pdf_path(prop.landlord_id, bill_id)
+    
+    # Generate a filename for download
+    filename = f"bill_{bill.bill_number or bill_id}.pdf"
+    
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=filename
+    )

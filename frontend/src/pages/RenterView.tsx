@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, RenterInfo, RenterBill, RenterBalance } from '../api';
+import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight } from 'lucide-react';
+import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
 
@@ -339,22 +339,36 @@ export default function RenterView() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          {item.bill.status !== 'paid' && (
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            {item.bill.status !== 'paid' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => openPayDialog(item)}
+                                  className="bg-emerald-600 hover:bg-emerald-700"
+                                >
+                                  {t('renter.pay')}
+                                </Button>
+                                {item.is_direct_debit && (
+                                  <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
+                                    {t('bill.directDebit')}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                            {item.has_pdf && token && (
                               <Button
                                 size="sm"
-                                onClick={() => openPayDialog(item)}
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                variant="outline"
+                                onClick={() => window.open(getRenterBillPdfUrl(token, item.bill.id), '_blank')}
+                                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                                title={t('renter.downloadPdf') || 'Download PDF'}
                               >
-                                {t('renter.pay')}
+                                <Download className="w-4 h-4 mr-1" />
+                                PDF
                               </Button>
-                              {item.is_direct_debit && (
-                                <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
-                                  {t('bill.directDebit')}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

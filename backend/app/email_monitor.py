@@ -9,6 +9,7 @@ import os
 import re
 import imaplib
 import email
+import base64
 from email.message import Message
 from typing import Optional, List, Tuple
 import logging
@@ -568,8 +569,8 @@ class EmailMonitor:
                                 'address_confidence': 100 if (match_reason and 'contract_id' in match_reason) else (best_score if extracted_address else None),
                                 'user_id': extracted_user_id,
                                 'source': 'email',
-                                # Note: pdf_data not included in response as it's binary and can't be JSON serialized
-                                # If needed later, we can re-fetch from email or store separately
+                                # PDF data base64 encoded for JSON serialization - used to save PDF when bill is created
+                                'pdf_data_base64': base64.b64encode(pdf_data).decode('utf-8'),
                             }
                             
                             discovered_bills.append(discovered_bill)
