@@ -53,21 +53,31 @@ async def renter_info(token: str):
     landlord_preferences = None
     date_format = "DD/MM/YYYY"  # Default
     landlord_iban = None
+    landlord_iban_eur = None
+    landlord_iban_usd = None
     landlord_name = None
+    rent_currency = "EUR"  # Default
     if prop:
         landlord_preferences = db.get_user_preferences(prop.landlord_id)
         if landlord_preferences:
             if landlord_preferences.date_format:
                 date_format = landlord_preferences.date_format
             landlord_iban = landlord_preferences.iban
+            landlord_iban_eur = landlord_preferences.iban_eur
+            landlord_iban_usd = landlord_preferences.iban_usd
             landlord_name = landlord_preferences.landlord_name
+            if landlord_preferences.rent_currency:
+                rent_currency = landlord_preferences.rent_currency
     
     return {
         "renter": {"id": renter.id, "name": renter.name},
         "property": {"id": prop.id, "name": prop.name, "address": prop.address} if prop else None,
         "date_format": date_format,
         "landlord_iban": landlord_iban,
+        "landlord_iban_eur": landlord_iban_eur,
+        "landlord_iban_usd": landlord_iban_usd,
         "landlord_name": landlord_name,
+        "rent_currency": rent_currency,
     }
 
 

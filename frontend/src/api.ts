@@ -437,8 +437,11 @@ export type RenterInfo = {
   renter: { id: string; name: string };
   property: { id: string; name: string; address: string } | null;
   date_format?: string;
-  landlord_iban?: string | null;  // Landlord's IBAN for rent payments
+  landlord_iban?: string | null;  // Landlord's RON IBAN for rent payments
+  landlord_iban_eur?: string | null;  // Landlord's EUR IBAN for rent payments
+  landlord_iban_usd?: string | null;  // Landlord's USD IBAN for rent payments
   landlord_name?: string | null;  // Landlord's name for rent payments
+  rent_currency?: string;  // Landlord's preferred rent currency
 };
 
 export type RenterBill = {

@@ -128,6 +128,7 @@
     "commission": "Comision",
     "totalWithCommission": "Total cu Comision",
     "iban": "IBAN",
+    "selectIban": "Selectează moneda IBAN",
     "billNumber": "Număr Factură",
     "reference": "Referință",
     "reference2": "Referință 2",

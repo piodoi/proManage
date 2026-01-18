@@ -128,6 +128,7 @@
     "commission": "Commission",
     "totalWithCommission": "Total with Commission",
     "iban": "IBAN",
+    "selectIban": "Select IBAN currency",
     "billNumber": "Bill Number",
     "reference": "Reference",
     "reference2": "Reference 2",

@@ -11,9 +11,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
+
+// Type for available IBAN options
+type IbanOption = {
+  currency: string;
+  iban: string;
+  label: string;
+};
 
 export default function RenterView() {
   const { token } = useParams<{ token: string }>();
@@ -26,6 +34,7 @@ export default function RenterView() {
   const [payingBill, setPayingBill] = useState<RenterBill | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [selectedIbanCurrency, setSelectedIbanCurrency] = useState<string | null>(null);
 
   // Toggle group expansion
   const toggleGroup = (groupKey: string) => {
@@ -128,9 +137,45 @@ export default function RenterView() {
     }
   };
 
+  // Get available IBAN options for rent/direct debit bills
+  const getAvailableIbans = (): IbanOption[] => {
+    const ibans: IbanOption[] = [];
+    
+    // RON IBAN (landlord_iban is the RON IBAN)
+    if (info?.landlord_iban) {
+      ibans.push({ currency: 'RON', iban: info.landlord_iban, label: `RON - ${info.landlord_iban}` });
+    }
+    // EUR IBAN
+    if (info?.landlord_iban_eur) {
+      ibans.push({ currency: 'EUR', iban: info.landlord_iban_eur, label: `EUR - ${info.landlord_iban_eur}` });
+    }
+    // USD IBAN
+    if (info?.landlord_iban_usd) {
+      ibans.push({ currency: 'USD', iban: info.landlord_iban_usd, label: `USD - ${info.landlord_iban_usd}` });
+    }
+    
+    return ibans;
+  };
+
+  // Get the default IBAN currency based on rent_currency preference
+  const getDefaultIbanCurrency = (): string | null => {
+    const availableIbans = getAvailableIbans();
+    if (availableIbans.length === 0) return null;
+    
+    // Try to use rent_currency preference first
+    const rentCurrency = info?.rent_currency || 'EUR';
+    const preferredIban = availableIbans.find(i => i.currency === rentCurrency);
+    if (preferredIban) return preferredIban.currency;
+    
+    // Fall back to first available IBAN
+    return availableIbans[0].currency;
+  };
+
   const openPayDialog = (bill: RenterBill) => {
     setPayingBill(bill);
     setCopiedField(null);
+    // Set default IBAN currency when opening dialog
+    setSelectedIbanCurrency(getDefaultIbanCurrency());
   };
 
   // Copy to clipboard helper
@@ -144,6 +189,13 @@ export default function RenterView() {
     }
   };
 
+  // Get the currently selected IBAN
+  const getSelectedIban = (): IbanOption | null => {
+    const availableIbans = getAvailableIbans();
+    if (!selectedIbanCurrency) return availableIbans[0] || null;
+    return availableIbans.find(i => i.currency === selectedIbanCurrency) || availableIbans[0] || null;
+  };
+
   // Get payment info for the current bill
   const getPaymentInfo = (bill: RenterBill | null) => {
     if (!bill) return null;
@@ -151,9 +203,11 @@ export default function RenterView() {
     // For rent bills or direct debit bills, use landlord's IBAN and name from preferences
     // (landlord pays direct debit bills, so renter pays landlord)
     if (bill.bill.bill_type === 'rent' || bill.is_direct_debit) {
-      if (info?.landlord_iban && info?.landlord_name) {
+      const selectedIban = getSelectedIban();
+      if (selectedIban && info?.landlord_name) {
         return {
-          iban: info.landlord_iban,
+          iban: selectedIban.iban,
+          ibanCurrency: selectedIban.currency,
           beneficiary: info.landlord_name,
           reference: bill.bill.description || `${t('bill.rent')} - ${bill.bill.bill_number || bill.bill.id}`,
         };
@@ -165,12 +219,23 @@ export default function RenterView() {
     if (bill.bill.iban && bill.bill.legal_name) {
       return {
         iban: bill.bill.iban,
+        ibanCurrency: null,
         beneficiary: bill.bill.legal_name,
         reference: bill.bill.contract_id || bill.bill.bill_number || bill.bill.id,
       };
     }
     
     return null;
+  };
+
+  // Convert amount to a specific currency
+  const convertAmount = (amount: number, fromCurrency: string, toCurrency: string): number => {
+    if (fromCurrency === toCurrency || !balance?.exchange_rates) return amount;
+    
+    const fromRate = balance.exchange_rates[fromCurrency as keyof typeof balance.exchange_rates] || 1;
+    const toRate = balance.exchange_rates[toCurrency as keyof typeof balance.exchange_rates] || 1;
+    
+    return amount * toRate / fromRate;
   };
 
   // Calculate RON amount from foreign currency
@@ -583,7 +648,15 @@ export default function RenterView() {
               {/* Bank Transfer Details */}
               {(() => {
                 const paymentInfo = getPaymentInfo(payingBill);
+                const availableIbans = getAvailableIbans();
+                const isRentOrDirectDebit = payingBill?.bill.bill_type === 'rent' || payingBill?.is_direct_debit;
+                const showIbanSelector = isRentOrDirectDebit && availableIbans.length > 1;
+                
                 if (paymentInfo) {
+                  // Get the bill's original currency
+                  const billCurrency = payingBill?.bill.currency || 'RON';
+                  const remaining = payingBill?.remaining || 0;
+                  
                   return (
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-3">
                       <div className="flex items-center gap-2 mb-2">
@@ -610,40 +683,88 @@ export default function RenterView() {
                         </div>
                       </div>
                       
-                      {/* IBAN */}
+                      {/* IBAN - with dropdown if multiple available */}
                       <div className="space-y-1">
-                        <p className="text-slate-500 text-xs uppercase">IBAN</p>
-                        <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
-                          <span className="text-slate-200 font-mono text-sm tracking-wider">{paymentInfo.iban}</span>
-                          <button
-                            onClick={() => copyToClipboard(paymentInfo.iban, 'iban')}
-                            className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-                            title={t('common.copy') || 'Copy'}
-                          >
-                            {copiedField === 'iban' ? (
-                              <Check className="w-4 h-4 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
+                        <p className="text-slate-500 text-xs uppercase">
+                          IBAN {paymentInfo.ibanCurrency && `(${paymentInfo.ibanCurrency})`}
+                        </p>
+                        {showIbanSelector ? (
+                          <div className="space-y-2">
+                            <Select
+                              value={selectedIbanCurrency || ''}
+                              onValueChange={(value) => setSelectedIbanCurrency(value)}
+                            >
+                              <SelectTrigger className="bg-slate-800 border-slate-600 text-slate-200">
+                                <SelectValue placeholder={t('renter.selectIban') || 'Select IBAN'} />
+                              </SelectTrigger>
+                              <SelectContent className="bg-slate-800 border-slate-600">
+                                {availableIbans.map((ibanOption) => (
+                                  <SelectItem
+                                    key={ibanOption.currency}
+                                    value={ibanOption.currency}
+                                    className="text-slate-200 hover:bg-slate-700"
+                                  >
+                                    <span className="font-semibold text-emerald-400">{ibanOption.currency}</span>
+                                    <span className="ml-2 font-mono text-xs">{ibanOption.iban}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                              <span className="text-slate-200 font-mono text-sm tracking-wider">{paymentInfo.iban}</span>
+                              <button
+                                onClick={() => copyToClipboard(paymentInfo.iban, 'iban')}
+                                className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                                title={t('common.copy') || 'Copy'}
+                              >
+                                {copiedField === 'iban' ? (
+                                  <Check className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                            <span className="text-slate-200 font-mono text-sm tracking-wider">{paymentInfo.iban}</span>
+                            <button
+                              onClick={() => copyToClipboard(paymentInfo.iban, 'iban')}
+                              className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                              title={t('common.copy') || 'Copy'}
+                            >
+                              {copiedField === 'iban' ? (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       
-                      {/* Amount */}
+                      {/* Amount - show in multiple currencies based on available IBANs */}
                       <div className="space-y-1">
                         <p className="text-slate-500 text-xs uppercase">{t('common.amount')}</p>
-                        <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
-                          {payingBill?.bill.currency && payingBill.bill.currency !== 'RON' ? (
-                            <>
-                              {/* Original currency amount with copy button */}
-                              <div className="flex items-center gap-1">
+                        <div className="bg-slate-800 rounded px-3 py-2 space-y-2">
+                          {/* Primary amount - in selected IBAN currency or bill currency */}
+                          {(() => {
+                            const displayCurrency = isRentOrDirectDebit && paymentInfo.ibanCurrency
+                              ? paymentInfo.ibanCurrency
+                              : billCurrency;
+                            const displayAmount = displayCurrency === billCurrency
+                              ? remaining
+                              : convertAmount(remaining, billCurrency, displayCurrency);
+                            
+                            return (
+                              <div className="flex items-center justify-between">
                                 <span className="text-emerald-400 font-mono text-sm font-bold">
-                                  {payingBill.remaining.toFixed(2)} {payingBill.bill.currency}
+                                  {displayAmount.toFixed(2)} {displayCurrency}
                                 </span>
                                 <button
-                                  onClick={() => copyToClipboard(payingBill.remaining.toFixed(2), 'amount')}
+                                  onClick={() => copyToClipboard(displayAmount.toFixed(2), 'amount')}
                                   className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-                                  title={`${t('common.copy') || 'Copy'} ${payingBill.bill.currency}`}
+                                  title={`${t('common.copy') || 'Copy'} ${displayCurrency}`}
                                 >
                                   {copiedField === 'amount' ? (
                                     <Check className="w-4 h-4 text-emerald-400" />
@@ -652,43 +773,79 @@ export default function RenterView() {
                                   )}
                                 </button>
                               </div>
-                              {/* RON equivalent with copy button */}
-                              {getAmountInRon(payingBill.remaining, payingBill.bill.currency) && (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-slate-400 font-mono text-sm">
-                                    / {getAmountInRon(payingBill.remaining, payingBill.bill.currency)} RON
+                            );
+                          })()}
+                          
+                          {/* Show amounts in other available currencies */}
+                          {isRentOrDirectDebit && availableIbans.length > 0 && (
+                            <div className="border-t border-slate-700 pt-2 space-y-1">
+                              {availableIbans
+                                .filter(iban => iban.currency !== (paymentInfo.ibanCurrency || billCurrency))
+                                .map((iban) => {
+                                  const convertedAmount = convertAmount(remaining, billCurrency, iban.currency);
+                                  return (
+                                    <div key={iban.currency} className="flex items-center justify-between text-slate-400">
+                                      <span className="font-mono text-xs">
+                                        {convertedAmount.toFixed(2)} {iban.currency}
+                                      </span>
+                                      <button
+                                        onClick={() => copyToClipboard(convertedAmount.toFixed(2), `amount_${iban.currency}`)}
+                                        className="text-slate-500 hover:text-slate-300 transition-colors p-0.5"
+                                        title={`${t('common.copy') || 'Copy'} ${iban.currency}`}
+                                      >
+                                        {copiedField === `amount_${iban.currency}` ? (
+                                          <Check className="w-3 h-3 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              {/* Always show rent currency if not already shown */}
+                              {info?.rent_currency &&
+                               !availableIbans.some(i => i.currency === info.rent_currency) &&
+                               info.rent_currency !== (paymentInfo.ibanCurrency || billCurrency) && (
+                                <div className="flex items-center justify-between text-slate-400">
+                                  <span className="font-mono text-xs">
+                                    {convertAmount(remaining, billCurrency, info.rent_currency).toFixed(2)} {info.rent_currency}
                                   </span>
                                   <button
-                                    onClick={() => copyToClipboard(getAmountInRon(payingBill.remaining, payingBill.bill.currency) || '', 'amountRon')}
-                                    className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-                                    title={`${t('common.copy') || 'Copy'} RON`}
+                                    onClick={() => copyToClipboard(convertAmount(remaining, billCurrency, info.rent_currency!).toFixed(2), `amount_${info.rent_currency}`)}
+                                    className="text-slate-500 hover:text-slate-300 transition-colors p-0.5"
+                                    title={`${t('common.copy') || 'Copy'} ${info.rent_currency}`}
                                   >
-                                    {copiedField === 'amountRon' ? (
-                                      <Check className="w-4 h-4 text-emerald-400" />
+                                    {copiedField === `amount_${info.rent_currency}` ? (
+                                      <Check className="w-3 h-3 text-emerald-400" />
                                     ) : (
-                                      <Copy className="w-4 h-4" />
+                                      <Copy className="w-3 h-3" />
                                     )}
                                   </button>
                                 </div>
                               )}
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-emerald-400 font-mono text-sm font-bold">
-                                {payingBill?.remaining.toFixed(2)} RON
-                              </span>
-                              <button
-                                onClick={() => copyToClipboard(payingBill?.remaining.toFixed(2) || '', 'amount')}
-                                className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-                                title={t('common.copy') || 'Copy'}
-                              >
-                                {copiedField === 'amount' ? (
-                                  <Check className="w-4 h-4 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-4 h-4" />
-                                )}
-                              </button>
-                            </>
+                            </div>
+                          )}
+                          
+                          {/* For non-rent bills, show RON equivalent if bill is in foreign currency */}
+                          {!isRentOrDirectDebit && billCurrency !== 'RON' && getAmountInRon(remaining, billCurrency) && (
+                            <div className="border-t border-slate-700 pt-2">
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span className="font-mono text-xs">
+                                  {getAmountInRon(remaining, billCurrency)} RON
+                                </span>
+                                <button
+                                  onClick={() => copyToClipboard(getAmountInRon(remaining, billCurrency) || '', 'amountRon')}
+                                  className="text-slate-500 hover:text-slate-300 transition-colors p-0.5"
+                                  title={`${t('common.copy') || 'Copy'} RON`}
+                                >
+                                  {copiedField === 'amountRon' ? (
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
