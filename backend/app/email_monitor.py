@@ -561,6 +561,7 @@ class EmailMonitor:
                                 'iban': extracted_data.get('iban'),
                                 'bill_number': extracted_data.get('bill_number'),
                                 'contract_id': extracted_contract_id,
+                                'client_code': extracted_data.get('client_code'),  # Client code for payment details
                                 'pattern_id': pattern_id,
                                 'pattern_name': pattern_name,
                                 'extracted_address': extracted_address,
@@ -623,6 +624,10 @@ class EmailMonitor:
                                 if skip_bill:
                                     continue
                                 
+                                # Build payment_details from client_code if available
+                                client_code = discovered_bill.get('client_code')
+                                payment_details = {"client_code": client_code} if client_code else None
+                                
                                 bill = Bill(
                                     property_id=matched_property.id,
                                     renter_id=None,  # Applies to all renters
@@ -638,7 +643,7 @@ class EmailMonitor:
                                     extraction_pattern_id=None,  # Text patterns don't have DB IDs
                                     property_supplier_id=property_supplier_id,
                                     contract_id=extracted_data.get('contract_id'),
-                                    payment_details=None,
+                                    payment_details=payment_details,
                                     status=BillStatus.PENDING,
                                 )
                                 

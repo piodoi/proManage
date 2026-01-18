@@ -209,19 +209,23 @@ export default function RenterView() {
           iban: selectedIban.iban,
           ibanCurrency: selectedIban.currency,
           beneficiary: info.landlord_name,
-          reference: bill.bill.description || `${t('bill.rent')} - ${bill.bill.bill_number || bill.bill.id}`,
+          reference: bill.bill.contract_id || bill.bill.description,
+          reference2: null, // No second reference for rent/direct debit
         };
       }
       return null;
     }
     
     // For other bills, use bill's IBAN and legal_name
+    // Reference 1 = contract_id, Reference 2 = payment_details.client_code (if available)
     if (bill.bill.iban && bill.bill.legal_name) {
+      const paymentDetails = bill.bill.payment_details as { client_code?: string } | null;
       return {
         iban: bill.bill.iban,
         ibanCurrency: null,
         beneficiary: bill.bill.legal_name,
-        reference: bill.bill.contract_id || bill.bill.bill_number || bill.bill.id,
+        reference: paymentDetails.contract_id,
+        reference2: paymentDetails?.client_code || null,
       };
     }
     
@@ -624,27 +628,6 @@ export default function RenterView() {
                 </p>
               </div>
 
-              {/* Bill Number - shown before payment details */}
-              {payingBill?.bill.bill_number && (
-                <div className="space-y-1">
-                  <p className="text-slate-500 text-xs uppercase">{t('renter.billNumber') || 'Bill Number'}</p>
-                  <div className="flex items-center justify-between bg-slate-900 border border-slate-700 rounded px-3 py-2">
-                    <span className="text-slate-200 font-mono text-sm">{payingBill.bill.bill_number}</span>
-                    <button
-                      onClick={() => copyToClipboard(payingBill.bill.bill_number || '', 'billNumber')}
-                      className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-                      title={t('common.copy') || 'Copy'}
-                    >
-                      {copiedField === 'billNumber' ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Bank Transfer Details */}
               {(() => {
                 const paymentInfo = getPaymentInfo(payingBill);
@@ -850,6 +833,27 @@ export default function RenterView() {
                         </div>
                       </div>
                       
+                      {/* Bill Number - only for non-rent bills */}
+                      {!isRentOrDirectDebit && payingBill?.bill.bill_number && (
+                        <div className="space-y-1">
+                          <p className="text-slate-500 text-xs uppercase">{t('renter.billNumber') || 'Bill Number'}</p>
+                          <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                            <span className="text-slate-200 font-mono text-sm">{payingBill.bill.bill_number}</span>
+                            <button
+                              onClick={() => copyToClipboard(payingBill.bill.bill_number || '', 'billNumber')}
+                              className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                              title={t('common.copy') || 'Copy'}
+                            >
+                              {copiedField === 'billNumber' ? (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Reference */}
                       <div className="space-y-1">
                         <p className="text-slate-500 text-xs uppercase">{t('renter.reference') || 'Reference'}</p>
@@ -869,14 +873,14 @@ export default function RenterView() {
                         </div>
                       </div>
                       
-                      {/* Reference 2 - Contract ID */}
-                      {payingBill?.bill.contract_id && (
+                      {/* Reference 2 - payment_details.client_code for non-rent bills */}
+                      {paymentInfo.reference2 && (
                         <div className="space-y-1">
                           <p className="text-slate-500 text-xs uppercase">{t('renter.reference2') || 'Reference 2'}</p>
                           <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
-                            <span className="text-slate-200 font-mono text-sm truncate mr-2">{payingBill.bill.contract_id}</span>
+                            <span className="text-slate-200 font-mono text-sm truncate mr-2">{paymentInfo.reference2}</span>
                             <button
-                              onClick={() => copyToClipboard(payingBill.bill.contract_id || '', 'reference2')}
+                              onClick={() => copyToClipboard(paymentInfo.reference2 || '', 'reference2')}
                               className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex-shrink-0"
                               title={t('common.copy') || 'Copy'}
                             >

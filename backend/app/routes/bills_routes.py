@@ -266,6 +266,7 @@ async def parse_bill_pdf(
         "bill_date": extracted_data.get("bill_date"),  # Date when bill was issued (from pattern)
         "legal_name": extracted_data.get("legal_name"),  # Legal name of supplier
         "contract_id": extracted_data.get("contract_id"),
+        "client_code": extracted_data.get("client_code"),  # Client code for payment details
         "address": extracted_data.get("address"),
         "business_name": extracted_data.get("legal_name") or extracted_data.get("description"),
         "matched_pattern_id": pattern_id,
@@ -573,6 +574,12 @@ async def create_bill_from_pdf(
                             "message": f"Bill with number '{bill_number}' already exists with different amount: existing={existing_bill.amount}, new={new_amount}. Use 'force_update' to update."
                         }
     
+    # Build payment_details from client_code if available
+    payment_details = None
+    client_code = data.get("client_code")
+    if client_code:
+        payment_details = {"client_code": client_code}
+    
     # Create bill with all available fields
     bill = Bill(
         property_id=property_id,
@@ -589,6 +596,7 @@ async def create_bill_from_pdf(
         extraction_pattern_id=data.get("extraction_pattern_id"),
         property_supplier_id=property_supplier_id,
         contract_id=data.get("contract_id"),
+        payment_details=payment_details,  # Additional payment details (e.g., client_code)
         status=BillStatus.PENDING,
     )
     db.save_bill(bill)
