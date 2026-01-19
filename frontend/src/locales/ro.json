@@ -34,7 +34,12 @@
     "collapse": "Restrânge",
     "copy": "Copiază",
     "copied": "Copiat!",
-    "comingSoon": "În curând"
+    "comingSoon": "În curând",
+    "sending": "Se trimite...",
+    "reject": "Respinge",
+    "pending": "În așteptare",
+    "confirmed": "Confirmat",
+    "rejected": "Respins"
   },
   "app": {
     "title": "ProManage",
@@ -158,7 +163,15 @@
     "pleaseMakeTransfer": "Te rog efectuează transferul folosind detaliile de mai sus. Plata ta va fi înregistrată odată confirmată.",
     "paymentInitiated": "Plata a fost inițiată!",
     "cardFee": "Card (2% comision)",
-    "commissionAdded": "Un comision de 2% ({amount} RON) va fi adăugat la plata ta."
+    "commissionAdded": "Un comision de 2% ({amount} RON) va fi adăugat la plata ta.",
+    "iMadeTheTransfer": "Am făcut transferul",
+    "notifyPaymentDescription": "După efectuarea transferului, notifică proprietarul:",
+    "paymentNote": "Notă (opțional)",
+    "paymentNotePlaceholder": "ex: Referință transfer, dată, etc.",
+    "paymentNotificationSent": "Notificare de plată trimisă cu succes",
+    "paymentNotificationPending": "Notificare de plată în așteptare",
+    "paymentNotificationConfirmed": "Plată confirmată de proprietar",
+    "paymentNotificationRejected": "Plată respinsă de proprietar"
   },
   "bill": {
     "bills": "Facturi",
@@ -523,7 +536,9 @@
     "saved": "Salvat cu succes",
     "deleted": "Șters cu succes",
     "synced": "Sincronizat cu succes {count} factură/facturi de la furnizori",
-    "billsSynced": "Facturile au fost sincronizate cu succes"
+    "billsSynced": "Facturile au fost sincronizate cu succes",
+    "paymentConfirmed": "Plată confirmată și factura marcată ca plătită",
+    "paymentRejected": "Notificare de plată respinsă"
   },
   "tools": {
     "tools": "Unelte",
@@ -560,6 +575,33 @@
     "labelSaved": "Etichetă salvată pentru {field} (offset: {offset})",
     "highlightedLine": "Linie evidențiată {line} (linie țintă pentru extragere)",
     "instructions": "Instrucțiuni: Selectează textul etichetei din PDF. Folosește butoanele +/- pentru a ajusta offset-ul liniei (implicit: 0). Dacă offset-ul este 0, valoarea va fi extrasă automat din aceeași linie după etichetă."
+  },
+  "notifications": {
+    "title": "Notificări",
+    "paymentNotifications": "Notificări de Plată",
+    "noNotifications": "Nicio notificare în așteptare",
+    "pendingPayments": "Plăți în Așteptare",
+    "confirmedPayments": "Plăți Confirmate",
+    "rejectedPayments": "Plăți Respinse",
+    "allNotifications": "Toate Notificările",
+    "renterClaims": "Chiriașul susține că a plătit",
+    "confirmPayment": "Confirmă Plata",
+    "rejectPayment": "Respinge Plata",
+    "confirmPaymentQuestion": "Confirmați această plată și marcați factura ca plătită?",
+    "rejectPaymentQuestion": "Respingeți această notificare de plată?",
+    "landlordNote": "Notă (opțional)",
+    "landlordNotePlaceholder": "Adaugă o notă pentru chiriaș...",
+    "renterNote": "Nota chiriașului",
+    "notificationDate": "Data Notificării",
+    "property": "Proprietate",
+    "renter": "Chiriaș",
+    "bill": "Factură",
+    "amount": "Sumă",
+    "status": "Status",
+    "actions": "Acțiuni",
+    "viewDetails": "Vezi Detalii",
+    "confirming": "Se confirmă...",
+    "rejecting": "Se respinge..."
   }
 }
 

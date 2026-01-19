@@ -13,7 +13,7 @@ from app.paths import ENV_FILE
 load_dotenv(dotenv_path=ENV_FILE)
 
 from app.models import (
-    User, Property, Renter, Bill, Payment,
+    User, Property, Renter, Bill, PaymentNotification,
     Supplier, PropertySupplier,
     UserPreferences, UserRole
 )
@@ -316,67 +316,24 @@ class Database:
     def delete_bill(self, bill_id: str) -> bool:
         return self._impl.delete_bill(bill_id)
     
-    # ==================== PAYMENT OPERATIONS ====================
-    def get_payment(self, payment_id: str) -> Optional[Payment]:
-        from sqlalchemy import text
-        with self._impl.engine.connect() as conn:
-            result = conn.execute(text("SELECT * FROM payments WHERE id = :id"), {"id": payment_id})
-            row = result.fetchone()
-            if row:
-                return Payment(
-                    id=row.id,
-                    bill_id=row.bill_id,
-                    amount=float(row.amount),
-                    method=row.method,
-                    status=row.status,
-                    commission=float(row.commission) if row.commission else 0,
-                    created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
-                )
-            return None
+    # ==================== PAYMENT NOTIFICATION OPERATIONS ====================
+    def get_payment_notification(self, notification_id: str) -> Optional[PaymentNotification]:
+        return self._impl.get_payment_notification_by_id(notification_id)
     
-    def list_payments(self, bill_id: Optional[str] = None) -> List[Payment]:
-        if bill_id:
-            return self._impl.get_payments_by_bill(bill_id)
-        else:
-            from sqlalchemy import text
-            with self._impl.engine.connect() as conn:
-                result = conn.execute(text("SELECT * FROM payments ORDER BY created_at DESC"))
-                payments = []
-                for row in result:
-                    payments.append(Payment(
-                        id=row.id,
-                        bill_id=row.bill_id,
-                        amount=float(row.amount),
-                        method=row.method,
-                        status=row.status,
-                        commission=float(row.commission) if row.commission else 0,
-                        created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
-                    ))
-                return payments
+    def list_payment_notifications_by_landlord(self, landlord_id: str, status: Optional[str] = None) -> List[PaymentNotification]:
+        return self._impl.get_payment_notifications_by_landlord(landlord_id, status)
     
-    def list_payments_for_bills(self, bill_ids: List[str]) -> List[Payment]:
-        if not bill_ids:
-            return []
-        from sqlalchemy import text
-        with self._impl.engine.connect() as conn:
-            placeholders = ', '.join([f"'{bid}'" for bid in bill_ids])
-            query = f"SELECT * FROM payments WHERE bill_id IN ({placeholders})"
-            result = conn.execute(text(query))
-            payments = []
-            for row in result:
-                payments.append(Payment(
-                    id=row.id,
-                    bill_id=row.bill_id,
-                    amount=float(row.amount),
-                    method=row.method,
-                    status=row.status,
-                    commission=float(row.commission) if row.commission else 0,
-                    created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
-                ))
-            return payments
+    def list_payment_notifications_by_bill(self, bill_id: str) -> List[PaymentNotification]:
+        return self._impl.get_payment_notifications_by_bill(bill_id)
     
-    def save_payment(self, payment: Payment) -> Payment:
-        return self._impl.create_payment(payment)
+    def get_pending_notification_count(self, landlord_id: str) -> int:
+        return self._impl.get_pending_notification_count(landlord_id)
+    
+    def save_payment_notification(self, notification: PaymentNotification) -> PaymentNotification:
+        return self._impl.create_payment_notification(notification)
+    
+    def update_payment_notification(self, notification_id: str, updates: Dict[str, Any]) -> Optional[PaymentNotification]:
+        return self._impl.update_payment_notification(notification_id, updates)
     
     # ==================== SUPPLIER OPERATIONS ====================
     def get_supplier(self, supplier_id: str) -> Optional[Supplier]:

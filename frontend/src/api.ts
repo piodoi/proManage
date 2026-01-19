@@ -140,7 +140,27 @@ export const api = {
     info: (token: string) => request<RenterInfo>(`/renter/${token}`),
     bills: (token: string) => request<RenterBill[]>(`/renter/${token}/bills`),
     balance: (token: string) => request<RenterBalance>(`/renter/${token}/balance`),
-    pay: (token: string, data: PaymentCreate) => request<PaymentResponse>(`/renter/${token}/pay`, { method: 'POST', body: data }),
+    notifyPayment: (token: string, data: PaymentNotificationCreate) =>
+      request<PaymentNotificationResponse>(`/renter/${token}/notify-payment`, { method: 'POST', body: data }),
+  },
+
+  paymentNotifications: {
+    list: (token: string, status?: string) =>
+      request<PaymentNotificationWithDetails[]>(`/payment-notifications${status ? `?status=${status}` : ''}`, { token }),
+    count: (token: string) => request<{ count: number }>('/payment-notifications/count', { token }),
+    get: (token: string, id: string) => request<PaymentNotificationWithDetails>(`/payment-notifications/${id}`, { token }),
+    confirm: (token: string, id: string, note?: string) =>
+      request<PaymentNotificationActionResponse>(`/payment-notifications/${id}/confirm`, {
+        method: 'POST',
+        body: { landlord_note: note },
+        token
+      }),
+    reject: (token: string, id: string, note?: string) =>
+      request<PaymentNotificationActionResponse>(`/payment-notifications/${id}/reject`, {
+        method: 'POST',
+        body: { landlord_note: note },
+        token
+      }),
   },
 
 
@@ -197,10 +217,6 @@ export const api = {
   preferences: {
     get: (token: string) => request<Preferences>('/preferences', { token }),
     save: (token: string, data: Partial<Preferences>) => request<Preferences>('/preferences', { method: 'POST', body: data, token }),
-  },
-
-  payments: {
-    list: (token: string) => request<Payment[]>('/payments', { token }),
   },
 
   billParser: {
@@ -450,6 +466,19 @@ export type RenterBill = {
   remaining: number;
   is_direct_debit: boolean;  // Whether this bill's supplier has direct_debit enabled
   has_pdf: boolean;  // Whether a PDF file is available for download
+  has_pending_notification?: boolean;  // Whether renter has a pending payment notification for this bill
+  notifications?: PaymentNotificationSummary[];  // Payment notifications for this bill from this renter
+};
+
+export type PaymentNotificationSummary = {
+  id: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  amount: number;
+  currency: string;
+  created_at: string;
+  renter_note?: string;
+  landlord_note?: string;
+  confirmed_at?: string;
 };
 
 // Helper function to get PDF download URL for renter view
@@ -473,16 +502,67 @@ export type RenterBalance = {
   eur_to_ron_rate?: number;
 };
 
-export type PaymentResponse = {
-  payment: Payment;
-  commission: number;
-  total_with_commission: number;
+export type PaymentNotificationCreate = {
+  bill_id: string;
+  amount: number;
+  currency?: string;
+  renter_note?: string;
+};
+
+export type PaymentNotificationResponse = {
+  notification: PaymentNotification;
+  message: string;
   bank_transfer_info?: {
     iban: string;
     bill_number: string;
     amount: number;
     reference: string;
   };
+};
+
+export type PaymentNotification = {
+  id: string;
+  bill_id: string;
+  renter_id: string;
+  landlord_id: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  renter_note?: string;
+  landlord_note?: string;
+  created_at: string;
+  confirmed_at?: string;
+};
+
+export type PaymentNotificationWithDetails = {
+  notification: PaymentNotification;
+  bill: {
+    id: string;
+    description: string;
+    amount: number;
+    currency: string;
+    due_date: string;
+    status: string;
+    bill_number?: string;
+    iban?: string;
+  } | null;
+  renter: {
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  } | null;
+  property: {
+    id: string;
+    name: string;
+    address: string;
+  } | null;
+};
+
+export type PaymentNotificationActionResponse = {
+  notification: PaymentNotification;
+  message: string;
+  bill_status?: string;
 };
 
 

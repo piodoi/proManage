@@ -33,15 +33,10 @@ class BillType(str, Enum):
 BILL_TYPE_VALUES = [bt.value for bt in BillType]
 
 
-class PaymentMethod(str, Enum):
-    BANK_TRANSFER = "bank_transfer"
-    PAYMENT_SERVICE = "payment_service"
-
-
-class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
+class PaymentNotificationStatus(str, Enum):
+    PENDING = "pending"  # Renter claims payment made, waiting for landlord confirmation
+    CONFIRMED = "confirmed"  # Landlord confirmed the payment
+    REJECTED = "rejected"  # Landlord rejected the payment claim
 
 
 # Subscription is now an int: 0 = off, 1 = on (reserved for future tiers)
@@ -123,16 +118,19 @@ class Bill(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class Payment(BaseModel):
+class PaymentNotification(BaseModel):
+    """Payment notification from renter to landlord for confirmation"""
     id: str = Field(default_factory=gen_id)
     bill_id: str
-    amount: float
-    method: PaymentMethod
-    status: PaymentStatus = PaymentStatus.PENDING
-    commission: float = 0.0
+    renter_id: str  # Who made the payment claim
+    landlord_id: str  # Who needs to confirm
+    amount: float  # Amount claimed to be paid
+    currency: str = "RON"  # Currency of the payment
+    status: PaymentNotificationStatus = PaymentNotificationStatus.PENDING
+    renter_note: Optional[str] = None  # Optional note from renter
+    landlord_note: Optional[str] = None  # Optional note from landlord when confirming/rejecting
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
+    confirmed_at: Optional[datetime] = None  # When landlord confirmed/rejected
 
 
 
@@ -294,10 +292,18 @@ class BillUpdate(BaseModel):
     property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id
 
 
-class PaymentCreate(BaseModel):
+class PaymentNotificationCreate(BaseModel):
+    """Create a payment notification from renter"""
     bill_id: str
     amount: float
-    method: PaymentMethod
+    currency: str = "RON"
+    renter_note: Optional[str] = None
+
+
+class PaymentNotificationUpdate(BaseModel):
+    """Update a payment notification (landlord confirmation/rejection)"""
+    status: PaymentNotificationStatus
+    landlord_note: Optional[str] = None
 
 
 class Supplier(BaseModel):

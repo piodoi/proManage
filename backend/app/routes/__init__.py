@@ -9,6 +9,7 @@ from app.routes.email_routes import router as email_router
 from app.routes.ebloc_routes import router as ebloc_router
 from app.routes.sync_routes import router as sync_router
 from app.routes.preferences_routes import router as preferences_router
+from app.routes.payment_notifications_routes import router as payment_notifications_router
 
 __all__ = [
     "auth_router",
@@ -22,4 +23,5 @@ __all__ = [
     "ebloc_router",
     "sync_router",
     "preferences_router",
+    "payment_notifications_router",
 ]

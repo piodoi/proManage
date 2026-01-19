@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../App';
 import { api, User, Supplier, SupplierCreate, SupplierUpdate, BillType, BILL_TYPES } from '../api';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown, Bell } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
 import SummaryView from '../components/SummaryView';
 import TextPatternView from '../components/TextPatternView';
+import NotificationsView from '../components/NotificationsView';
 import UserPatternDialog from '../components/dialogs/UserPatternDialog';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
@@ -47,11 +48,32 @@ export default function Dashboard() {
     extraction_pattern_supplier: undefined,
   });
 
+  // Notification count state
+  const [notificationCount, setNotificationCount] = useState(0);
+
   // Session-based tab memory
   const [activeTab, setActiveTab] = useState(() => {
     const saved = sessionStorage.getItem('dashboard-active-tab');
     return saved || 'summary';
   });
+
+  // Load notification count on mount
+  const loadNotificationCount = useCallback(async () => {
+    if (!token) return;
+    try {
+      const { count } = await api.paymentNotifications.count(token);
+      setNotificationCount(count);
+    } catch (err) {
+      console.error('Failed to load notification count:', err);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadNotificationCount();
+    // Refresh count every 60 seconds
+    const interval = setInterval(loadNotificationCount, 60000);
+    return () => clearInterval(interval);
+  }, [loadNotificationCount]);
 
   useEffect(() => {
     if (activeTab) {
@@ -267,6 +289,15 @@ export default function Dashboard() {
               <Crown className="w-4 h-4 mr-2" />
               {t('settings.subscriptions')}
             </TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent relative">
+              <Bell className="w-4 h-4 mr-2" />
+              {t('notifications.title')}
+              {notificationCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
               <FileText className="w-4 h-4 mr-2" />
               {t('tools.tools')}
@@ -294,6 +325,10 @@ export default function Dashboard() {
 
             <TabsContent value="subscription" className="m-0 p-6 space-y-4">
               <SettingsView token={token} user={user} onError={setError} forceTab="subscription" hideTabBar />
+            </TabsContent>
+
+            <TabsContent value="notifications" className="m-0 p-6 space-y-4">
+              <NotificationsView onCountChange={setNotificationCount} />
             </TabsContent>
 
             <TabsContent value="tools" className="m-0 p-6 space-y-4">

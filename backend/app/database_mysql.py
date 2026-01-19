@@ -19,9 +19,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
 from app.models import (
-    User, Property, Renter, Bill, Payment,
+    User, Property, Renter, Bill, PaymentNotification,
     Supplier, PropertySupplier,
-    UserPreferences
+    UserPreferences, PaymentNotificationStatus
 )
 
 
@@ -484,48 +484,119 @@ class MySQLDatabase:
             created_at=row.created_at.isoformat() if row.created_at else None
         )
     
-    # ==================== PAYMENT OPERATIONS ====================
+    # ==================== PAYMENT NOTIFICATION OPERATIONS ====================
     
-    def get_payments_by_bill(self, bill_id: str) -> List[Payment]:
-        """Get all payments for a bill"""
+    def get_payment_notifications_by_landlord(self, landlord_id: str, status: Optional[str] = None) -> List[PaymentNotification]:
+        """Get all payment notifications for a landlord, optionally filtered by status"""
+        with self.engine.connect() as conn:
+            if status:
+                result = conn.execute(
+                    text("SELECT * FROM payment_notifications WHERE landlord_id = :landlord_id AND status = :status ORDER BY created_at DESC"),
+                    {"landlord_id": landlord_id, "status": status}
+                )
+            else:
+                result = conn.execute(
+                    text("SELECT * FROM payment_notifications WHERE landlord_id = :landlord_id ORDER BY created_at DESC"),
+                    {"landlord_id": landlord_id}
+                )
+            notifications = []
+            for row in result:
+                notifications.append(self._row_to_payment_notification(row))
+            return notifications
+    
+    def get_payment_notifications_by_bill(self, bill_id: str) -> List[PaymentNotification]:
+        """Get all payment notifications for a bill"""
         with self.engine.connect() as conn:
             result = conn.execute(
-                text("SELECT * FROM payments WHERE bill_id = :bill_id ORDER BY created_at DESC"),
+                text("SELECT * FROM payment_notifications WHERE bill_id = :bill_id ORDER BY created_at DESC"),
                 {"bill_id": bill_id}
             )
-            payments = []
+            notifications = []
             for row in result:
-                payments.append(Payment(
-                    id=row.id,
-                    bill_id=row.bill_id,
-                    amount=float(row.amount),
-                    method=row.method,
-                    status=row.status,
-                    commission=float(row.commission) if row.commission else 0,
-                    created_at=row.created_at.isoformat() if row.created_at else None
-                ))
-            return payments
+                notifications.append(self._row_to_payment_notification(row))
+            return notifications
     
-    def create_payment(self, payment: Payment) -> Payment:
-        """Create a new payment"""
+    def get_payment_notification_by_id(self, notification_id: str) -> Optional[PaymentNotification]:
+        """Get payment notification by ID"""
+        with self.engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT * FROM payment_notifications WHERE id = :id"),
+                {"id": notification_id}
+            )
+            row = result.fetchone()
+            if row:
+                return self._row_to_payment_notification(row)
+            return None
+    
+    def get_pending_notification_count(self, landlord_id: str) -> int:
+        """Get count of pending payment notifications for a landlord"""
+        with self.engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT COUNT(*) as count FROM payment_notifications WHERE landlord_id = :landlord_id AND status = 'pending'"),
+                {"landlord_id": landlord_id}
+            )
+            row = result.fetchone()
+            return row.count if row else 0
+    
+    def create_payment_notification(self, notification: PaymentNotification) -> PaymentNotification:
+        """Create a new payment notification"""
         with self.engine.connect() as conn:
             conn.execute(
                 text("""
-                    INSERT INTO payments (id, bill_id, amount, method, status, commission, created_at)
-                    VALUES (:id, :bill_id, :amount, :method, :status, :commission, :created_at)
+                    INSERT INTO payment_notifications (
+                        id, bill_id, renter_id, landlord_id, amount, currency,
+                        status, renter_note, landlord_note, created_at, confirmed_at
+                    ) VALUES (
+                        :id, :bill_id, :renter_id, :landlord_id, :amount, :currency,
+                        :status, :renter_note, :landlord_note, :created_at, :confirmed_at
+                    )
                 """),
                 {
-                    "id": payment.id,
-                    "bill_id": payment.bill_id,
-                    "amount": payment.amount,
-                    "method": payment.method or "bank_transfer",
-                    "status": payment.status or "pending",
-                    "commission": payment.commission or 0,
-                    "created_at": payment.created_at or datetime.now().isoformat()
+                    "id": notification.id,
+                    "bill_id": notification.bill_id,
+                    "renter_id": notification.renter_id,
+                    "landlord_id": notification.landlord_id,
+                    "amount": notification.amount,
+                    "currency": notification.currency or "RON",
+                    "status": notification.status or "pending",
+                    "renter_note": notification.renter_note,
+                    "landlord_note": notification.landlord_note,
+                    "created_at": notification.created_at or datetime.now().isoformat(),
+                    "confirmed_at": notification.confirmed_at
                 }
             )
             conn.commit()
-        return payment
+        return notification
+    
+    def update_payment_notification(self, notification_id: str, updates: Dict[str, Any]) -> Optional[PaymentNotification]:
+        """Update payment notification fields"""
+        if not updates:
+            return self.get_payment_notification_by_id(notification_id)
+        
+        set_clause = ", ".join([f"{k} = :{k}" for k in updates.keys()])
+        with self.engine.connect() as conn:
+            conn.execute(
+                text(f"UPDATE payment_notifications SET {set_clause} WHERE id = :notification_id"),
+                {"notification_id": notification_id, **updates}
+            )
+            conn.commit()
+        return self.get_payment_notification_by_id(notification_id)
+    
+    def _row_to_payment_notification(self, row) -> PaymentNotification:
+        """Convert database row to PaymentNotification model"""
+        return PaymentNotification(
+            id=row.id,
+            bill_id=row.bill_id,
+            renter_id=row.renter_id,
+            landlord_id=row.landlord_id,
+            amount=float(row.amount) if row.amount else 0,
+            currency=row.currency or "RON",
+            status=row.status or "pending",
+            renter_note=row.renter_note,
+            landlord_note=row.landlord_note,
+            created_at=row.created_at.isoformat() if row.created_at else None,
+            confirmed_at=row.confirmed_at.isoformat() if row.confirmed_at else None
+        )
     
     # ==================== SUPPLIER OPERATIONS ====================
     

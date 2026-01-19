@@ -18,6 +18,7 @@ from app.routes import (
     ebloc_router,
     sync_router,
     preferences_router,
+    payment_notifications_router,
 )
 from app.routes.subscription_routes import router as subscription_router
 from app.routes.text_pattern_routes import router as text_pattern_router
@@ -106,6 +107,7 @@ app.include_router(subscription_router)
 app.include_router(preferences_router)
 app.include_router(text_pattern_router)
 app.include_router(stripe_router)
+app.include_router(payment_notifications_router)
 
 
 @app.on_event("startup")

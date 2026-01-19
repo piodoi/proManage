@@ -34,7 +34,12 @@
     "collapse": "Collapse",
     "copy": "Copy",
     "copied": "Copied!",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "sending": "Sending...",
+    "reject": "Reject",
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "rejected": "Rejected"
   },
   "app": {
     "title": "ProManage",
@@ -150,7 +155,15 @@
     "whatsAppMessage": "Hello! Here's your renter access link: {link}",
     "dueDay": "Due day",
     "start": "Start",
-    "downloadPdf": "Download PDF"
+    "downloadPdf": "Download PDF",
+    "iMadeTheTransfer": "I made the transfer",
+    "notifyPaymentDescription": "After making the transfer, notify the landlord:",
+    "paymentNote": "Note (optional)",
+    "paymentNotePlaceholder": "e.g., Transfer reference, date, etc.",
+    "paymentNotificationSent": "Payment notification sent successfully",
+    "paymentNotificationPending": "Payment notification pending",
+    "paymentNotificationConfirmed": "Payment confirmed by landlord",
+    "paymentNotificationRejected": "Payment rejected by landlord"
   },
   "bill": {
     "bills": "Bills",
@@ -530,7 +543,9 @@
     "saved": "Saved successfully",
     "deleted": "Deleted successfully",
     "synced": "Successfully synced {count} bill(s) from suppliers",
-    "billsSynced": "Bills synced successfully"
+    "billsSynced": "Bills synced successfully",
+    "paymentConfirmed": "Payment confirmed and bill marked as paid",
+    "paymentRejected": "Payment notification rejected"
   },
   "tools": {
     "tools": "Tools",
@@ -567,6 +582,33 @@
     "labelSaved": "Label saved for {field} (offset: {offset})",
     "highlightedLine": "Highlighted line {line} (target line for extraction)",
     "instructions": "Instructions: Select the label text in the PDF. Use +/- buttons to adjust line offset (default: 0). If offset is 0, the value will be automatically extracted from the same line after the label."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "paymentNotifications": "Payment Notifications",
+    "noNotifications": "No pending notifications",
+    "pendingPayments": "Pending Payments",
+    "confirmedPayments": "Confirmed Payments",
+    "rejectedPayments": "Rejected Payments",
+    "allNotifications": "All Notifications",
+    "renterClaims": "Renter claims to have paid",
+    "confirmPayment": "Confirm Payment",
+    "rejectPayment": "Reject Payment",
+    "confirmPaymentQuestion": "Confirm this payment and mark the bill as paid?",
+    "rejectPaymentQuestion": "Reject this payment notification?",
+    "landlordNote": "Note (optional)",
+    "landlordNotePlaceholder": "Add a note for the renter...",
+    "renterNote": "Renter's note",
+    "notificationDate": "Notification Date",
+    "property": "Property",
+    "renter": "Renter",
+    "bill": "Bill",
+    "amount": "Amount",
+    "status": "Status",
+    "actions": "Actions",
+    "viewDetails": "View Details",
+    "confirming": "Confirming...",
+    "rejecting": "Rejecting..."
   }
 }
 

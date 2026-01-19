@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl } from '../api';
+import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl, PaymentNotificationCreate } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
 
@@ -35,6 +36,8 @@ export default function RenterView() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [selectedIbanCurrency, setSelectedIbanCurrency] = useState<string | null>(null);
+  const [notifyingPayment, setNotifyingPayment] = useState(false);
+  const [paymentNote, setPaymentNote] = useState('');
 
   // Toggle group expansion
   const toggleGroup = (groupKey: string) => {
@@ -174,8 +177,37 @@ export default function RenterView() {
   const openPayDialog = (bill: RenterBill) => {
     setPayingBill(bill);
     setCopiedField(null);
+    setPaymentNote('');
     // Set default IBAN currency when opening dialog
     setSelectedIbanCurrency(getDefaultIbanCurrency());
+  };
+
+  // Handle "I made the transfer" button click
+  const handleNotifyPayment = async () => {
+    if (!payingBill || !token) return;
+    
+    setNotifyingPayment(true);
+    try {
+      const data: PaymentNotificationCreate = {
+        bill_id: payingBill.bill.id,
+        amount: payingBill.remaining,
+        currency: payingBill.bill.currency || 'RON',
+        renter_note: paymentNote || undefined,
+      };
+      
+      await api.renter.notifyPayment(token, data);
+      
+      // Reload bills to show updated notification status
+      const billsData = await api.renter.bills(token);
+      setBills(billsData);
+      
+      setPayingBill(null);
+      setPaymentNote('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setNotifyingPayment(false);
+    }
   };
 
   // Copy to clipboard helper
@@ -933,7 +965,55 @@ export default function RenterView() {
                   </p>
                 </div>
               )}
+
+              {/* Payment Notification Section */}
+              <div className="border-t border-slate-700 pt-4 mt-4">
+                <p className="text-slate-300 text-sm mb-2">
+                  {t('renter.notifyPaymentDescription') || 'After making the transfer, notify the landlord:'}
+                </p>
+                
+                {/* Optional note */}
+                <div className="space-y-2 mb-4">
+                  <label className="text-slate-400 text-xs">
+                    {t('renter.paymentNote') || 'Note (optional)'}
+                  </label>
+                  <Textarea
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                    placeholder={t('renter.paymentNotePlaceholder') || 'e.g., Transfer reference, date, etc.'}
+                    className="bg-slate-900 border-slate-600 text-slate-200 placeholder:text-slate-500 resize-none"
+                    rows={2}
+                  />
+                </div>
+              </div>
             </div>
+            
+            <DialogFooter className="flex gap-2 sm:gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPayingBill(null)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                {t('common.cancel') || 'Cancel'}
+              </Button>
+              <Button
+                onClick={handleNotifyPayment}
+                disabled={notifyingPayment}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {notifyingPayment ? (
+                  <>
+                    <Clock className="w-4 h-4 mr-2 animate-spin" />
+                    {t('common.sending') || 'Sending...'}
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    {t('renter.iMadeTheTransfer') || 'I made the transfer'}
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </main>

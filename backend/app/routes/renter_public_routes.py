@@ -4,14 +4,13 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from app.models import Payment, PaymentCreate, PaymentMethod, PaymentStatus, BillStatus, TokenData, Bill
+from pydantic import BaseModel
+from app.models import PaymentNotification, PaymentNotificationCreate, PaymentNotificationStatus, BillStatus, Bill
 from app.database import db
 from app.utils.currency import get_exchange_rates, convert_currency
 from app.paths import get_bill_pdf_path, bill_pdf_exists
 
 router = APIRouter(prefix="/renter", tags=["renter-public"])
-
-PAYMENT_SERVICE_COMMISSION = float(os.getenv("PAYMENT_SERVICE_COMMISSION", "0.02"))
 
 
 def calculate_bill_status(bill: Bill) -> Bill:
@@ -101,19 +100,18 @@ async def renter_bills(token: str):
     property_suppliers = db.list_property_suppliers(renter.property_id)
     direct_debit_by_property_supplier = {ps.id: ps.direct_debit for ps in property_suppliers}
     
-    bill_ids = [bill.id for bill in bills]
-    all_payments = db.list_payments_for_bills(bill_ids)
-    payments_by_bill = {}
-    for payment in all_payments:
-        if payment.bill_id not in payments_by_bill:
-            payments_by_bill[payment.bill_id] = []
-        payments_by_bill[payment.bill_id].append(payment)
-    
     result = []
     for bill in bills:
         bill = calculate_bill_status(bill)
-        payments = payments_by_bill.get(bill.id, [])
-        paid_amount = sum(p.amount for p in payments if p.status == PaymentStatus.COMPLETED)
+        
+        # Get payment notifications for this bill
+        notifications = db.list_payment_notifications_by_bill(bill.id)
+        
+        # Check if there's a pending notification from this renter
+        has_pending_notification = any(
+            n.renter_id == renter.id and n.status == PaymentNotificationStatus.PENDING 
+            for n in notifications
+        )
         
         # Check if this bill's property supplier has direct_debit enabled
         is_direct_debit = False
@@ -127,10 +125,24 @@ async def renter_bills(token: str):
         
         result.append({
             "bill": bill,
-            "paid_amount": paid_amount,
-            "remaining": bill.amount - paid_amount,
+            "paid_amount": 0,  # Will be updated when landlord confirms payment
+            "remaining": bill.amount,
             "is_direct_debit": is_direct_debit,
             "has_pdf": has_pdf,
+            "has_pending_notification": has_pending_notification,
+            "notifications": [
+                {
+                    "id": n.id,
+                    "status": n.status,
+                    "amount": n.amount,
+                    "currency": n.currency,
+                    "created_at": n.created_at,
+                    "renter_note": n.renter_note,
+                    "landlord_note": n.landlord_note,
+                    "confirmed_at": n.confirmed_at
+                }
+                for n in notifications if n.renter_id == renter.id
+            ]
         })
     
     return result
@@ -156,33 +168,16 @@ async def renter_balance(token: str):
     # Filter bills: include if renter_id is None, 'all', or matches this renter
     bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
     
-    # Get property suppliers to check direct_debit status
-    property_suppliers = db.list_property_suppliers(renter.property_id)
-    direct_debit_suppliers = {ps.supplier_id: ps.direct_debit for ps in property_suppliers}
-    
-    bill_ids = [bill.id for bill in bills]
-    all_payments = db.list_payments_for_bills(bill_ids)
-    payments_by_bill = {}
-    for payment in all_payments:
-        if payment.bill_id not in payments_by_bill:
-            payments_by_bill[payment.bill_id] = []
-        payments_by_bill[payment.bill_id].append(payment)
-    
     total_due_original = 0.0
     total_paid_original = 0.0
     
     for bill in bills:
-        bill_payments = payments_by_bill.get(bill.id, [])
-        paid_for_this_bill = sum(p.amount for p in bill_payments if p.status == PaymentStatus.COMPLETED)
-        
         # Include all unpaid/pending bills in the balance (including direct debit)
         if bill.status != BillStatus.PAID:
             bill_currency_original = bill.currency if bill.currency else "RON"
             bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
-            paid_amount_converted = convert_currency(paid_for_this_bill, bill_currency_original, bill_currency, exchange_rates)
             
             total_due_original += bill_amount_converted
-            total_paid_original += paid_amount_converted
     
     balance_original = total_due_original - total_paid_original
     
@@ -203,45 +198,69 @@ async def renter_balance(token: str):
     return response
 
 
-@router.post("/{token}/pay")
-async def renter_pay(token: str, data: PaymentCreate):
+@router.post("/{token}/notify-payment")
+async def notify_payment(token: str, data: PaymentNotificationCreate):
+    """
+    Renter notifies landlord that they made a payment transfer.
+    Creates a payment notification that the landlord needs to confirm.
+    """
     renter = db.get_renter_by_token(token)
     if not renter:
         raise HTTPException(status_code=404, detail="Invalid access token")
+    
     bill = db.get_bill(data.bill_id)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
+    
     if bill.property_id != renter.property_id:
         raise HTTPException(status_code=403, detail="Bill does not belong to this renter's property")
-    commission = 0.0
-    if data.method == PaymentMethod.PAYMENT_SERVICE:
-        commission = data.amount * PAYMENT_SERVICE_COMMISSION
-    payment = Payment(
+    
+    # Check if renter has access to this bill
+    if bill.renter_id is not None and bill.renter_id != 'all' and bill.renter_id != renter.id:
+        raise HTTPException(status_code=403, detail="Access denied to this bill")
+    
+    # Get property to find landlord_id
+    prop = db.get_property(bill.property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Check if there's already a pending notification for this bill from this renter
+    existing_notifications = db.list_payment_notifications_by_bill(bill.id)
+    pending_from_renter = [
+        n for n in existing_notifications 
+        if n.renter_id == renter.id and n.status == PaymentNotificationStatus.PENDING
+    ]
+    
+    if pending_from_renter:
+        raise HTTPException(
+            status_code=400, 
+            detail="You already have a pending payment notification for this bill. Please wait for the landlord to confirm."
+        )
+    
+    # Create the payment notification
+    notification = PaymentNotification(
         bill_id=data.bill_id,
+        renter_id=renter.id,
+        landlord_id=prop.landlord_id,
         amount=data.amount,
-        method=data.method,
-        commission=commission,
+        currency=data.currency or bill.currency or "RON",
+        status=PaymentNotificationStatus.PENDING,
+        renter_note=data.renter_note,
+        created_at=datetime.utcnow()
     )
-    db.save_payment(payment)
-    existing_payments = db.list_payments(bill_id=bill.id)
-    total_paid = sum(p.amount for p in existing_payments if p.status == PaymentStatus.COMPLETED)
-    total_paid += data.amount
-    if total_paid >= bill.amount:
-        bill.status = BillStatus.PAID
-        db.save_bill(bill)
-    response = {
-        "payment": payment,
-        "commission": commission,
-        "total_with_commission": data.amount + commission,
-    }
-    if data.method == PaymentMethod.BANK_TRANSFER and bill.iban:
-        response["bank_transfer_info"] = {
+    
+    saved_notification = db.save_payment_notification(notification)
+    
+    return {
+        "notification": saved_notification,
+        "message": "Payment notification sent to landlord. They will confirm once they verify the transfer.",
+        "bank_transfer_info": {
             "iban": bill.iban,
             "bill_number": bill.bill_number,
             "amount": data.amount,
             "reference": f"Bill {bill.bill_number or bill.id}",
-        }
-    return response
+        } if bill.iban else None
+    }
 
 
 @router.get("/{token}/bill/{bill_id}/pdf")

@@ -2,7 +2,7 @@
 -- Execute using Neon MCP or psql
 
 -- Drop existing tables (in correct order due to foreign keys)
-DROP TABLE IF EXISTS payments CASCADE;
+DROP TABLE IF EXISTS payment_notifications CASCADE;
 DROP TABLE IF EXISTS bills CASCADE;
 DROP TABLE IF EXISTS property_suppliers CASCADE;
 DROP TABLE IF EXISTS renters CASCADE;
@@ -131,19 +131,27 @@ CREATE INDEX idx_bills_contract ON bills(contract_id);
 CREATE INDEX idx_bills_property_due ON bills(property_id, due_date);
 CREATE INDEX idx_bills_property_status ON bills(property_id, status);
 
--- PAYMENTS TABLE
-CREATE TABLE payments (
+-- PAYMENT_NOTIFICATIONS TABLE
+-- Stores payment claims from renters that landlords need to confirm
+CREATE TABLE payment_notifications (
     id VARCHAR(36) PRIMARY KEY,
     bill_id VARCHAR(36) NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+    renter_id VARCHAR(36) NOT NULL REFERENCES renters(id) ON DELETE CASCADE,
+    landlord_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     amount REAL NOT NULL,
-    method VARCHAR(20) NOT NULL CHECK (method IN ('bank_transfer', 'payment_service')),
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
-    commission REAL DEFAULT 0.0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    currency VARCHAR(10) DEFAULT 'RON',
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected')),
+    renter_note TEXT NULL,  -- Optional note from renter about the payment
+    landlord_note TEXT NULL,  -- Optional note from landlord when confirming/rejecting
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMP NULL  -- When landlord confirmed or rejected
 );
-CREATE INDEX idx_payments_bill ON payments(bill_id);
-CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_created ON payments(created_at);
+CREATE INDEX idx_pn_bill ON payment_notifications(bill_id);
+CREATE INDEX idx_pn_renter ON payment_notifications(renter_id);
+CREATE INDEX idx_pn_landlord ON payment_notifications(landlord_id);
+CREATE INDEX idx_pn_status ON payment_notifications(status);
+CREATE INDEX idx_pn_created ON payment_notifications(created_at);
+CREATE INDEX idx_pn_landlord_status ON payment_notifications(landlord_id, status);
 
 -- USER_PREFERENCES TABLE
 CREATE TABLE user_preferences (

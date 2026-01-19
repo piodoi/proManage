@@ -3,7 +3,7 @@
 
 -- Drop existing tables (in correct order due to foreign keys)
 SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS payment_notifications;
 DROP TABLE IF EXISTS bills;
 DROP TABLE IF EXISTS property_suppliers;
 DROP TABLE IF EXISTS renters;
@@ -141,19 +141,29 @@ CREATE TABLE bills (
     INDEX idx_bills_property_status (property_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- PAYMENTS TABLE
-CREATE TABLE payments (
+-- PAYMENT_NOTIFICATIONS TABLE
+-- Stores payment claims from renters that landlords need to confirm
+CREATE TABLE payment_notifications (
     id VARCHAR(36) PRIMARY KEY,
     bill_id VARCHAR(36) NOT NULL,
+    renter_id VARCHAR(36) NOT NULL,
+    landlord_id VARCHAR(36) NOT NULL,
     amount FLOAT NOT NULL,
-    method ENUM('bank_transfer', 'payment_service') NOT NULL,
-    status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
-    commission FLOAT DEFAULT 0.0,
+    currency VARCHAR(10) DEFAULT 'RON',
+    status ENUM('pending', 'confirmed', 'rejected') DEFAULT 'pending',
+    renter_note TEXT NULL COMMENT 'Optional note from renter about the payment',
+    landlord_note TEXT NULL COMMENT 'Optional note from landlord when confirming/rejecting',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at DATETIME NULL COMMENT 'When landlord confirmed or rejected',
     FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
-    INDEX idx_payments_bill (bill_id),
-    INDEX idx_payments_status (status),
-    INDEX idx_payments_created (created_at)
+    FOREIGN KEY (renter_id) REFERENCES renters(id) ON DELETE CASCADE,
+    FOREIGN KEY (landlord_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_pn_bill (bill_id),
+    INDEX idx_pn_renter (renter_id),
+    INDEX idx_pn_landlord (landlord_id),
+    INDEX idx_pn_status (status),
+    INDEX idx_pn_created (created_at),
+    INDEX idx_pn_landlord_status (landlord_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- USER_PREFERENCES TABLE
