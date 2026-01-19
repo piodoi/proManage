@@ -3,6 +3,7 @@ import os
 import re
 import logging
 import sys
+import base64
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query
 from fastapi.responses import FileResponse
@@ -14,7 +15,7 @@ from app.database import db
 from app.text_pattern_extractor import extract_bill_from_pdf_auto
 from app.utils.suppliers import initialize_suppliers
 from app.routes.sync_routes import resolve_property_supplier_id
-from app.paths import delete_bill_pdf, bill_pdf_exists, get_bill_pdf_path
+from app.paths import delete_bill_pdf, bill_pdf_exists, get_bill_pdf_path, save_bill_pdf
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -600,6 +601,16 @@ async def create_bill_from_pdf(
         status=BillStatus.PENDING,
     )
     db.save_bill(bill)
+    
+    # Save PDF file if pdf_data_base64 is provided
+    pdf_data_base64 = data.get("pdf_data_base64")
+    if pdf_data_base64:
+        try:
+            pdf_data = base64.b64decode(pdf_data_base64)
+            pdf_path = save_bill_pdf(current_user.user_id, bill.id, pdf_data)
+            logger.info(f"[Create Bill from PDF] Saved PDF for bill {bill.id} at {pdf_path}")
+        except Exception as pdf_err:
+            logger.error(f"[Create Bill from PDF] Failed to save PDF for bill {bill.id}: {pdf_err}")
     
     # Save contract_id to PropertySupplier if resolved and contract_id exists
     contract_id_from_data = data.get("contract_id")

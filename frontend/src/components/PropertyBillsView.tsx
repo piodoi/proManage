@@ -126,6 +126,7 @@ export default function PropertyBillsView({
   }, [renters, editingBill, billForm.renter_id]);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);  // Store PDF file for saving
   const [showBillConfirm, setShowBillConfirm] = useState(false);
   const [duplicateConflict, setDuplicateConflict] = useState<{
     billNumber: string;
@@ -226,6 +227,18 @@ export default function PropertyBillsView({
       // Use pattern name as description, supplier name for supplier matching
       const extractionPatternId = patternId || result.matched_pattern_id;
       
+      // Convert PDF file to base64 if available
+      let pdfDataBase64: string | undefined;
+      if (pdfFile) {
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        pdfDataBase64 = btoa(binary);
+      }
+      
       // Send matched_pattern_name and matched_pattern_bill_type - backend will use these
       const billData: any = {
         property_id: propertyId,
@@ -243,6 +256,8 @@ export default function PropertyBillsView({
         matched_pattern_name: result.matched_pattern_name,
         matched_pattern_supplier: supplier || result.matched_pattern_supplier,
         matched_pattern_bill_type: (result as any).matched_pattern_bill_type,
+        // Include PDF data for saving
+        pdf_data_base64: pdfDataBase64,
       };
       
       if (forceUpdate) {
@@ -272,6 +287,7 @@ export default function PropertyBillsView({
       }
       
       setPdfResult(null);
+      setPdfFile(null);  // Clear PDF file after successful creation
       setShowBillConfirm(false);
       if (onBillsChange) {
         onBillsChange();
@@ -293,6 +309,7 @@ export default function PropertyBillsView({
   const handleDuplicateSkip = () => {
     setDuplicateConflict(null);
     setPdfResult(null);
+    setPdfFile(null);  // Clear PDF file when skipping
     setShowBillConfirm(false);
     restoreScroll();
   };
@@ -541,6 +558,7 @@ export default function PropertyBillsView({
                 try {
                   const result = await api.billParser.parse(token, file, propertyId);
                   setPdfResult(result);
+                  setPdfFile(file);  // Store the PDF file for later saving
                   
                   // Show supplier message if present (info message, not blocking)
                   if (result.supplier_message && onError) {
@@ -858,6 +876,7 @@ export default function PropertyBillsView({
         onCancel={() => {
           setShowBillConfirm(false);
           setPdfResult(null);
+          setPdfFile(null);  // Clear PDF file when canceling
           restoreScroll();
         }}
         onConfirm={() => {
