@@ -57,11 +57,12 @@ export default function LandlordView({ token, onError, hideSettings = false, onN
   const dragItemRef = useRef<number | null>(null);
 
   // Wait for preferences to load before loading data (so property_order is available)
+  // Also re-run when property_order changes (e.g., on first login when preferences are loaded)
   useEffect(() => {
     if (!preferencesLoading) {
       loadData();
     }
-  }, [token, preferencesLoading]);
+  }, [token, preferencesLoading, preferences.property_order]);
 
   const handleError = (err: unknown) => {
     const message = err instanceof Error ? err.message : t('errors.generic');
