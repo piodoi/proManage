@@ -46,10 +46,20 @@ export default function PropertyCard({
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [renterLink, setRenterLink] = useState<{ token: string; link: string; renter: Renter | null } | null>(null);
 
-  // Get pending bills for the property
-  const pendingBills = useMemo(() => {
+  // Get pending bills for the property (all pending/overdue bills)
+  const allPendingBills = useMemo(() => {
     return bills.filter(bill => bill.status === 'pending' || bill.status === 'overdue');
   }, [bills]);
+
+  // Get pending bills for a specific renter (their rent bills + shared utility bills)
+  const getPendingBillsForRenter = (renterId: string) => {
+    return allPendingBills.filter(bill =>
+      // Bills assigned to this specific renter
+      bill.renter_id === renterId ||
+      // Shared bills (not assigned to any renter) - utilities, etc.
+      (!bill.renter_id && bill.bill_type !== 'rent')
+    );
+  };
 
   const handleGetRenterLink = async (renterId: string) => {
     if (!token) return;
@@ -249,7 +259,7 @@ export default function PropertyCard({
         open={!!renterLink}
         onOpenChange={(open) => !open && setRenterLink(null)}
         renterLink={renterLink}
-        pendingBills={pendingBills}
+        pendingBills={renterLink?.renter ? getPendingBillsForRenter(renterLink.renter.id) : []}
       />
     </>
   );
