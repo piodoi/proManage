@@ -1072,6 +1072,9 @@ export default function TextPatternView() {
 
           <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
             <div className="p-6">
+              <p className="text-sm text-slate-400 mb-4">
+                {t('tools.uploadPdfHint')}
+              </p>
               <div className="flex items-center gap-4 flex-wrap mb-4">
                 <div className="flex items-center gap-2">
                   <label htmlFor="pdf-upload" className="cursor-pointer">

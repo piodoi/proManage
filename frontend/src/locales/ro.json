@@ -299,6 +299,7 @@
     "selectAtLeastOne": "Selectează cel puțin o opțiune",
     "addFromPattern": "Adaugă din model",
     "addFromPatternLabel": "Adaugă Furnizor din Model Text",
+    "addFromPatternHint": "Pentru a adăuga un model nou, mergi la Unelte → Creează Model. Încarcă un PDF de factură și definește regulile de extracție pentru furnizor.",
     "selectPattern": "Selectează un model",
     "patternNotFound": "Modelul nu a fost găsit",
     "createPatternHint": "Ai nevoie de un furnizor nou? Creează un model de extracție în",
@@ -544,6 +545,7 @@
     "matchPattern": "Potrivește Model",
     "editPattern": "Editează Model",
     "uploadPdf": "Încarcă PDF",
+    "uploadPdfHint": "Încarcă un PDF de factură pentru a crea un model de extracție. Modelul poate fi apoi folosit pentru a extrage automat datele facturii din PDF-uri similare.",
     "savePattern": "Salvează Model",
     "updatePattern": "Actualizează Model",
     "field": "Câmp",
@@ -572,7 +574,7 @@
     "patternNameRequired": "Numele modelului și cel puțin un câmp de model sunt obligatorii",
     "labelSaved": "Etichetă salvată pentru {field} (offset: {offset})",
     "highlightedLine": "Linie evidențiată {line} (linie țintă pentru extragere)",
-    "instructions": "Instrucțiuni: Selectează textul etichetei din PDF. Folosește butoanele +/- pentru a ajusta offset-ul liniei (implicit: 0). Dacă offset-ul este 0, valoarea va fi extrasă automat din aceeași linie după etichetă."
+    "instructions": "Instrucțiuni: Selectează textul etichetei din PDF. Folosește butoanele +/- pentru a ajusta offset-ul liniei (implicit: 0). Dacă offset-ul este 0, valoarea va fi extrasă automat din aceeași linie după etichetă. Offset poate di si -1, in acest caz toata linia va fi folosita."
   },
   "notifications": {
     "title": "Notificări",
@@ -599,7 +601,11 @@
     "actions": "Acțiuni",
     "viewDetails": "Vezi Detalii",
     "confirming": "Se confirmă...",
-    "rejecting": "Se respinge..."
+    "rejecting": "Se respinge...",
+    "clearAll": "Șterge Tot",
+    "clearAllConfirm": "Ești sigur că vrei să ștergi toate notificările din acest tab? Această acțiune nu poate fi anulată.",
+    "clearing": "Se șterge...",
+    "clearedCount": "S-au șters {count} notificare/notificări"
   }
 }
 

@@ -306,6 +306,7 @@
     "selectAtLeastOne": "Please select at least one option",
     "addFromPattern": "Add from pattern",
     "addFromPatternLabel": "Add Supplier from Text Pattern",
+    "addFromPatternHint": "To add a new pattern, go to Tools → Create Pattern. Upload a PDF bill and define extraction rules for the supplier.",
     "selectPattern": "Select a pattern",
     "patternNotFound": "Pattern not found",
     "createPatternHint": "Need a new supplier? Create a new extraction pattern in",
@@ -551,6 +552,7 @@
     "matchPattern": "Match Pattern",
     "editPattern": "Edit Pattern",
     "uploadPdf": "Upload PDF",
+    "uploadPdfHint": "Upload a PDF bill to create an extraction pattern. The pattern can then be used to automatically extract bill data from similar PDFs.",
     "savePattern": "Save Pattern",
     "updatePattern": "Update Pattern",
     "field": "Field",
@@ -579,7 +581,7 @@
     "patternNameRequired": "Pattern name and at least one field pattern required",
     "labelSaved": "Label saved for {field} (offset: {offset})",
     "highlightedLine": "Highlighted line {line} (target line for extraction)",
-    "instructions": "Instructions: Select the label text in the PDF. Use +/- buttons to adjust line offset (default: 0). If offset is 0, the value will be automatically extracted from the same line after the label."
+    "instructions": "Instructions: Select the label text in the PDF. Use +/- buttons to adjust line offset (default: 0). If offset is 0, the value will be automatically extracted from the same line after the label. Offset can be -1, in that case the whole line will be used including the label."
   },
   "notifications": {
     "title": "Notifications",
@@ -606,7 +608,10 @@
     "actions": "Actions",
     "viewDetails": "View Details",
     "confirming": "Confirming...",
-    "rejecting": "Rejecting..."
+    "rejecting": "Rejecting...",
+    "clearAll": "Clear All",
+    "clearAllConfirm": "Are you sure you want to delete all notifications in this tab? This action cannot be undone.",
+    "clearing": "Clearing...",
+    "clearedCount": "Deleted {count} notification(s)"
   }
 }
-

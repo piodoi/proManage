@@ -388,8 +388,7 @@ export default function PropertySupplierSettingsDialog({
               </div>
               {/* Info message about creating new patterns */}
               <p className="text-xs text-slate-500 mt-3">
-                {t('supplier.createPatternHint')}{' '}
-                <span className="text-indigo-400">{t('tools.tools')}</span> → <span className="text-indigo-400">{t('tools.createPattern')}</span>
+                {t('supplier.addFromPatternHint')}
               </p>
             </div>
 

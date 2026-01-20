@@ -193,3 +193,21 @@ async def reject_notification(
         "notification": updated_notification,
         "message": "Payment notification rejected."
     }
+
+
+@router.delete("/clear-all")
+async def clear_all_notifications(
+    status: Optional[str] = None,
+    current_user = Depends(get_current_user)
+):
+    """
+    Delete all payment notifications for the current landlord.
+    Optionally filter by status: 'pending', 'confirmed', 'rejected', or 'all' for all notifications.
+    """
+    deleted_count = db.delete_all_payment_notifications(current_user.user_id, status)
+    
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+        "message": f"Deleted {deleted_count} notification(s)"
+    }

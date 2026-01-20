@@ -161,6 +161,11 @@ export const api = {
         body: { landlord_note: note },
         token
       }),
+    clearAll: (token: string, status?: string) =>
+      request<{ status: string; deleted_count: number; message: string }>(`/payment-notifications/clear-all${status ? `?status=${status}` : ''}`, {
+        method: 'DELETE',
+        token
+      }),
   },
 
 

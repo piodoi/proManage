@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bell, CheckCircle, XCircle, Clock, Building2, User, FileText, MessageSquare } from 'lucide-react';
+import { Bell, CheckCircle, XCircle, Clock, Building2, User, FileText, MessageSquare, Trash2 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
 import { usePreferences } from '../hooks/usePreferences';
@@ -28,6 +28,8 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
   const [actionType, setActionType] = useState<'confirm' | 'reject' | null>(null);
   const [landlordNote, setLandlordNote] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const loadNotifications = useCallback(async () => {
     if (!token) return;
@@ -100,6 +102,29 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
     setLandlordNote('');
   };
 
+  const handleClearAll = async () => {
+    if (!token) return;
+    
+    setClearing(true);
+    try {
+      const status = activeTab === 'all' ? undefined : activeTab;
+      const result = await api.paymentNotifications.clearAll(token, status);
+      
+      setShowClearConfirm(false);
+      loadNotifications();
+      
+      // Refresh pending count
+      if (onCountChange) {
+        const { count } = await api.paymentNotifications.count(token);
+        onCountChange(count);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -150,20 +175,34 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-slate-700 mb-4">
-              <TabsTrigger value="pending" className="data-[state=active]:bg-slate-600">
-                {t('notifications.pendingPayments')}
-              </TabsTrigger>
-              <TabsTrigger value="confirmed" className="data-[state=active]:bg-slate-600">
-                {t('notifications.confirmedPayments')}
-              </TabsTrigger>
-              <TabsTrigger value="rejected" className="data-[state=active]:bg-slate-600">
-                {t('notifications.rejectedPayments')}
-              </TabsTrigger>
-              <TabsTrigger value="all" className="data-[state=active]:bg-slate-600">
-                {t('notifications.allNotifications')}
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex items-center justify-between mb-4">
+              <TabsList className="bg-slate-700">
+                <TabsTrigger value="pending" className="data-[state=active]:bg-slate-600">
+                  {t('notifications.pendingPayments')}
+                </TabsTrigger>
+                <TabsTrigger value="confirmed" className="data-[state=active]:bg-slate-600">
+                  {t('notifications.confirmedPayments')}
+                </TabsTrigger>
+                <TabsTrigger value="rejected" className="data-[state=active]:bg-slate-600">
+                  {t('notifications.rejectedPayments')}
+                </TabsTrigger>
+                <TabsTrigger value="all" className="data-[state=active]:bg-slate-600">
+                  {t('notifications.allNotifications')}
+                </TabsTrigger>
+              </TabsList>
+              
+              {notifications.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowClearConfirm(true)}
+                  className="border-red-600 text-red-400 hover:bg-red-900/50"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  {t('notifications.clearAll')}
+                </Button>
+              )}
+            </div>
 
             <TabsContent value={activeTab} className="mt-0">
               {loading ? (
@@ -340,6 +379,37 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
                 ? (actionType === 'confirm' ? t('notifications.confirming') : t('notifications.rejecting'))
                 : (actionType === 'confirm' ? t('common.confirm') : t('common.reject'))
               }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear All Confirmation Dialog */}
+      <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-100">
+              {t('notifications.clearAll')}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {t('notifications.clearAllConfirm')}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowClearConfirm(false)}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleClearAll}
+              disabled={clearing}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {clearing ? t('notifications.clearing') : t('notifications.clearAll')}
             </Button>
           </DialogFooter>
         </DialogContent>

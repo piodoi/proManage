@@ -335,6 +335,23 @@ class Database:
     def update_payment_notification(self, notification_id: str, updates: Dict[str, Any]) -> Optional[PaymentNotification]:
         return self._impl.update_payment_notification(notification_id, updates)
     
+    def delete_all_payment_notifications(self, landlord_id: str, status: Optional[str] = None) -> int:
+        """Delete all payment notifications for a landlord, optionally filtered by status."""
+        from sqlalchemy import text
+        with self._impl.engine.connect() as conn:
+            if status and status != 'all':
+                result = conn.execute(
+                    text("DELETE FROM payment_notifications WHERE landlord_id = :landlord_id AND status = :status"),
+                    {"landlord_id": landlord_id, "status": status}
+                )
+            else:
+                result = conn.execute(
+                    text("DELETE FROM payment_notifications WHERE landlord_id = :landlord_id"),
+                    {"landlord_id": landlord_id}
+                )
+            conn.commit()
+            return result.rowcount
+    
     # ==================== SUPPLIER OPERATIONS ====================
     def get_supplier(self, supplier_id: str) -> Optional[Supplier]:
         return self._impl.get_supplier_by_id(supplier_id)
