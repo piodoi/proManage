@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Building2, Receipt, CreditCard, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
 
@@ -935,34 +935,95 @@ export default function RenterView() {
                 return null;
               })()}
 
-              {/* No payment info available */}
+              {/* No payment info available - show references and PDF link */}
               {!getPaymentInfo(payingBill) && (
-                <div className="space-y-2">
-                  <p className="text-slate-300 text-sm">{t('renter.paymentMethod') || 'Payment Method'}:</p>
-                  
-                  {/* Supplier Payment Link - placeholder for future */}
-                  <Button
-                    className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600"
-                    disabled
-                  >
-                    <Banknote className="w-4 h-4 mr-2" />
-                    {t('renter.payViaSupplier') || 'Pay via Supplier Portal'}
-                    <span className="ml-2 text-xs text-slate-500">({t('common.comingSoon') || 'Coming soon'})</span>
-                  </Button>
-
-                  {/* Stripe Payment */}
-                  <Button
-                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                    disabled
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    {t('renter.payWithStripe') || 'Pay with Stripe'}
-                    <span className="ml-2 text-xs text-emerald-200">({t('common.comingSoon') || 'Coming soon'})</span>
-                  </Button>
-                  
-                  <p className="text-xs text-slate-500 text-center">
-                    {t('renter.paymentComingSoon') || 'Payment integration will be available soon'}
+                <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-3">
+                  <p className="text-amber-400 text-sm text-center">
+                    {t('renter.checkBillForPaymentInfo') || 'Check the bill for payment information'}
                   </p>
+                  
+                  {/* PDF Link if available */}
+                  {payingBill?.has_pdf && token && (
+                    <div className="flex justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(getRenterBillPdfUrl(token, payingBill.bill.id), '_blank')}
+                        className="border-slate-600 text-blue-400 hover:bg-slate-700 hover:text-blue-300"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        {t('renter.downloadPdf') || 'Download PDF'}
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Bill Number */}
+                  {payingBill?.bill.bill_number && (
+                    <div className="space-y-1">
+                      <p className="text-slate-500 text-xs uppercase">{t('renter.billNumber') || 'Bill Number'}</p>
+                      <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                        <span className="text-slate-200 font-mono text-sm">{payingBill.bill.bill_number}</span>
+                        <button
+                          onClick={() => copyToClipboard(payingBill.bill.bill_number || '', 'billNumber')}
+                          className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                          title={t('common.copy') || 'Copy'}
+                        >
+                          {copiedField === 'billNumber' ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Contract ID */}
+                  {payingBill?.bill.contract_id && (
+                    <div className="space-y-1">
+                      <p className="text-slate-500 text-xs uppercase">{t('renter.reference') || 'Reference'}</p>
+                      <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                        <span className="text-slate-200 font-mono text-sm">{payingBill.bill.contract_id}</span>
+                        <button
+                          onClick={() => copyToClipboard(payingBill.bill.contract_id || '', 'contractId')}
+                          className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                          title={t('common.copy') || 'Copy'}
+                        >
+                          {copiedField === 'contractId' ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Payment Details - client_code */}
+                  {(() => {
+                    const paymentDetails = payingBill?.bill.payment_details as { client_code?: string } | null;
+                    if (paymentDetails?.client_code) {
+                      return (
+                        <div className="space-y-1">
+                          <p className="text-slate-500 text-xs uppercase">{t('renter.reference2') || 'Reference 2'}</p>
+                          <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                            <span className="text-slate-200 font-mono text-sm">{paymentDetails.client_code}</span>
+                            <button
+                              onClick={() => copyToClipboard(paymentDetails.client_code || '', 'clientCode')}
+                              className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                              title={t('common.copy') || 'Copy'}
+                            >
+                              {copiedField === 'clientCode' ? (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               )}
 
