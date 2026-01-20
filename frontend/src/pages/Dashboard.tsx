@@ -9,13 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown, Bell } from 'lucide-react';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown, Bell, HelpCircle } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
 import SummaryView from '../components/SummaryView';
 import TextPatternView from '../components/TextPatternView';
 import NotificationsView from '../components/NotificationsView';
+import HelpManualView from '../components/HelpManualView';
 import UserPatternDialog from '../components/dialogs/UserPatternDialog';
 import { useI18n } from '../lib/i18n';
 import { LanguageSelector } from '../components/LanguageSelector';
@@ -254,6 +255,14 @@ export default function Dashboard() {
             </h1>
           </div>
           <div className="flex items-center gap-4">
+            <Button
+              onClick={() => setActiveTab('help')}
+              variant="ghost"
+              className="text-slate-400 hover:text-slate-100"
+              title={t('help.title')}
+            >
+              <HelpCircle className="w-5 h-5" />
+            </Button>
             <LanguageSelector />
             <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
               <LogOut className="w-4 h-4 mr-2" />
@@ -333,6 +342,10 @@ export default function Dashboard() {
 
             <TabsContent value="tools" className="m-0 p-6 space-y-4">
               <TextPatternView />
+            </TabsContent>
+
+            <TabsContent value="help" className="m-0 p-6 space-y-4">
+              <HelpManualView />
             </TabsContent>
 
             {isAdmin && (
