@@ -48,8 +48,8 @@ export default function RenterDialog({
           if (!isNaN(date.getTime())) {
             formattedStartDate = date.toISOString().split('T')[0];
           }
-        } catch (e) {
-          console.error('[RenterDialog] Error formatting start_contract_date:', e);
+        } catch {
+          // Ignore date parsing errors
         }
       }
 
@@ -57,8 +57,8 @@ export default function RenterDialog({
         name: renter.name || '',
         rent_day: renter.rent_day ? renter.rent_day.toString() : '',
         start_contract_date: formattedStartDate,
-        rent_amount: renter.rent_amount_eur ? renter.rent_amount_eur.toString() : '',
-        rent_currency: 'EUR',
+        rent_amount: renter.rent_amount ? renter.rent_amount.toString() : '',
+        rent_currency: (renter.rent_currency || 'EUR') as 'EUR' | 'RON' | 'USD',
         email: renter.email || '',
         phone: renter.phone || '',
       });
@@ -83,7 +83,7 @@ export default function RenterDialog({
     }
 
     try {
-      const rentAmountEUR = parseFloat(form.rent_amount);
+      const rentAmount = parseFloat(form.rent_amount);
       const rentDay = form.rent_day ? parseInt(form.rent_day, 10) : undefined;
       const startContractDate = form.start_contract_date || undefined;
 
@@ -94,7 +94,8 @@ export default function RenterDialog({
           phone: form.phone || undefined,
           rent_day: rentDay,
           start_contract_date: startContractDate,
-          rent_amount_eur: rentAmountEUR,
+          rent_amount: rentAmount,
+          rent_currency: form.rent_currency,
         });
       } else {
         await api.renters.create(token, propertyId, {
@@ -103,7 +104,8 @@ export default function RenterDialog({
           phone: form.phone || undefined,
           rent_day: rentDay,
           start_contract_date: startContractDate,
-          rent_amount_eur: rentAmountEUR,
+          rent_amount: rentAmount,
+          rent_currency: form.rent_currency,
         });
       }
 

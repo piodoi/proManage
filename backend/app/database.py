@@ -252,6 +252,14 @@ class Database:
                 result = conn.execute(text("SELECT * FROM renters ORDER BY name"))
                 renters = []
                 for row in result:
+                    start_date_value = None
+                    raw_start_date = getattr(row, 'start_contract_date', None)
+                    if raw_start_date:
+                        if hasattr(raw_start_date, 'isoformat'):
+                            start_date_value = raw_start_date.isoformat()
+                        else:
+                            start_date_value = str(raw_start_date)
+                    
                     renters.append(Renter(
                         id=row.id,
                         property_id=row.property_id,
@@ -259,8 +267,9 @@ class Database:
                         email=row.email,
                         phone=row.phone,
                         rent_day=row.rent_day,
-                        start_contract_date=row.start_contract_date if isinstance(row.start_contract_date, str) else (row.start_contract_date.isoformat() if row.start_contract_date else None),
-                        rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
+                        start_contract_date=start_date_value,
+                        rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                        rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                         access_token=row.access_token,
                         created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
                     ))
@@ -270,7 +279,7 @@ class Database:
         existing = self._impl.get_renter_by_id(renter.id)
         if existing:
             updates = {}
-            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount_eur']:
+            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'rent_currency']:
                 if getattr(renter, field) != getattr(existing, field):
                     updates[field] = getattr(renter, field)
             if updates:

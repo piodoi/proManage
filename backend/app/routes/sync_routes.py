@@ -92,7 +92,7 @@ def resolve_property_supplier_id(
 @router.post("/rent/generate")
 async def generate_rent_bills(current_user: TokenData = Depends(require_landlord)):
     """
-    Generate rent bills for all properties with renters who have rent_amount_eur set.
+    Generate rent bills for all properties with renters who have rent_amount set.
     Only generates bills for properties owned by the current user.
     """
     from app.models import Bill, BillType
@@ -121,10 +121,10 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
             renters = db.list_renters(prop.id)
             
             # Filter for renters with rent amount set
-            renters_with_rent = [r for r in renters if r.rent_amount_eur and r.rent_amount_eur > 0]
+            renters_with_rent = [r for r in renters if r.rent_amount and r.rent_amount > 0]
             
             if not renters_with_rent:
-                logger.debug(f"[Rent Bills] Property {prop.id} has no renters with rent_amount_eur set, skipping")
+                logger.debug(f"[Rent Bills] Property {prop.id} has no renters with rent_amount set, skipping")
                 continue
             
             # For each renter with rent, generate a rent bill
@@ -193,13 +193,16 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
                 # Create the bill with localized month name
                 month_name = get_month_name(target_month, user_language)
                 
+                # Use renter's currency if set, otherwise use default
+                bill_currency = renter.rent_currency if renter.rent_currency else default_currency
+                
                 bill = Bill(
                     property_id=prop.id,
                     renter_id=renter.id,
                     bill_type=BillType.RENT,
                     description=f"{month_name} {target_year}",
-                    amount=renter.rent_amount_eur,
-                    currency=default_currency,
+                    amount=renter.rent_amount,
+                    currency=bill_currency,
                     due_date=due_date,
                     iban=default_iban,
                     bill_number=bill_number,
@@ -231,7 +234,7 @@ async def generate_rent_bills(current_user: TokenData = Depends(require_landlord
                 
                 logger.info(
                     f"[Rent Bills] Created rent bill for property {prop.id}, "
-                    f"renter {renter.id}, amount {renter.rent_amount_eur} {default_currency}, "
+                    f"renter {renter.id}, amount {renter.rent_amount} {bill_currency}, "
                     f"due {due_date.strftime('%Y-%m-%d')}"
                 )
                 

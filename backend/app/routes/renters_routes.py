@@ -42,13 +42,14 @@ async def create_renter(
             raise HTTPException(status_code=403, detail=message)
     
     renter = Renter(
-        property_id=property_id, 
-        name=data.name, 
-        email=data.email, 
+        property_id=property_id,
+        name=data.name,
+        email=data.email,
         phone=data.phone,
         rent_day=data.rent_day,
         start_contract_date=data.start_contract_date,
-        rent_amount_eur=data.rent_amount_eur
+        rent_amount=data.rent_amount,
+        rent_currency=data.rent_currency or 'EUR'
     )
     db.save_renter(renter)
     return renter
@@ -89,8 +90,10 @@ async def update_renter(
         renter.rent_day = data.rent_day
     if data.start_contract_date is not None:
         renter.start_contract_date = data.start_contract_date
-    if data.rent_amount_eur is not None:
-        renter.rent_amount_eur = data.rent_amount_eur
+    if data.rent_amount is not None:
+        renter.rent_amount = data.rent_amount
+    if data.rent_currency is not None:
+        renter.rent_currency = data.rent_currency
     db.save_renter(renter)
     return renter
 

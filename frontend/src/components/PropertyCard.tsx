@@ -184,21 +184,25 @@ export default function PropertyCard({
           ) : (
             <div className="space-y-1">
               {renters.map((renter) => {
-                const rentAmountEUR = renter.rent_amount_eur || 0;
-                const rentAmountRON = rentAmountEUR > 0
-                  ? convertCurrency(rentAmountEUR, 'EUR', 'RON', exchangeRates)
-                  : 0;
+                const rentAmount = renter.rent_amount || 0;
+                const rentCurrency = renter.rent_currency || 'EUR';
+                // Convert to RON for display if not already RON
+                const rentAmountRON = rentAmount > 0 && rentCurrency !== 'RON'
+                  ? convertCurrency(rentAmount, rentCurrency, 'RON', exchangeRates)
+                  : (rentCurrency === 'RON' ? rentAmount : 0);
 
                 return (
                   <div key={renter.id} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-slate-300 font-medium">{renter.name}</span>
-                      {(rentAmountEUR > 0 || renter.rent_day || renter.start_contract_date) && (
+                      {(rentAmount > 0 || renter.rent_day || renter.start_contract_date) && (
                         <span className="text-xs text-slate-400">
-                          {rentAmountEUR > 0 && (
+                          {rentAmount > 0 && (
                             <>
-                              <span>{formatAmount(rentAmountEUR, 'EUR')}</span>
-                              <span className="ml-1">({formatAmount(rentAmountRON, 'RON')})</span>
+                              <span>{formatAmount(rentAmount, rentCurrency)}</span>
+                              {rentCurrency !== 'RON' && rentAmountRON > 0 && (
+                                <span className="ml-1">({formatAmount(rentAmountRON, 'RON')})</span>
+                              )}
                             </>
                           )}
                           {renter.rent_day && (

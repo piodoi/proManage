@@ -49,7 +49,8 @@ CREATE TABLE renters (
     phone VARCHAR(50) NULL,
     rent_day INT NULL,
     start_contract_date DATE NULL,
-    rent_amount_eur REAL NULL,
+    rent_amount REAL NULL,
+    rent_currency VARCHAR(10) DEFAULT 'EUR',
     access_token VARCHAR(36) NOT NULL UNIQUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

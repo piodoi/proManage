@@ -228,6 +228,14 @@ class MySQLDatabase:
             )
             renters = []
             for row in result:
+                start_date_value = None
+                raw_start_date = getattr(row, 'start_contract_date', None)
+                if raw_start_date:
+                    if hasattr(raw_start_date, 'isoformat'):
+                        start_date_value = raw_start_date.isoformat()
+                    else:
+                        start_date_value = str(raw_start_date)
+                
                 renters.append(Renter(
                     id=row.id,
                     property_id=row.property_id,
@@ -235,8 +243,9 @@ class MySQLDatabase:
                     email=row.email,
                     phone=row.phone,
                     rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
-                    rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
+                    start_contract_date=start_date_value,
+                    rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                    rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     access_token=row.access_token,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 ))
@@ -251,6 +260,14 @@ class MySQLDatabase:
             )
             row = result.fetchone()
             if row:
+                start_date_value = None
+                raw_start_date = getattr(row, 'start_contract_date', None)
+                if raw_start_date:
+                    if hasattr(raw_start_date, 'isoformat'):
+                        start_date_value = raw_start_date.isoformat()
+                    else:
+                        start_date_value = str(raw_start_date)
+                
                 return Renter(
                     id=row.id,
                     property_id=row.property_id,
@@ -258,8 +275,9 @@ class MySQLDatabase:
                     email=row.email,
                     phone=row.phone,
                     rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
-                    rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
+                    start_contract_date=start_date_value,
+                    rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                    rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     access_token=row.access_token,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
@@ -274,6 +292,14 @@ class MySQLDatabase:
             )
             row = result.fetchone()
             if row:
+                start_date_value = None
+                raw_start_date = getattr(row, 'start_contract_date', None)
+                if raw_start_date:
+                    if hasattr(raw_start_date, 'isoformat'):
+                        start_date_value = raw_start_date.isoformat()
+                    else:
+                        start_date_value = str(raw_start_date)
+                
                 return Renter(
                     id=row.id,
                     property_id=row.property_id,
@@ -281,8 +307,9 @@ class MySQLDatabase:
                     email=row.email,
                     phone=row.phone,
                     rent_day=row.rent_day,
-                    start_contract_date=row.start_contract_date.isoformat() if row.start_contract_date else None,
-                    rent_amount_eur=float(row.rent_amount_eur) if row.rent_amount_eur else None,
+                    start_contract_date=start_date_value,
+                    rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                    rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     access_token=row.access_token,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
@@ -295,10 +322,10 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
-                        start_contract_date, rent_amount_eur, access_token, created_at
+                        start_contract_date, rent_amount, rent_currency, access_token, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
-                        :start_contract_date, :rent_amount_eur, :access_token, :created_at
+                        :start_contract_date, :rent_amount, :rent_currency, :access_token, :created_at
                     )
                 """),
                 {
@@ -309,7 +336,8 @@ class MySQLDatabase:
                     "phone": renter.phone,
                     "rent_day": renter.rent_day,
                     "start_contract_date": renter.start_contract_date,
-                    "rent_amount_eur": renter.rent_amount_eur,
+                    "rent_amount": renter.rent_amount,
+                    "rent_currency": renter.rent_currency or 'EUR',
                     "access_token": renter.access_token,
                     "created_at": renter.created_at or datetime.now().isoformat()
                 }

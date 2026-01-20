@@ -80,7 +80,7 @@ export default function AllPropertiesSyncDialog({
     for (const property of properties) {
       try {
         const renters = await api.renters.list(token, property.id);
-        const rentersWithAmount = renters.filter(r => r.rent_amount_eur && r.rent_amount_eur > 0);
+        const rentersWithAmount = renters.filter(r => r.rent_amount && r.rent_amount > 0);
         if (rentersWithAmount.length > 0) {
           propertiesWithRenters++;
           totalRenters += rentersWithAmount.length;

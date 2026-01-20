@@ -215,6 +215,7 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
                     <TableRow className="border-slate-700">
                       <TableHead className="text-slate-400">{t('notifications.notificationDate')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.property')}</TableHead>
+                      <TableHead className="text-slate-400">{t('notifications.notes')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.renter')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.bill')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.amount')}</TableHead>
@@ -223,64 +224,92 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {notifications.map((item) => (
-                      <TableRow key={item.notification.id} className="border-slate-700">
-                        <TableCell className="text-slate-300">
-                          {formatDate(item.notification.created_at)}
-                        </TableCell>
-                        <TableCell className="text-slate-200">
-                          <div className="flex items-center gap-1">
-                            <Building2 className="w-4 h-4 text-slate-400" />
-                            {item.property?.name || '-'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-slate-200">
-                          <div className="flex items-center gap-1">
-                            <User className="w-4 h-4 text-slate-400" />
-                            {item.renter?.name || '-'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-slate-200">
-                          <div className="flex items-center gap-1">
-                            <FileText className="w-4 h-4 text-slate-400" />
-                            {item.bill?.description || '-'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-emerald-400 font-medium">
-                          {item.notification.amount.toFixed(2)} {item.notification.currency}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(item.notification.status)}
-                        </TableCell>
-                        <TableCell>
-                          {item.notification.status === 'pending' ? (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => openActionDialog(item, 'confirm')}
-                                className="bg-emerald-600 hover:bg-emerald-700"
-                              >
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                                {t('common.confirm')}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openActionDialog(item, 'reject')}
-                                className="border-red-600 text-red-400 hover:bg-red-900/50"
-                              >
-                                <XCircle className="w-4 h-4 mr-1" />
-                                {t('common.reject')}
-                              </Button>
+                    {notifications.map((item) => {
+                      // Check if this is a contract expiry notification (no bill, amount = 0)
+                      const isContractExpiry = !item.notification.bill_id || item.notification.amount === 0;
+                      const hasNotes = item.notification.renter_note || item.notification.landlord_note;
+                      
+                      return (
+                        <TableRow key={item.notification.id} className="border-slate-700">
+                          <TableCell className="text-slate-300">
+                            {formatDate(item.notification.created_at)}
+                          </TableCell>
+                          <TableCell className="text-slate-200">
+                            <div className="flex items-center gap-1">
+                              <Building2 className="w-4 h-4 text-slate-400" />
+                              {item.property?.name || '-'}
                             </div>
-                          ) : (
-                            <span className="text-slate-500 text-sm">
-                              {item.notification.confirmed_at && formatDate(item.notification.confirmed_at)}
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-slate-200">
+                            {hasNotes ? (
+                              <div className="flex flex-col gap-1 max-w-xs">
+                                {/* Show renter note if present */}
+                                {item.notification.renter_note && (
+                                  <div className="text-xs text-amber-400 flex items-start gap-1">
+                                    <MessageSquare className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                    <span className="break-words">{item.notification.renter_note}</span>
+                                  </div>
+                                )}
+                                {/* Show landlord note if present */}
+                                {item.notification.landlord_note && (
+                                  <div className="text-xs text-blue-400 flex items-start gap-1">
+                                    <MessageSquare className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                    <span className="break-words">{item.notification.landlord_note}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-slate-200">
+                            <div className="flex items-center gap-1">
+                              <User className="w-4 h-4 text-slate-400" />
+                              {item.renter?.name || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-slate-200">
+                            <div className="flex items-center gap-1">
+                              <FileText className="w-4 h-4 text-slate-400" />
+                              {isContractExpiry ? t('common.none') : (item.bill?.description || '-')}
+                            </div>
+                          </TableCell>
+                          <TableCell className={isContractExpiry ? "text-slate-500" : "text-emerald-400 font-medium"}>
+                            {isContractExpiry ? t('common.none') : `${item.notification.amount.toFixed(2)} ${item.notification.currency}`}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(item.notification.status)}
+                          </TableCell>
+                          <TableCell>
+                            {item.notification.status === 'pending' ? (
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => openActionDialog(item, 'confirm')}
+                                  className="bg-emerald-600 hover:bg-emerald-700"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                  {t('common.confirm')}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openActionDialog(item, 'reject')}
+                                  className="border-red-600 text-red-400 hover:bg-red-900/50"
+                                >
+                                  <XCircle className="w-4 h-4 mr-1" />
+                                  {t('common.reject')}
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 text-sm">
+                                {item.notification.confirmed_at && formatDate(item.notification.confirmed_at)}
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}

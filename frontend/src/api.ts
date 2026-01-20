@@ -343,26 +343,29 @@ export type Renter = {
   phone?: string;
   rent_day?: number;  // Day of month (1-28) for recurring rent
   start_contract_date?: string;  // Optional start date of contract
-  rent_amount_eur?: number;
+  rent_amount?: number;  // Rent amount
+  rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
   access_token: string;
   created_at: string;
 };
 
-export type RenterCreate = { 
-  name: string; 
-  email?: string; 
+export type RenterCreate = {
+  name: string;
+  email?: string;
   phone?: string;
   rent_day?: number;  // Day of month (1-28) for recurring rent
   start_contract_date?: string;  // Optional start date of contract
-  rent_amount_eur?: number;
+  rent_amount?: number;  // Rent amount
+  rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
 };
-export type RenterUpdate = { 
-  name?: string; 
-  email?: string; 
+export type RenterUpdate = {
+  name?: string;
+  email?: string;
   phone?: string;
   rent_day?: number;  // Day of month (1-28) for recurring rent
   start_contract_date?: string;  // Optional start date of contract
-  rent_amount_eur?: number;
+  rent_amount?: number;  // Rent amount
+  rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
 };
 
 export type Bill = {

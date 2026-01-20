@@ -602,6 +602,7 @@
     "renter": "Chiriaș",
     "bill": "Factură",
     "amount": "Sumă",
+    "notes": "Note",
     "status": "Status",
     "actions": "Acțiuni",
     "viewDetails": "Vezi Detalii",
@@ -610,7 +611,9 @@
     "clearAll": "Șterge Tot",
     "clearAllConfirm": "Ești sigur că vrei să ștergi toate notificările din acest tab? Această acțiune nu poate fi anulată.",
     "clearing": "Se șterge...",
-    "clearedCount": "S-au șters {count} notificare/notificări"
+    "clearedCount": "S-au șters {count} notificare/notificări",
+    "contractExpiry": "Expirare Contract",
+    "contractExpiryNotice": "Contract expiră în curând"
   },
   "help": {
     "title": "Manual de Utilizare",

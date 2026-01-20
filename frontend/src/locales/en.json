@@ -609,6 +609,7 @@
     "renter": "Renter",
     "bill": "Bill",
     "amount": "Amount",
+    "notes": "Notes",
     "status": "Status",
     "actions": "Actions",
     "viewDetails": "View Details",
@@ -617,7 +618,9 @@
     "clearAll": "Clear All",
     "clearAllConfirm": "Are you sure you want to delete all notifications in this tab? This action cannot be undone.",
     "clearing": "Clearing...",
-    "clearedCount": "Deleted {count} notification(s)"
+    "clearedCount": "Deleted {count} notification(s)",
+    "contractExpiry": "Contract Expiry",
+    "contractExpiryNotice": "Contract expiring soon"
   },
   "help": {
     "title": "User Manual",
