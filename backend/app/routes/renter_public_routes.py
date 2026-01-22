@@ -56,6 +56,7 @@ async def renter_info(token: str):
     landlord_iban_usd = None
     landlord_name = None
     rent_currency = "EUR"  # Default
+    rent_warning_days = 5  # Default
     if prop:
         landlord_preferences = db.get_user_preferences(prop.landlord_id)
         if landlord_preferences:
@@ -67,6 +68,8 @@ async def renter_info(token: str):
             landlord_name = landlord_preferences.landlord_name
             if landlord_preferences.rent_currency:
                 rent_currency = landlord_preferences.rent_currency
+            if landlord_preferences.rent_warning_days is not None:
+                rent_warning_days = landlord_preferences.rent_warning_days
     
     return {
         "renter": {"id": renter.id, "name": renter.name},
@@ -77,6 +80,7 @@ async def renter_info(token: str):
         "landlord_iban_usd": landlord_iban_usd,
         "landlord_name": landlord_name,
         "rent_currency": rent_currency,
+        "rent_warning_days": rent_warning_days,
     }
 
 
@@ -117,21 +121,26 @@ async def renter_bills(token: str):
         )
         
         # Calculate paid amount from confirmed notifications
-        # Convert all confirmed notification amounts to bill currency
+        # Use amount_in_bill_currency if available (stored at time of payment for stability)
+        # Otherwise fall back to runtime conversion for backward compatibility
         bill_currency = bill.currency or "RON"
         paid_amount = 0.0
         has_confirmed_notifications = False
         for n in notifications:
             if n.status == PaymentNotificationStatus.CONFIRMED:
                 has_confirmed_notifications = True
-                # Convert notification amount to bill currency
-                notification_currency = n.currency or "RON"
-                if notification_currency == bill_currency:
-                    paid_amount += n.amount
+                # Use stored amount_in_bill_currency if available (stable regardless of exchange rate changes)
+                if n.amount_in_bill_currency is not None and n.bill_currency == bill_currency:
+                    paid_amount += n.amount_in_bill_currency
                 else:
-                    # Convert to bill currency
-                    converted = convert_currency(n.amount, notification_currency, bill_currency, exchange_rates)
-                    paid_amount += converted
+                    # Fall back to runtime conversion for old notifications without stored conversion
+                    notification_currency = n.currency or "RON"
+                    if notification_currency == bill_currency:
+                        paid_amount += n.amount
+                    else:
+                        # Convert to bill currency
+                        converted = convert_currency(n.amount, notification_currency, bill_currency, exchange_rates)
+                        paid_amount += converted
         
         # Calculate remaining amount (can be negative if overpaid = credit)
         # If bill is marked as paid but has no confirmed notifications, remaining is 0
@@ -205,14 +214,23 @@ async def renter_balance(token: str):
         bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
         
         # Get confirmed payment notifications for this bill
+        # Use amount_in_bill_currency if available (stored at time of payment for stability)
+        # Otherwise fall back to runtime conversion for backward compatibility
         notifications = db.list_payment_notifications_by_bill(bill.id)
         paid_for_bill = 0.0
         has_confirmed_notifications = False
         for n in notifications:
             if n.status == PaymentNotificationStatus.CONFIRMED:
                 has_confirmed_notifications = True
-                notification_currency = n.currency or "RON"
-                paid_converted = convert_currency(n.amount, notification_currency, bill_currency, exchange_rates)
+                # Use stored amount_in_bill_currency if available (stable regardless of exchange rate changes)
+                if n.amount_in_bill_currency is not None:
+                    # Convert from bill's original currency to display currency
+                    n_bill_currency = n.bill_currency or "RON"
+                    paid_converted = convert_currency(n.amount_in_bill_currency, n_bill_currency, bill_currency, exchange_rates)
+                else:
+                    # Fall back to runtime conversion for old notifications without stored conversion
+                    notification_currency = n.currency or "RON"
+                    paid_converted = convert_currency(n.amount, notification_currency, bill_currency, exchange_rates)
                 paid_for_bill += paid_converted
         
         # Handle paid bills without notifications (manually marked as paid)
@@ -277,15 +295,28 @@ async def notify_payment(token: str, data: PaymentNotificationCreate):
     # Check if there's already a pending notification for this bill from this renter
     existing_notifications = db.list_payment_notifications_by_bill(bill.id)
     pending_from_renter = [
-        n for n in existing_notifications 
+        n for n in existing_notifications
         if n.renter_id == renter.id and n.status == PaymentNotificationStatus.PENDING
     ]
     
     if pending_from_renter:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="You already have a pending payment notification for this bill. Please wait for the landlord to confirm."
         )
+    
+    # Get exchange rates to calculate amount_in_bill_currency
+    exchange_rates = await get_exchange_rates()
+    
+    payment_currency = data.currency or bill.currency or "RON"
+    bill_currency = bill.currency or "RON"
+    
+    # Calculate amount in bill currency (fixed at current exchange rate)
+    # This ensures balance remains stable regardless of future exchange rate changes
+    if payment_currency == bill_currency:
+        amount_in_bill_currency = data.amount
+    else:
+        amount_in_bill_currency = convert_currency(data.amount, payment_currency, bill_currency, exchange_rates)
     
     # Create the payment notification
     notification = PaymentNotification(
@@ -293,7 +324,9 @@ async def notify_payment(token: str, data: PaymentNotificationCreate):
         renter_id=renter.id,
         landlord_id=prop.landlord_id,
         amount=data.amount,
-        currency=data.currency or bill.currency or "RON",
+        currency=payment_currency,
+        amount_in_bill_currency=amount_in_bill_currency,
+        bill_currency=bill_currency,
         status=PaymentNotificationStatus.PENDING,
         renter_note=data.renter_note,
         created_at=datetime.utcnow()

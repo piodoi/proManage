@@ -613,10 +613,14 @@
     "rejecting": "Se respinge...",
     "clearAll": "Șterge Tot",
     "clearAllConfirm": "Ești sigur că vrei să ștergi toate notificările din acest tab? Această acțiune nu poate fi anulată.",
+    "clearAllForPropertyConfirm": "Aceasta va șterge toate notificările pentru proprietatea selectată din acest tab. Această acțiune nu poate fi anulată.",
+    "clearSelected": "Șterge Selectate",
     "clearing": "Se șterge...",
     "clearedCount": "S-au șters {count} notificare/notificări",
     "contractExpiry": "Expirare Contract",
-    "contractExpiryNotice": "Contract expiră în curând"
+    "contractExpiryNotice": "Contract expiră în curând",
+    "filterByProperty": "Filtrează după proprietate",
+    "allProperties": "Toate Proprietățile"
   },
   "help": {
     "title": "Manual de Utilizare",

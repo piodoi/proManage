@@ -573,9 +573,11 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO payment_notifications (
                         id, bill_id, renter_id, landlord_id, amount, currency,
+                        amount_in_bill_currency, bill_currency,
                         status, renter_note, landlord_note, created_at, confirmed_at
                     ) VALUES (
                         :id, :bill_id, :renter_id, :landlord_id, :amount, :currency,
+                        :amount_in_bill_currency, :bill_currency,
                         :status, :renter_note, :landlord_note, :created_at, :confirmed_at
                     )
                 """),
@@ -586,6 +588,8 @@ class MySQLDatabase:
                     "landlord_id": notification.landlord_id,
                     "amount": notification.amount,
                     "currency": notification.currency or "RON",
+                    "amount_in_bill_currency": notification.amount_in_bill_currency,
+                    "bill_currency": notification.bill_currency,
                     "status": notification.status or "pending",
                     "renter_note": notification.renter_note,
                     "landlord_note": notification.landlord_note,
@@ -619,6 +623,8 @@ class MySQLDatabase:
             landlord_id=row.landlord_id,
             amount=float(row.amount) if row.amount else 0,
             currency=row.currency or "RON",
+            amount_in_bill_currency=float(row.amount_in_bill_currency) if getattr(row, 'amount_in_bill_currency', None) else None,
+            bill_currency=getattr(row, 'bill_currency', None),
             status=row.status or "pending",
             renter_note=row.renter_note,
             landlord_note=row.landlord_note,

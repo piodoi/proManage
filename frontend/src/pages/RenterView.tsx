@@ -34,7 +34,7 @@ export default function RenterView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [payingBill, setPayingBill] = useState<RenterBill | null>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string> | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [selectedIbanCurrency, setSelectedIbanCurrency] = useState<string | null>(null);
   const [notifyingPayment, setNotifyingPayment] = useState(false);
@@ -46,7 +46,7 @@ export default function RenterView() {
   // Toggle group expansion
   const toggleGroup = (groupKey: string) => {
     setExpandedGroups(prev => {
-      const newSet = new Set(prev);
+      const newSet = new Set(prev || []);
       if (newSet.has(groupKey)) {
         newSet.delete(groupKey);
       } else {
@@ -63,6 +63,25 @@ export default function RenterView() {
     olderBills: RenterBill[];
   };
 
+  // Helper function to sort bills: unpaid (ascending by due date), then paid (descending by due date)
+  const sortBillsForDisplay = (billItems: RenterBill[]): RenterBill[] => {
+    const unpaidBills = billItems.filter(item => item.bill.status !== 'paid');
+    const paidBills = billItems.filter(item => item.bill.status === 'paid');
+    
+    // Sort unpaid bills by due_date ascending (soonest first)
+    unpaidBills.sort((a, b) =>
+      new Date(a.bill.due_date).getTime() - new Date(b.bill.due_date).getTime()
+    );
+    
+    // Sort paid bills by due_date descending (most recent first)
+    paidBills.sort((a, b) =>
+      new Date(b.bill.due_date).getTime() - new Date(a.bill.due_date).getTime()
+    );
+    
+    // Unpaid bills first, then paid bills
+    return [...unpaidBills, ...paidBills];
+  };
+
   const groupedBills = useMemo((): BillGroup[] => {
     // Separate rent bills from other bills
     const rentBills = bills.filter(item => item.bill.bill_type === 'rent');
@@ -72,9 +91,7 @@ export default function RenterView() {
 
     // Group all rent bills together
     if (rentBills.length > 0) {
-      const sortedRentBills = [...rentBills].sort((a, b) =>
-        new Date(b.bill.due_date).getTime() - new Date(a.bill.due_date).getTime()
-      );
+      const sortedRentBills = sortBillsForDisplay(rentBills);
       groups.push({
         groupKey: 'type-rent',
         latestBill: sortedRentBills[0],
@@ -94,9 +111,7 @@ export default function RenterView() {
     });
 
     descriptionBillsMap.forEach((billItems) => {
-      const sortedBills = [...billItems].sort((a, b) =>
-        new Date(b.bill.due_date).getTime() - new Date(a.bill.due_date).getTime()
-      );
+      const sortedBills = sortBillsForDisplay(billItems);
       groups.push({
         groupKey: `desc-${sortedBills[0].bill.description || t('bill.noDescription')}`,
         latestBill: sortedBills[0],
@@ -104,13 +119,43 @@ export default function RenterView() {
       });
     });
 
-    // Sort groups by latest bill due_date descending
-    groups.sort((a, b) =>
-      new Date(b.latestBill.bill.due_date).getTime() - new Date(a.latestBill.bill.due_date).getTime()
-    );
+    // Sort groups: groups with unpaid bills first (by earliest due date), then groups with only paid bills (by most recent due date)
+    groups.sort((a, b) => {
+      const aHasUnpaid = a.latestBill.bill.status !== 'paid' || a.olderBills.some(item => item.bill.status !== 'paid');
+      const bHasUnpaid = b.latestBill.bill.status !== 'paid' || b.olderBills.some(item => item.bill.status !== 'paid');
+      
+      if (aHasUnpaid && !bHasUnpaid) return -1;
+      if (!aHasUnpaid && bHasUnpaid) return 1;
+      
+      // Both have unpaid or both are paid - sort by the first bill's due date
+      if (aHasUnpaid && bHasUnpaid) {
+        // For groups with unpaid bills, sort by earliest due date (ascending)
+        return new Date(a.latestBill.bill.due_date).getTime() - new Date(b.latestBill.bill.due_date).getTime();
+      } else {
+        // For groups with only paid bills, sort by most recent due date (descending)
+        return new Date(b.latestBill.bill.due_date).getTime() - new Date(a.latestBill.bill.due_date).getTime();
+      }
+    });
 
     return groups;
   }, [bills, t]);
+
+  // Initialize expanded groups - expand groups that have pending/overdue bills in older bills
+  useEffect(() => {
+    if (expandedGroups === null && groupedBills.length > 0) {
+      const groupsToExpand = new Set<string>();
+      groupedBills.forEach(group => {
+        // Check if any older bill is pending or overdue
+        const hasUnpaidOlderBills = group.olderBills.some(
+          item => item.bill.status === 'pending' || item.bill.status === 'overdue'
+        );
+        if (hasUnpaidOlderBills) {
+          groupsToExpand.add(group.groupKey);
+        }
+      });
+      setExpandedGroups(groupsToExpand);
+    }
+  }, [groupedBills, expandedGroups]);
 
   // Default to Romanian for renters
   useEffect(() => {
@@ -449,7 +494,7 @@ export default function RenterView() {
                 </TableHeader>
                 <TableBody>
                   {groupedBills.map((group) => {
-                    const isExpanded = expandedGroups.has(group.groupKey);
+                    const isExpanded = expandedGroups?.has(group.groupKey) ?? false;
                     const hasOlderBills = group.olderBills.length > 0;
                     // Check if all older bills are paid
                     const allOlderBillsPaid = group.olderBills.every(item => item.bill.status === 'paid');
@@ -582,6 +627,19 @@ export default function RenterView() {
             const dueDate = new Date(b.bill.due_date);
             return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
           });
+          
+          // Filter bills for balance calculation based on warning days
+          // Only include bills with due dates within the warning threshold (today + warning_days)
+          const warningDays = info?.rent_warning_days ?? 5;
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() + warningDays);
+          cutoffDate.setHours(23, 59, 59, 999); // End of the cutoff day
+          
+          const balanceBills = bills.filter(b => {
+            const dueDate = new Date(b.bill.due_date);
+            // Include bills that are due on or before the cutoff date
+            return dueDate <= cutoffDate;
+          });
 
           return (
           <div className="grid grid-cols-3 gap-4 mb-6">
@@ -620,10 +678,10 @@ export default function RenterView() {
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm mb-3">{t('renter.balance')}</p>
                 
-                {/* Bills breakdown inside balance card - all bills with non-zero remaining balance */}
-                {bills.filter(b => b.remaining !== 0).length > 0 && (
+                {/* Bills breakdown inside balance card - bills with non-zero remaining within warning days */}
+                {balanceBills.filter(b => b.remaining !== 0).length > 0 && (
                   <div className="mb-3 space-y-0.5 text-xs">
-                    {bills.filter(b => b.remaining !== 0).map((item) => (
+                    {balanceBills.filter(b => b.remaining !== 0).map((item) => (
                       <div key={item.bill.id} className={`flex justify-between items-center ${item.remaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
                         <span className="truncate mr-2">{item.bill.description}</span>
                         <div className="flex items-center gap-1 flex-shrink-0">
@@ -646,14 +704,14 @@ export default function RenterView() {
                 
                 <div className="flex justify-end items-baseline gap-1">
                   <p className={`text-2xl font-bold tabular-nums ${
-                    bills.reduce((sum, b) => {
+                    balanceBills.reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
                         ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
                         : b.remaining;
                       return sum + ronValue;
                     }, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
-                    {bills
+                    {balanceBills
                       .reduce((sum, b) => {
                         const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
                           ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
@@ -663,7 +721,7 @@ export default function RenterView() {
                       .toFixed(2)}
                   </p>
                   <p className={`text-lg font-medium ${
-                    bills.reduce((sum, b) => sum + b.remaining, 0) > 0 ? 'text-amber-400' : 'text-green-400'
+                    balanceBills.reduce((sum, b) => sum + b.remaining, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     RON
                   </p>

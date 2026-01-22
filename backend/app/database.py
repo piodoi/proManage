@@ -344,20 +344,46 @@ class Database:
     def update_payment_notification(self, notification_id: str, updates: Dict[str, Any]) -> Optional[PaymentNotification]:
         return self._impl.update_payment_notification(notification_id, updates)
     
-    def delete_all_payment_notifications(self, landlord_id: str, status: Optional[str] = None) -> int:
-        """Delete all payment notifications for a landlord, optionally filtered by status."""
+    def delete_payment_notification(self, notification_id: str) -> bool:
+        """Delete a single payment notification by ID."""
         from sqlalchemy import text
         with self._impl.engine.connect() as conn:
+            result = conn.execute(
+                text("DELETE FROM payment_notifications WHERE id = :id"),
+                {"id": notification_id}
+            )
+            conn.commit()
+            return result.rowcount > 0
+    
+    def delete_all_payment_notifications(self, landlord_id: str, status: Optional[str] = None, property_id: Optional[str] = None) -> int:
+        """Delete all payment notifications for a landlord, optionally filtered by status and/or property."""
+        from sqlalchemy import text
+        with self._impl.engine.connect() as conn:
+            # Build the query dynamically based on filters
+            query = "DELETE FROM payment_notifications WHERE landlord_id = :landlord_id"
+            params: Dict[str, Any] = {"landlord_id": landlord_id}
+            
             if status and status != 'all':
-                result = conn.execute(
-                    text("DELETE FROM payment_notifications WHERE landlord_id = :landlord_id AND status = :status"),
-                    {"landlord_id": landlord_id, "status": status}
-                )
-            else:
-                result = conn.execute(
-                    text("DELETE FROM payment_notifications WHERE landlord_id = :landlord_id"),
-                    {"landlord_id": landlord_id}
-                )
+                query += " AND status = :status"
+                params["status"] = status
+            
+            if property_id:
+                # Need to join with bills to filter by property
+                query = """
+                    DELETE FROM payment_notifications
+                    WHERE landlord_id = :landlord_id
+                    AND bill_id IN (SELECT id FROM bills WHERE property_id = :property_id)
+                """
+                params["property_id"] = property_id
+                if status and status != 'all':
+                    query = """
+                        DELETE FROM payment_notifications
+                        WHERE landlord_id = :landlord_id
+                        AND status = :status
+                        AND bill_id IN (SELECT id FROM bills WHERE property_id = :property_id)
+                    """
+            
+            result = conn.execute(text(query), params)
             conn.commit()
             return result.rowcount
     

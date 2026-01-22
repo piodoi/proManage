@@ -125,8 +125,10 @@ class PaymentNotification(BaseModel):
     bill_id: str
     renter_id: str  # Who made the payment claim
     landlord_id: str  # Who needs to confirm
-    amount: float  # Amount claimed to be paid
+    amount: float  # Amount claimed to be paid (in payment currency)
     currency: str = "RON"  # Currency of the payment
+    amount_in_bill_currency: Optional[float] = None  # Amount converted to bill currency at time of payment (for stable balance)
+    bill_currency: Optional[str] = None  # Bill's currency at time of payment (for reference)
     status: PaymentNotificationStatus = PaymentNotificationStatus.PENDING
     renter_note: Optional[str] = None  # Optional note from renter
     landlord_note: Optional[str] = None  # Optional note from landlord when confirming/rejecting
@@ -300,6 +302,8 @@ class PaymentNotificationCreate(BaseModel):
     bill_id: str
     amount: float
     currency: str = "RON"
+    amount_in_bill_currency: Optional[float] = None  # Amount converted to bill currency at time of payment
+    bill_currency: Optional[str] = None  # Bill's currency at time of payment
     renter_note: Optional[str] = None
 
 

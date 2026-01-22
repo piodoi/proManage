@@ -1,6 +1,6 @@
 """Payment notification routes for landlords."""
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.models import PaymentNotificationStatus, PaymentNotificationUpdate, BillStatus
@@ -13,6 +13,11 @@ router = APIRouter(prefix="/payment-notifications", tags=["payment-notifications
 class NotificationActionRequest(BaseModel):
     """Request body for confirming/rejecting a payment notification"""
     landlord_note: Optional[str] = None
+
+
+class ClearSelectedRequest(BaseModel):
+    """Request body for clearing selected notifications"""
+    notification_ids: List[str]
 
 
 @router.get("/")
@@ -198,13 +203,38 @@ async def reject_notification(
 @router.delete("/clear-all")
 async def clear_all_notifications(
     status: Optional[str] = None,
+    property_id: Optional[str] = None,
     current_user = Depends(get_current_user)
 ):
     """
     Delete all payment notifications for the current landlord.
     Optionally filter by status: 'pending', 'confirmed', 'rejected', or 'all' for all notifications.
+    Optionally filter by property_id to only delete notifications for a specific property.
     """
-    deleted_count = db.delete_all_payment_notifications(current_user.user_id, status)
+    deleted_count = db.delete_all_payment_notifications(current_user.user_id, status, property_id)
+    
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+        "message": f"Deleted {deleted_count} notification(s)"
+    }
+
+
+@router.post("/clear-selected")
+async def clear_selected_notifications(
+    data: ClearSelectedRequest,
+    current_user = Depends(get_current_user)
+):
+    """
+    Delete specific payment notifications by their IDs.
+    Only deletes notifications that belong to the current landlord.
+    """
+    deleted_count = 0
+    for notification_id in data.notification_ids:
+        notification = db.get_payment_notification(notification_id)
+        if notification and notification.landlord_id == current_user.user_id:
+            db.delete_payment_notification(notification_id)
+            deleted_count += 1
     
     return {
         "status": "success",

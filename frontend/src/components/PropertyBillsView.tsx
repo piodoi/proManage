@@ -439,6 +439,25 @@ export default function PropertyBillsView({
     renterName?: string;
   };
 
+  // Helper function to sort bills: unpaid (ascending by due date), then paid (descending by due date)
+  const sortBillsForDisplay = (billItems: Bill[]): Bill[] => {
+    const unpaidBills = billItems.filter(bill => getEffectiveStatus(bill) !== 'paid');
+    const paidBills = billItems.filter(bill => getEffectiveStatus(bill) === 'paid');
+    
+    // Sort unpaid bills by due_date ascending (soonest first)
+    unpaidBills.sort((a, b) =>
+      new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+    );
+    
+    // Sort paid bills by due_date descending (most recent first)
+    paidBills.sort((a, b) =>
+      new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
+    );
+    
+    // Unpaid bills first, then paid bills
+    return [...unpaidBills, ...paidBills];
+  };
+
   const groupedBills = useMemo((): BillGroup[] => {
     // Separate bills into renter-specific and property-wide
     const renterBills = propertyBills.filter(bill => bill.renter_id);
@@ -469,11 +488,9 @@ export default function PropertyBillsView({
       }
     });
 
-    // Sort each renter rent group by due_date descending and create group objects
+    // Sort each renter rent group: unpaid first (ascending), then paid (descending)
     renterRentBillsMap.forEach((bills, renterId) => {
-      const sortedBills = [...bills].sort((a, b) =>
-        new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
-      );
+      const sortedBills = sortBillsForDisplay(bills);
       const renter = renters.find(r => r.id === renterId);
       groups.push({
         groupKey: `renter-rent-${renterId}`,
@@ -484,12 +501,10 @@ export default function PropertyBillsView({
       });
     });
 
-    // Sort each renter other bills group by due_date descending and create group objects
+    // Sort each renter other bills group: unpaid first (ascending), then paid (descending)
     renterOtherBillsMap.forEach((bills, key) => {
       const renterId = key.split('::')[0];
-      const sortedBills = [...bills].sort((a, b) =>
-        new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
-      );
+      const sortedBills = sortBillsForDisplay(bills);
       const renter = renters.find(r => r.id === renterId);
       groups.push({
         groupKey: `renter-other-${key}`,
@@ -512,11 +527,9 @@ export default function PropertyBillsView({
       descriptionBillsMap.get(key)!.push(bill);
     });
 
-    // Sort each description group by due_date descending and create group objects
+    // Sort each description group: unpaid first (ascending), then paid (descending)
     descriptionBillsMap.forEach((bills) => {
-      const sortedBills = [...bills].sort((a, b) =>
-        new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
-      );
+      const sortedBills = sortBillsForDisplay(bills);
       groups.push({
         groupKey: `desc-${sortedBills[0].description || t('bill.noDescription')}`,
         latestBill: sortedBills[0],
@@ -525,13 +538,26 @@ export default function PropertyBillsView({
       });
     });
 
-    // Sort groups by latest bill due_date descending
-    groups.sort((a, b) =>
-      new Date(b.latestBill.due_date).getTime() - new Date(a.latestBill.due_date).getTime()
-    );
+    // Sort groups: groups with unpaid bills first (by earliest due date), then groups with only paid bills (by most recent due date)
+    groups.sort((a, b) => {
+      const aHasUnpaid = getEffectiveStatus(a.latestBill) !== 'paid' || a.olderBills.some(bill => getEffectiveStatus(bill) !== 'paid');
+      const bHasUnpaid = getEffectiveStatus(b.latestBill) !== 'paid' || b.olderBills.some(bill => getEffectiveStatus(bill) !== 'paid');
+      
+      if (aHasUnpaid && !bHasUnpaid) return -1;
+      if (!aHasUnpaid && bHasUnpaid) return 1;
+      
+      // Both have unpaid or both are paid - sort by the first bill's due date
+      if (aHasUnpaid && bHasUnpaid) {
+        // For groups with unpaid bills, sort by earliest due date (ascending)
+        return new Date(a.latestBill.due_date).getTime() - new Date(b.latestBill.due_date).getTime();
+      } else {
+        // For groups with only paid bills, sort by most recent due date (descending)
+        return new Date(b.latestBill.due_date).getTime() - new Date(a.latestBill.due_date).getTime();
+      }
+    });
 
     return groups;
-  }, [propertyBills, renters, t]);
+  }, [propertyBills, renters, t, pendingStatusChanges]);
 
   return (
     <>

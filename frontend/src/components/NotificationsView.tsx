@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
-import { api, PaymentNotificationWithDetails } from '../api';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { api, PaymentNotificationWithDetails, Property } from '../api';
 import { useAuth } from '../App';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Bell, CheckCircle, XCircle, Clock, Building2, User, FileText, MessageSquare, Trash2 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -21,6 +23,7 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
   const { t, language } = useI18n();
   const { preferences } = usePreferences();
   const [notifications, setNotifications] = useState<PaymentNotificationWithDetails[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
@@ -30,6 +33,22 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
   const [processing, setProcessing] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [selectedPropertyFilter, setSelectedPropertyFilter] = useState<string>('all');
+  const [selectedNotificationIds, setSelectedNotificationIds] = useState<Set<string>>(new Set());
+
+  // Load properties for filter dropdown
+  useEffect(() => {
+    const loadProperties = async () => {
+      if (!token) return;
+      try {
+        const data = await api.properties.list(token);
+        setProperties(data);
+      } catch (err) {
+        console.error('Failed to load properties:', err);
+      }
+    };
+    loadProperties();
+  }, [token]);
 
   const loadNotifications = useCallback(async () => {
     if (!token) return;
@@ -43,6 +62,9 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
       if (activeTab === 'pending' && onCountChange) {
         onCountChange(data.length);
       }
+      
+      // Clear selection when reloading
+      setSelectedNotificationIds(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
@@ -67,6 +89,25 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
     };
     loadPendingCount();
   }, [token, onCountChange]);
+
+  // Filter notifications by property
+  const filteredNotifications = useMemo(() => {
+    if (selectedPropertyFilter === 'all') {
+      return notifications;
+    }
+    return notifications.filter(n => n.property?.id === selectedPropertyFilter);
+  }, [notifications, selectedPropertyFilter]);
+
+  // Get unique properties from notifications for the filter
+  const notificationProperties = useMemo(() => {
+    const propertyMap = new Map<string, { id: string; name: string }>();
+    notifications.forEach(n => {
+      if (n.property) {
+        propertyMap.set(n.property.id, { id: n.property.id, name: n.property.name });
+      }
+    });
+    return Array.from(propertyMap.values());
+  }, [notifications]);
 
   const handleAction = async () => {
     if (!token || !selectedNotification || !actionType) return;
@@ -108,7 +149,8 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
     setClearing(true);
     try {
       const status = activeTab === 'all' ? undefined : activeTab;
-      const result = await api.paymentNotifications.clearAll(token, status);
+      const propertyId = selectedPropertyFilter !== 'all' ? selectedPropertyFilter : undefined;
+      await api.paymentNotifications.clearAll(token, status, propertyId);
       
       setShowClearConfirm(false);
       loadNotifications();
@@ -122,6 +164,50 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
       setError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
       setClearing(false);
+    }
+  };
+
+  const handleClearSelected = async () => {
+    if (!token || selectedNotificationIds.size === 0) return;
+    
+    setClearing(true);
+    try {
+      await api.paymentNotifications.clearSelected(token, Array.from(selectedNotificationIds));
+      
+      setSelectedNotificationIds(new Set());
+      loadNotifications();
+      
+      // Refresh pending count
+      if (onCountChange) {
+        const { count } = await api.paymentNotifications.count(token);
+        onCountChange(count);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const toggleNotificationSelection = (notificationId: string) => {
+    setSelectedNotificationIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(notificationId)) {
+        newSet.delete(notificationId);
+      } else {
+        newSet.add(notificationId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedNotificationIds.size === filteredNotifications.length) {
+      // Deselect all
+      setSelectedNotificationIds(new Set());
+    } else {
+      // Select all filtered notifications
+      setSelectedNotificationIds(new Set(filteredNotifications.map(n => n.notification.id)));
     }
   };
 
@@ -175,44 +261,99 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="flex items-center justify-between mb-4">
-              <TabsList className="bg-slate-700">
-                <TabsTrigger value="pending" className="data-[state=active]:bg-slate-600">
-                  {t('notifications.pendingPayments')}
-                </TabsTrigger>
-                <TabsTrigger value="confirmed" className="data-[state=active]:bg-slate-600">
-                  {t('notifications.confirmedPayments')}
-                </TabsTrigger>
-                <TabsTrigger value="rejected" className="data-[state=active]:bg-slate-600">
-                  {t('notifications.rejectedPayments')}
-                </TabsTrigger>
-                <TabsTrigger value="all" className="data-[state=active]:bg-slate-600">
-                  {t('notifications.allNotifications')}
-                </TabsTrigger>
-              </TabsList>
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="flex items-center justify-between">
+                <TabsList className="bg-slate-700">
+                  <TabsTrigger value="pending" className="data-[state=active]:bg-slate-600">
+                    {t('notifications.pendingPayments')}
+                  </TabsTrigger>
+                  <TabsTrigger value="confirmed" className="data-[state=active]:bg-slate-600">
+                    {t('notifications.confirmedPayments')}
+                  </TabsTrigger>
+                  <TabsTrigger value="rejected" className="data-[state=active]:bg-slate-600">
+                    {t('notifications.rejectedPayments')}
+                  </TabsTrigger>
+                  <TabsTrigger value="all" className="data-[state=active]:bg-slate-600">
+                    {t('notifications.allNotifications')}
+                  </TabsTrigger>
+                </TabsList>
+              </div>
               
-              {notifications.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowClearConfirm(true)}
-                  className="border-red-600 text-red-400 hover:bg-red-900/50"
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  {t('notifications.clearAll')}
-                </Button>
-              )}
+              {/* Filter and action row */}
+              <div className="flex items-center justify-between gap-4">
+                {/* Property filter */}
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-slate-400" />
+                  <Select
+                    value={selectedPropertyFilter}
+                    onValueChange={setSelectedPropertyFilter}
+                  >
+                    <SelectTrigger className="w-48 bg-slate-700 border-slate-600 text-slate-200">
+                      <SelectValue placeholder={t('notifications.filterByProperty') || 'Filter by property'} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="all" className="text-slate-200 hover:bg-slate-700">
+                        {t('notifications.allProperties') || 'All Properties'}
+                      </SelectItem>
+                      {notificationProperties.map((prop) => (
+                        <SelectItem
+                          key={prop.id}
+                          value={prop.id}
+                          className="text-slate-200 hover:bg-slate-700"
+                        >
+                          {prop.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Action buttons */}
+                <div className="flex items-center gap-2">
+                  {selectedNotificationIds.size > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearSelected}
+                      disabled={clearing}
+                      className="border-red-600 text-red-400 hover:bg-red-900/50"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      {t('notifications.clearSelected') || 'Clear Selected'} ({selectedNotificationIds.size})
+                    </Button>
+                  )}
+                  {filteredNotifications.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowClearConfirm(true)}
+                      className="border-red-600 text-red-400 hover:bg-red-900/50"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      {t('notifications.clearAll')}
+                      {selectedPropertyFilter !== 'all' && ` (${filteredNotifications.length})`}
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <TabsContent value={activeTab} className="mt-0">
               {loading ? (
                 <div className="text-slate-400 text-center py-8">{t('common.loading')}</div>
-              ) : notifications.length === 0 ? (
+              ) : filteredNotifications.length === 0 ? (
                 <div className="text-slate-400 text-center py-8">{t('notifications.noNotifications')}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow className="border-slate-700">
+                      <TableHead className="text-slate-400 w-10">
+                        <Checkbox
+                          checked={selectedNotificationIds.size === filteredNotifications.length && filteredNotifications.length > 0}
+                          onCheckedChange={toggleSelectAll}
+                          className="border-slate-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                        />
+                      </TableHead>
                       <TableHead className="text-slate-400">{t('notifications.notificationDate')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.property')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.notes')}</TableHead>
@@ -224,13 +365,21 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {notifications.map((item) => {
+                    {filteredNotifications.map((item) => {
                       // Check if this is a contract expiry notification (no bill, amount = 0)
                       const isContractExpiry = !item.notification.bill_id || item.notification.amount === 0;
                       const hasNotes = item.notification.renter_note || item.notification.landlord_note;
+                      const isSelected = selectedNotificationIds.has(item.notification.id);
                       
                       return (
-                        <TableRow key={item.notification.id} className="border-slate-700">
+                        <TableRow key={item.notification.id} className={`border-slate-700 ${isSelected ? 'bg-slate-700/50' : ''}`}>
+                          <TableCell>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleNotificationSelection(item.notification.id)}
+                              className="border-slate-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                            />
+                          </TableCell>
                           <TableCell className="text-slate-300">
                             {formatDate(item.notification.created_at)}
                           </TableCell>
@@ -421,7 +570,10 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
               {t('notifications.clearAll')}
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              {t('notifications.clearAllConfirm')}
+              {selectedPropertyFilter !== 'all' 
+                ? (t('notifications.clearAllForPropertyConfirm') || `This will delete all ${activeTab !== 'all' ? activeTab : ''} notifications for the selected property.`)
+                : t('notifications.clearAllConfirm')
+              }
             </DialogDescription>
           </DialogHeader>
           

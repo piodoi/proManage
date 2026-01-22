@@ -161,9 +161,20 @@ export const api = {
         body: { landlord_note: note },
         token
       }),
-    clearAll: (token: string, status?: string) =>
-      request<{ status: string; deleted_count: number; message: string }>(`/payment-notifications/clear-all${status ? `?status=${status}` : ''}`, {
+    clearAll: (token: string, status?: string, propertyId?: string) => {
+      const params = new URLSearchParams();
+      if (status) params.append('status', status);
+      if (propertyId) params.append('property_id', propertyId);
+      const queryString = params.toString();
+      return request<{ status: string; deleted_count: number; message: string }>(`/payment-notifications/clear-all${queryString ? `?${queryString}` : ''}`, {
         method: 'DELETE',
+        token
+      });
+    },
+    clearSelected: (token: string, notificationIds: string[]) =>
+      request<{ status: string; deleted_count: number; message: string }>('/payment-notifications/clear-selected', {
+        method: 'POST',
+        body: { notification_ids: notificationIds },
         token
       }),
   },
@@ -466,6 +477,7 @@ export type RenterInfo = {
   landlord_iban_usd?: string | null;  // Landlord's USD IBAN for rent payments
   landlord_name?: string | null;  // Landlord's name for rent payments
   rent_currency?: string;  // Landlord's preferred rent currency
+  rent_warning_days?: number;  // Number of days before due date to include bills in balance
 };
 
 export type RenterBill = {
