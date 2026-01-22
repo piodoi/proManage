@@ -174,7 +174,9 @@
     "paymentNotificationSent": "Notificare de plată trimisă cu succes",
     "paymentNotificationPending": "Notificare de plată în așteptare",
     "paymentNotificationConfirmed": "Plată confirmată de proprietar",
-    "paymentNotificationRejected": "Plată respinsă de proprietar"
+    "paymentNotificationRejected": "Plată respinsă de proprietar",
+    "payingMore": "Plătești mai mult decât suma facturii. Diferența va fi adăugată la soldul tău.",
+    "payingLess": "Plătești mai puțin decât suma facturii. Restul va rămâne pe soldul tău."
   },
   "bill": {
     "bills": "Facturi",
@@ -513,7 +515,8 @@
     "confirmationFailed": "Confirmare eșuată",
     "deleteFailed": "Ștergere eșuată",
     "saveFailed": "Salvare eșuată",
-    "loadFailed": "Încărcare date eșuată"
+    "loadFailed": "Încărcare date eșuată",
+    "invalidAmount": "Te rog introdu o sumă validă"
   },
   "addressWarning": {
     "title": "Avertisment Neconcordanță Adresă",

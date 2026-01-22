@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -38,6 +39,9 @@ export default function RenterView() {
   const [selectedIbanCurrency, setSelectedIbanCurrency] = useState<string | null>(null);
   const [notifyingPayment, setNotifyingPayment] = useState(false);
   const [paymentNote, setPaymentNote] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [paymentCurrency, setPaymentCurrency] = useState<string>('RON');
+  const [previousPaymentCurrency, setPreviousPaymentCurrency] = useState<string>('RON');
 
   // Toggle group expansion
   const toggleGroup = (groupKey: string) => {
@@ -178,20 +182,45 @@ export default function RenterView() {
     setPayingBill(bill);
     setCopiedField(null);
     setPaymentNote('');
+    // Set default payment amount to remaining bill amount
+    setPaymentAmount(bill.remaining.toFixed(2));
+    // Set default payment currency to bill currency
+    const billCurrency = bill.bill.currency || 'RON';
+    setPaymentCurrency(billCurrency);
+    setPreviousPaymentCurrency(billCurrency);
     // Set default IBAN currency when opening dialog
     setSelectedIbanCurrency(getDefaultIbanCurrency());
+  };
+
+  // Handle payment currency change - auto-convert amount
+  const handlePaymentCurrencyChange = (newCurrency: string) => {
+    if (paymentAmount && balance?.exchange_rates && previousPaymentCurrency !== newCurrency) {
+      const currentAmount = parseFloat(paymentAmount);
+      if (!isNaN(currentAmount) && currentAmount > 0) {
+        const convertedAmount = convertAmount(currentAmount, previousPaymentCurrency, newCurrency);
+        setPaymentAmount(convertedAmount.toFixed(2));
+      }
+    }
+    setPreviousPaymentCurrency(newCurrency);
+    setPaymentCurrency(newCurrency);
   };
 
   // Handle "I made the transfer" button click
   const handleNotifyPayment = async () => {
     if (!payingBill || !token) return;
     
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError(t('errors.invalidAmount') || 'Please enter a valid amount');
+      return;
+    }
+    
     setNotifyingPayment(true);
     try {
       const data: PaymentNotificationCreate = {
         bill_id: payingBill.bill.id,
-        amount: payingBill.remaining,
-        currency: payingBill.bill.currency || 'RON',
+        amount: amount,
+        currency: paymentCurrency,
         renter_note: paymentNote || undefined,
       };
       
@@ -203,6 +232,8 @@ export default function RenterView() {
       
       setPayingBill(null);
       setPaymentNote('');
+      setPaymentAmount('');
+      setPaymentCurrency('RON');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
@@ -589,20 +620,20 @@ export default function RenterView() {
               <CardContent className="pt-6">
                 <p className="text-slate-400 text-sm mb-3">{t('renter.balance')}</p>
                 
-                {/* Bills breakdown inside balance card - all unpaid bills */}
-                {bills.filter(b => b.bill.status !== 'paid').length > 0 && (
+                {/* Bills breakdown inside balance card - all bills with non-zero remaining balance */}
+                {bills.filter(b => b.remaining !== 0).length > 0 && (
                   <div className="mb-3 space-y-0.5 text-xs">
-                    {bills.filter(b => b.bill.status !== 'paid').map((item) => (
-                      <div key={item.bill.id} className="flex justify-between items-center text-slate-400">
+                    {bills.filter(b => b.remaining !== 0).map((item) => (
+                      <div key={item.bill.id} className={`flex justify-between items-center ${item.remaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
                         <span className="truncate mr-2">{item.bill.description}</span>
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {item.bill.currency && item.bill.currency !== 'RON' && (
-                            <span className="whitespace-nowrap">{item.bill.amount.toFixed(2)} {item.bill.currency} /</span>
+                            <span className="whitespace-nowrap">{item.remaining.toFixed(2)} {item.bill.currency} /</span>
                           )}
                           <span className="tabular-nums text-right min-w-[60px]">
-                            {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON' 
-                              ? (item.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
-                              : item.bill.amount.toFixed(2)
+                            {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON'
+                              ? (item.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
+                              : item.remaining.toFixed(2)
                             }
                           </span>
                           <span className="w-8 text-left">RON</span>
@@ -615,25 +646,24 @@ export default function RenterView() {
                 
                 <div className="flex justify-end items-baseline gap-1">
                   <p className={`text-2xl font-bold tabular-nums ${
-                    bills.filter(b => b.bill.status !== 'paid').reduce((sum, b) => {
+                    bills.reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                        ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                        : b.bill.amount;
+                        ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                        : b.remaining;
                       return sum + ronValue;
                     }, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     {bills
-                      .filter(b => b.bill.status !== 'paid')
                       .reduce((sum, b) => {
                         const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                          ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                          : b.bill.amount;
+                          ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                          : b.remaining;
                         return sum + ronValue;
                       }, 0)
                       .toFixed(2)}
                   </p>
                   <p className={`text-lg font-medium ${
-                    bills.filter(b => b.bill.status !== 'paid').reduce((sum, b) => sum + b.bill.amount, 0) > 0 ? 'text-amber-400' : 'text-green-400'
+                    bills.reduce((sum, b) => sum + b.remaining, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     RON
                   </p>
@@ -1032,6 +1062,64 @@ export default function RenterView() {
                 <p className="text-slate-300 text-sm mb-2">
                   {t('renter.notifyPaymentDescription') || 'After making the transfer, notify the landlord:'}
                 </p>
+                
+                {/* Payment Amount and Currency */}
+                <div className="space-y-2 mb-4">
+                  <label className="text-slate-400 text-xs">
+                    {t('renter.paymentAmount') || 'Amount Paid'}
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder={payingBill?.remaining.toFixed(2) || '0.00'}
+                      className="bg-slate-900 border-slate-600 text-slate-200 placeholder:text-slate-500 flex-1"
+                    />
+                    <Select
+                      value={paymentCurrency}
+                      onValueChange={handlePaymentCurrencyChange}
+                    >
+                      <SelectTrigger className="bg-slate-900 border-slate-600 text-slate-200 w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="RON" className="text-slate-200 hover:bg-slate-700">RON</SelectItem>
+                        <SelectItem value="EUR" className="text-slate-200 hover:bg-slate-700">EUR</SelectItem>
+                        <SelectItem value="USD" className="text-slate-200 hover:bg-slate-700">USD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {payingBill && paymentAmount && (() => {
+                    const enteredAmount = parseFloat(paymentAmount);
+                    if (isNaN(enteredAmount)) return null;
+                    
+                    const billCurrency = payingBill.bill.currency || 'RON';
+                    // Convert entered amount to bill currency for comparison
+                    const enteredAmountInBillCurrency = paymentCurrency === billCurrency
+                      ? enteredAmount
+                      : convertAmount(enteredAmount, paymentCurrency, billCurrency);
+                    
+                    // Use a small tolerance for floating point comparison
+                    const difference = enteredAmountInBillCurrency - payingBill.remaining;
+                    if (Math.abs(difference) < 0.01) return null;
+                    
+                    const displayRemaining = paymentCurrency === billCurrency
+                      ? payingBill.remaining
+                      : convertAmount(payingBill.remaining, billCurrency, paymentCurrency);
+                    
+                    return (
+                      <p className="text-xs text-amber-400">
+                        {difference > 0
+                          ? t('renter.payingMore') || `You're paying more than the bill amount (${displayRemaining.toFixed(2)} ${paymentCurrency}). The extra will be added to your balance.`
+                          : t('renter.payingLess') || `You're paying less than the bill amount (${displayRemaining.toFixed(2)} ${paymentCurrency}). The remaining will stay on your balance.`
+                        }
+                      </p>
+                    );
+                  })()}
+                </div>
                 
                 {/* Optional note */}
                 <div className="space-y-2 mb-4">

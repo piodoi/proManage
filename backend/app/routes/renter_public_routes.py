@@ -100,6 +100,9 @@ async def renter_bills(token: str):
     property_suppliers = db.list_property_suppliers(renter.property_id)
     direct_debit_by_property_supplier = {ps.id: ps.direct_debit for ps in property_suppliers}
     
+    # Get exchange rates for currency conversion
+    exchange_rates = await get_exchange_rates()
+    
     result = []
     for bill in bills:
         bill = calculate_bill_status(bill)
@@ -109,9 +112,35 @@ async def renter_bills(token: str):
         
         # Check if there's a pending notification from this renter
         has_pending_notification = any(
-            n.renter_id == renter.id and n.status == PaymentNotificationStatus.PENDING 
+            n.renter_id == renter.id and n.status == PaymentNotificationStatus.PENDING
             for n in notifications
         )
+        
+        # Calculate paid amount from confirmed notifications
+        # Convert all confirmed notification amounts to bill currency
+        bill_currency = bill.currency or "RON"
+        paid_amount = 0.0
+        has_confirmed_notifications = False
+        for n in notifications:
+            if n.status == PaymentNotificationStatus.CONFIRMED:
+                has_confirmed_notifications = True
+                # Convert notification amount to bill currency
+                notification_currency = n.currency or "RON"
+                if notification_currency == bill_currency:
+                    paid_amount += n.amount
+                else:
+                    # Convert to bill currency
+                    converted = convert_currency(n.amount, notification_currency, bill_currency, exchange_rates)
+                    paid_amount += converted
+        
+        # Calculate remaining amount (can be negative if overpaid = credit)
+        # If bill is marked as paid but has no confirmed notifications, remaining is 0
+        # (bill was paid through other means, e.g., manually marked as paid)
+        if bill.status == BillStatus.PAID and not has_confirmed_notifications:
+            remaining = 0.0
+            paid_amount = bill.amount  # Assume full amount was paid
+        else:
+            remaining = bill.amount - paid_amount  # Can be negative (credit)
         
         # Check if this bill's property supplier has direct_debit enabled
         is_direct_debit = False
@@ -125,8 +154,8 @@ async def renter_bills(token: str):
         
         result.append({
             "bill": bill,
-            "paid_amount": 0,  # Will be updated when landlord confirms payment
-            "remaining": bill.amount,
+            "paid_amount": paid_amount,
+            "remaining": remaining,
             "is_direct_debit": is_direct_debit,
             "has_pdf": has_pdf,
             "has_pending_notification": has_pending_notification,
@@ -172,14 +201,35 @@ async def renter_balance(token: str):
     total_paid_original = 0.0
     
     for bill in bills:
+        bill_currency_original = bill.currency if bill.currency else "RON"
+        bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
+        
+        # Get confirmed payment notifications for this bill
+        notifications = db.list_payment_notifications_by_bill(bill.id)
+        paid_for_bill = 0.0
+        has_confirmed_notifications = False
+        for n in notifications:
+            if n.status == PaymentNotificationStatus.CONFIRMED:
+                has_confirmed_notifications = True
+                notification_currency = n.currency or "RON"
+                paid_converted = convert_currency(n.amount, notification_currency, bill_currency, exchange_rates)
+                paid_for_bill += paid_converted
+        
+        # Handle paid bills without notifications (manually marked as paid)
+        if bill.status == BillStatus.PAID and not has_confirmed_notifications:
+            # Bill was paid through other means, count full amount as paid
+            paid_for_bill = bill_amount_converted
+        
         # Include all unpaid/pending bills in the balance (including direct debit)
         if bill.status != BillStatus.PAID:
-            bill_currency_original = bill.currency if bill.currency else "RON"
-            bill_amount_converted = convert_currency(bill.amount, bill_currency_original, bill_currency, exchange_rates)
-            
-            total_due_original += bill_amount_converted
+            # Calculate remaining amount for this bill (can be negative = credit)
+            remaining = bill_amount_converted - paid_for_bill
+            total_due_original += remaining
+        
+        # Add to total paid
+        total_paid_original += paid_for_bill
     
-    balance_original = total_due_original - total_paid_original
+    balance_original = total_due_original  # Balance is just the remaining due amount
     
     response = {
         "total_due": total_due_original,

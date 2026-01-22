@@ -166,7 +166,9 @@
     "paymentNotificationSent": "Payment notification sent successfully",
     "paymentNotificationPending": "Payment notification pending",
     "paymentNotificationConfirmed": "Payment confirmed by landlord",
-    "paymentNotificationRejected": "Payment rejected by landlord"
+    "paymentNotificationRejected": "Payment rejected by landlord",
+    "payingMore": "You're paying more than the bill amount. The extra will be added to your balance.",
+    "payingLess": "You're paying less than the bill amount. The remaining will stay on your balance."
   },
   "bill": {
     "bills": "Bills",
@@ -520,7 +522,8 @@
     "confirmationFailed": "Confirmation failed",
     "deleteFailed": "Failed to delete",
     "saveFailed": "Failed to save",
-    "loadFailed": "Failed to load data"
+    "loadFailed": "Failed to load data",
+    "invalidAmount": "Please enter a valid amount"
   },
   "addressWarning": {
     "title": "Address Mismatch Warning",
