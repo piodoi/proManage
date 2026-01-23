@@ -397,6 +397,8 @@ async def parse_bill_pdf(
     # Auto-add supplier to property if matched pattern has a supplier
     supplier_added = False
     supplier_message = None
+    contract_id_from_pdf = result.get("contract_id")
+    
     if result.get("matched_pattern_supplier"):
         # Initialize suppliers to ensure they exist in database
         initialize_suppliers()
@@ -415,14 +417,22 @@ async def parse_bill_pdf(
             # Check if supplier is already added to property
             existing = db.get_property_supplier_by_supplier(property_id, matched_supplier.id)
             if not existing:
-                # Auto-add supplier to property
+                # Auto-add supplier to property with contract_id if available
                 property_supplier = PropertySupplier(
                     property_id=property_id,
                     supplier_id=matched_supplier.id,
+                    contract_id=contract_id_from_pdf,  # Save contract_id from PDF
                 )
                 db.save_property_supplier(property_supplier)
                 supplier_added = True
-                logger.info(f"[PDF Parse] Auto-added supplier '{matched_supplier.name}' to property {property_id}")
+                logger.info(f"[PDF Parse] Auto-added supplier '{matched_supplier.name}' to property {property_id}" +
+                           (f" with contract_id: {contract_id_from_pdf}" if contract_id_from_pdf else ""))
+            else:
+                # Supplier already exists - update contract_id if we have one and it's different
+                if contract_id_from_pdf and existing.contract_id != contract_id_from_pdf:
+                    existing.contract_id = contract_id_from_pdf
+                    db.save_property_supplier(existing)
+                    logger.info(f"[PDF Parse] Updated PropertySupplier for '{matched_supplier.name}' with contract_id: {contract_id_from_pdf}")
             
             # Add message about supplier being added
             if matched_supplier.has_api:
@@ -613,13 +623,18 @@ async def create_bill_from_pdf(
             logger.error(f"[Create Bill from PDF] Failed to save PDF for bill {bill.id}: {pdf_err}")
     
     # Save contract_id to PropertySupplier if resolved and contract_id exists
+    # This helps with future matching by storing the contract_id from parsed bills
     contract_id_from_data = data.get("contract_id")
     if property_supplier_id and contract_id_from_data:
         # Get the PropertySupplier by its ID
         property_supplier = db.get_property_supplier(property_supplier_id)
-        if property_supplier and not property_supplier.contract_id:
-            property_supplier.contract_id = contract_id_from_data
-            db.save_property_supplier(property_supplier)
+        if property_supplier:
+            # Always update contract_id if we have one from the bill
+            # This ensures the PropertySupplier has the latest contract_id for future matching
+            if property_supplier.contract_id != contract_id_from_data:
+                property_supplier.contract_id = contract_id_from_data
+                db.save_property_supplier(property_supplier)
+                logger.info(f"[Create Bill from PDF] Updated PropertySupplier {property_supplier_id} with contract_id: {contract_id_from_data}")
     
     return {
         "bill": bill,

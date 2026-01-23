@@ -371,6 +371,20 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
             bills_created += 1
             logger.info(f"[Save Bills] Created bill: {description}, amount={bill.amount}, property={property_id}")
             
+            # Save contract_id to PropertySupplier if resolved and contract_id exists
+            # This helps with future matching by storing the contract_id from parsed bills
+            contract_id_from_data = bill_data.get("contract_id")
+            if property_supplier_id and contract_id_from_data:
+                # Get the PropertySupplier by its ID
+                property_supplier = db.get_property_supplier(property_supplier_id)
+                if property_supplier:
+                    # Always update contract_id if we have one from the bill
+                    # This ensures the PropertySupplier has the latest contract_id for future matching
+                    if property_supplier.contract_id != contract_id_from_data:
+                        property_supplier.contract_id = contract_id_from_data
+                        db.save_property_supplier(property_supplier)
+                        logger.info(f"[Save Bills] Updated PropertySupplier {property_supplier_id} with contract_id: {contract_id_from_data}")
+            
             # Save PDF file if pdf_data_base64 is provided
             pdf_data_base64 = bill_data.get("pdf_data_base64")
             if pdf_data_base64:
