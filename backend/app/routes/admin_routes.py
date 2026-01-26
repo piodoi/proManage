@@ -16,6 +16,7 @@ from app.database import db
 from app.routes.auth_routes import hash_password
 from app.paths import USERDATA_DIR, TEXT_PATTERNS_DIR
 from app.utils.suppliers import save_suppliers_to_json
+from app.contract_expiry_checker import check_and_notify_expiring_contracts
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -308,3 +309,27 @@ async def copy_user_pattern_to_admin(
         "supplier_id": supplier.id,
         "message": f"Supplier '{supplier_name}' created successfully with pattern '{safe_id}'"
     }
+
+
+# ========================================================================
+# Contract Expiry Check Route (manual trigger)
+# ========================================================================
+
+@router.post("/check-contract-expiry")
+async def trigger_contract_expiry_check(_: TokenData = Depends(require_admin)):
+    """
+    Manually trigger the contract expiry check.
+    This is useful for testing or running the check outside the scheduled time.
+    """
+    try:
+        result = await check_and_notify_expiring_contracts()
+        return {
+            "status": "success",
+            "emails_sent": result['emails_sent'],
+            "notifications_created": result['notifications_created'],
+            "skipped": result['skipped'],
+            "message": f"Contract expiry check complete. {result['emails_sent']} emails sent, {result['notifications_created']} notifications created."
+        }
+    except Exception as e:
+        logger.error(f"Contract expiry check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Contract expiry check failed: {str(e)}")

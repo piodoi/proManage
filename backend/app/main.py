@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import logging
 import asyncio
 import sys
+from contextlib import asynccontextmanager
+from datetime import datetime, time, timedelta
 
 from app.routes import (
     auth_router,
@@ -24,6 +26,7 @@ from app.routes.subscription_routes import router as subscription_router
 from app.routes.text_pattern_routes import router as text_pattern_router
 from app.routes.stripe_routes import router as stripe_router
 from app.utils.suppliers import initialize_suppliers
+from app.contract_expiry_checker import check_and_notify_expiring_contracts
 
 load_dotenv()
 
@@ -88,7 +91,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request, call_next):
-    print(f"[DEBUG] {request.method} {request.url} - Host: {request.headers.get('host')}")
+    #print(f"[DEBUG] {request.method} {request.url} - Host: {request.headers.get('host')}")
     response = await call_next(request)
     return response
 
@@ -110,16 +113,86 @@ app.include_router(stripe_router)
 app.include_router(payment_notifications_router)
 
 
+# Background task for contract expiry check
+_scheduler_task = None
+_scheduler_running = False
+
+
+async def contract_expiry_scheduler():
+    """Background task that runs contract expiry check daily at 8:00 AM."""
+    global _scheduler_running
+    _scheduler_running = True
+    
+    logger.info("[Scheduler] Contract expiry scheduler started")
+    
+    while _scheduler_running:
+        try:
+            # Calculate time until next 8:00 AM
+            now = datetime.now()
+            target_time = time(8, 0, 0)  # 8:00 AM
+            
+            if now.time() >= target_time:
+                # Already past 8 AM today, schedule for tomorrow
+                next_run = datetime.combine(now.date(), target_time) + timedelta(days=1)
+            else:
+                # Schedule for today
+                next_run = datetime.combine(now.date(), target_time)
+            
+            wait_seconds = (next_run - now).total_seconds()
+            logger.info(f"[Scheduler] Next contract expiry check in {wait_seconds/3600:.1f} hours")
+            
+            # Wait until next scheduled time
+            await asyncio.sleep(wait_seconds)
+            
+            if not _scheduler_running:
+                break
+            
+            # Run the contract expiry check
+            logger.info("[Scheduler] Running scheduled contract expiry check...")
+            try:
+                result = await check_and_notify_expiring_contracts()
+                logger.info(f"[Scheduler] Contract expiry check complete: {result}")
+            except Exception as e:
+                logger.error(f"[Scheduler] Contract expiry check failed: {e}")
+            
+        except asyncio.CancelledError:
+            logger.info("[Scheduler] Contract expiry scheduler cancelled")
+            break
+        except Exception as e:
+            logger.error(f"[Scheduler] Scheduler error: {e}")
+            # Wait a bit before retrying
+            await asyncio.sleep(60)
+    
+    logger.info("[Scheduler] Contract expiry scheduler stopped")
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize suppliers from JSON files on startup."""
+    global _scheduler_task
     initialize_suppliers()
+    
+    # Start the contract expiry scheduler
+    _scheduler_task = asyncio.create_task(contract_expiry_scheduler())
+    logger.info("[Startup] Contract expiry scheduler task created")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
+    global _scheduler_running, _scheduler_task
+    
     logger.info("Shutting down application...")
+    
+    # Stop the scheduler
+    _scheduler_running = False
+    if _scheduler_task:
+        _scheduler_task.cancel()
+        try:
+            await _scheduler_task
+        except asyncio.CancelledError:
+            pass
+    
     # Give connections time to close gracefully
     await asyncio.sleep(0.1)
 
