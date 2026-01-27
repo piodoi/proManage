@@ -14,9 +14,11 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send, CreditCard } from 'lucide-react';
+import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
+import { TransactionResponse } from '../utils/utility';
 
 // Type for available IBAN options
 type IbanOption = {
@@ -42,6 +44,10 @@ export default function RenterView() {
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentCurrency, setPaymentCurrency] = useState<string>('RON');
   const [previousPaymentCurrency, setPreviousPaymentCurrency] = useState<string>('RON');
+  
+  // Utility payment dialog state
+  const [showUtilityPayment, setShowUtilityPayment] = useState(false);
+  const [utilityPaymentBill, setUtilityPaymentBill] = useState<RenterBill | null>(null);
 
   // Toggle group expansion
   const toggleGroup = (groupKey: string) => {
@@ -579,6 +585,21 @@ export default function RenterView() {
                                 >
                                   {t('renter.pay')}
                                 </Button>
+                                {/* Pay Online button - show for utility bills with bill number (used as barcode) */}
+                                {item.bill.bill_type !== 'rent' && item.bill.bill_number && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setUtilityPaymentBill(item);
+                                      setShowUtilityPayment(true);
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                    title={t('utility.payOnlineBtn')}
+                                  >
+                                    <CreditCard className="w-4 h-4 mr-1" />
+                                    {t('utility.payOnlineBtn')}
+                                  </Button>
+                                )}
                                 {item.is_direct_debit && (
                                   <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
                                     {t('bill.directDebit')}
@@ -1223,6 +1244,27 @@ export default function RenterView() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        
+        {/* Utility Payment Dialog */}
+        <UtilityPaymentDialog
+          open={showUtilityPayment}
+          onClose={() => {
+            setShowUtilityPayment(false);
+            setUtilityPaymentBill(null);
+          }}
+          billBarcode={utilityPaymentBill?.bill.bill_number || ''}
+          mode="renter"
+          onSuccess={(transaction: TransactionResponse) => {
+            // Reload bills to show updated status
+            if (token) {
+              api.renter.bills(token)
+                .then(setBills)
+                .catch((err) => setError(err instanceof Error ? err.message : t('errors.generic')));
+            }
+            setShowUtilityPayment(false);
+            setUtilityPaymentBill(null);
+          }}
+        />
       </main>
     </div>
   );

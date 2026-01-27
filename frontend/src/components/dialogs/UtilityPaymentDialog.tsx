@@ -1,28 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Typography,
-  Box,
-  CircularProgress,
-  Alert,
-  Stepper,
-  Step,
-  StepLabel,
-  Paper,
-  Divider,
-} from '@mui/material';
-import { useUtilityPayment } from '../hooks/useUtilityPayment';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Loader2, CheckCircle2, AlertCircle, ChevronRight, ArrowLeft } from 'lucide-react';
+import { useUtilityPayment } from '../../hooks/useUtilityPayment';
+import { useI18n } from '../../lib/i18n';
 import {
   SupplierMatch,
   BalanceResponse,
   TransactionResponse,
   PaymentFieldsData,
-} from '../types/utility';
+} from '../../utils/utility';
 
 interface UtilityPaymentDialogProps {
   open: boolean;
@@ -34,7 +26,7 @@ interface UtilityPaymentDialogProps {
   mode: 'landlord' | 'renter';
 }
 
-const steps = ['Identify Supplier', 'Verify Amount', 'Confirm Payment'];
+const steps = ['utility.step.identify', 'utility.step.verify', 'utility.step.confirm'];
 
 export function UtilityPaymentDialog({
   open,
@@ -45,6 +37,7 @@ export function UtilityPaymentDialog({
   onSuccess,
   mode,
 }: UtilityPaymentDialogProps) {
+  const { t } = useI18n();
   const { matchBarcode, getBalance, payBill, loading, error, clearError } = useUtilityPayment();
 
   const [activeStep, setActiveStep] = useState(0);
@@ -145,169 +138,233 @@ export function UtilityPaymentDialog({
     onClose();
   };
 
+  // Step indicator component
+  const StepIndicator = () => (
+    <div className="flex items-center justify-center mb-6">
+      {steps.map((step, index) => (
+        <React.Fragment key={step}>
+          <div className="flex flex-col items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                index < activeStep
+                  ? 'bg-emerald-600 text-white'
+                  : index === activeStep
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-600 text-slate-400'
+              }`}
+            >
+              {index < activeStep ? (
+                <CheckCircle2 className="w-5 h-5" />
+              ) : (
+                index + 1
+              )}
+            </div>
+            <span className={`text-xs mt-1 ${
+              index <= activeStep ? 'text-slate-200' : 'text-slate-500'
+            }`}>
+              {t(step)}
+            </span>
+          </div>
+          {index < steps.length - 1 && (
+            <div
+              className={`w-12 h-0.5 mx-2 ${
+                index < activeStep ? 'bg-emerald-600' : 'bg-slate-600'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+
   const renderStepContent = () => {
     switch (activeStep) {
       case 0:
         // Step 1: Barcode input and supplier matching
         return (
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Enter the barcode from your utility bill to identify the supplier.
-            </Typography>
-            <TextField
-              fullWidth
-              label="Barcode"
-              value={paymentFields.barcode || ''}
-              onChange={(e) =>
-                setPaymentFields({ ...paymentFields, barcode: e.target.value })
-              }
-              disabled={loading}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Invoice Number (optional)"
-              value={paymentFields.invoiceNumber || ''}
-              onChange={(e) =>
-                setPaymentFields({ ...paymentFields, invoiceNumber: e.target.value })
-              }
-              disabled={loading}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Customer Code (optional)"
-              value={paymentFields.invoiceCustomerCode || ''}
-              onChange={(e) =>
-                setPaymentFields({ ...paymentFields, invoiceCustomerCode: e.target.value })
-              }
-              disabled={loading}
-            />
-          </Box>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">
+              {t('utility.enterBarcode')}
+            </p>
+            <div>
+              <Label className="text-slate-300">{t('utility.barcode')}</Label>
+              <Input
+                value={paymentFields.barcode || ''}
+                onChange={(e) =>
+                  setPaymentFields({ ...paymentFields, barcode: e.target.value })
+                }
+                disabled={loading}
+                className="bg-slate-700 border-slate-600 text-slate-100"
+                placeholder={t('utility.barcodePlaceholder')}
+              />
+            </div>
+            <div>
+              <Label className="text-slate-300">{t('utility.invoiceNumber')} ({t('common.optional')})</Label>
+              <Input
+                value={paymentFields.invoiceNumber || ''}
+                onChange={(e) =>
+                  setPaymentFields({ ...paymentFields, invoiceNumber: e.target.value })
+                }
+                disabled={loading}
+                className="bg-slate-700 border-slate-600 text-slate-100"
+              />
+            </div>
+            <div>
+              <Label className="text-slate-300">{t('utility.customerCode')} ({t('common.optional')})</Label>
+              <Input
+                value={paymentFields.invoiceCustomerCode || ''}
+                onChange={(e) =>
+                  setPaymentFields({ ...paymentFields, invoiceCustomerCode: e.target.value })
+                }
+                disabled={loading}
+                className="bg-slate-700 border-slate-600 text-slate-100"
+              />
+            </div>
+          </div>
         );
 
       case 1:
         // Step 2: Supplier selection and balance fetch
         return (
-          <Box>
+          <div className="space-y-4">
             {suppliers.length > 1 ? (
               <>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Multiple suppliers matched. Please select one:
-                </Typography>
+                <p className="text-sm text-slate-400">
+                  {t('utility.multipleSuppliers')}
+                </p>
                 {suppliers.map((supplier) => (
-                  <Paper
+                  <Card
                     key={supplier.uid}
-                    sx={{
-                      p: 2,
-                      mb: 1,
-                      cursor: 'pointer',
-                      border: selectedSupplier?.uid === supplier.uid ? 2 : 1,
-                      borderColor: selectedSupplier?.uid === supplier.uid ? 'primary.main' : 'divider',
-                    }}
+                    className={`cursor-pointer transition-colors ${
+                      selectedSupplier?.uid === supplier.uid
+                        ? 'border-2 border-blue-500 bg-slate-700'
+                        : 'border-slate-600 bg-slate-800 hover:bg-slate-700'
+                    }`}
                     onClick={() => setSelectedSupplier(supplier)}
                   >
-                    <Typography variant="subtitle1">{supplier.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {supplier.module}
-                    </Typography>
-                  </Paper>
+                    <CardContent className="p-4">
+                      <p className="font-medium text-slate-100">{supplier.name}</p>
+                      <p className="text-sm text-slate-400">{supplier.module}</p>
+                    </CardContent>
+                  </Card>
                 ))}
               </>
             ) : selectedSupplier ? (
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Supplier identified:
-                </Typography>
-                <Paper sx={{ p: 2, mb: 2, bgcolor: 'success.light' }}>
-                  <Typography variant="h6">{selectedSupplier.name}</Typography>
-                </Paper>
-                <Typography variant="body2" color="text.secondary">
-                  Fetching bill amount...
-                </Typography>
-              </Box>
+              <div className="space-y-4">
+                <p className="text-sm text-slate-400">
+                  {t('utility.supplierIdentified')}
+                </p>
+                <Card className="border-emerald-500 bg-emerald-900/30">
+                  <CardContent className="p-4">
+                    <p className="font-medium text-lg text-slate-100">{selectedSupplier.name}</p>
+                  </CardContent>
+                </Card>
+                {loading && (
+                  <p className="text-sm text-slate-400 flex items-center">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {t('utility.fetchingBalance')}
+                  </p>
+                )}
+              </div>
             ) : (
-              <Alert severity="warning">No suppliers matched this barcode.</Alert>
+              <Alert className="bg-amber-900/30 border-amber-600">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="text-amber-200">
+                  {t('utility.noSupplierMatch')}
+                </AlertDescription>
+              </Alert>
             )}
-          </Box>
+          </div>
         );
 
       case 2:
         // Step 3: Display balance and confirm payment
         return (
-          <Box>
+          <div className="space-y-4">
             {balance && (
               <>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Please confirm the payment details:
-                </Typography>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Supplier
-                  </Typography>
-                  <Typography variant="h6" sx={{ mb: 2 }}>
-                    {selectedSupplier?.name}
-                  </Typography>
+                <p className="text-sm text-slate-400">
+                  {t('utility.confirmPayment')}
+                </p>
+                <Card className="border-slate-600 bg-slate-800">
+                  <CardContent className="p-4 space-y-4">
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                        {t('utility.supplier')}
+                      </p>
+                      <p className="text-lg font-medium text-slate-100">
+                        {selectedSupplier?.name}
+                      </p>
+                    </div>
 
-                  {balance.utilityData && (
-                    <>
-                      {balance.utilityData.customerName && (
-                        <>
-                          <Typography variant="subtitle2" color="text.secondary">
-                            Customer Name
-                          </Typography>
-                          <Typography variant="body1" sx={{ mb: 1 }}>
-                            {balance.utilityData.customerName}
-                          </Typography>
-                        </>
-                      )}
-                      {balance.utilityData.invoiceNumber && (
-                        <>
-                          <Typography variant="subtitle2" color="text.secondary">
-                            Invoice Number
-                          </Typography>
-                          <Typography variant="body1" sx={{ mb: 1 }}>
-                            {balance.utilityData.invoiceNumber}
-                          </Typography>
-                        </>
-                      )}
-                      {balance.utilityData.dueDate && (
-                        <>
-                          <Typography variant="subtitle2" color="text.secondary">
-                            Due Date
-                          </Typography>
-                          <Typography variant="body1" sx={{ mb: 1 }}>
-                            {balance.utilityData.dueDate}
-                          </Typography>
-                        </>
-                      )}
-                    </>
-                  )}
+                    {balance.utilityData && (
+                      <>
+                        {balance.utilityData.customerName && (
+                          <div>
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">
+                              {t('utility.customerName')}
+                            </p>
+                            <p className="text-slate-200">
+                              {balance.utilityData.customerName}
+                            </p>
+                          </div>
+                        )}
+                        {balance.utilityData.invoiceNumber && (
+                          <div>
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">
+                              {t('utility.invoiceNumber')}
+                            </p>
+                            <p className="text-slate-200">
+                              {balance.utilityData.invoiceNumber}
+                            </p>
+                          </div>
+                        )}
+                        {balance.utilityData.dueDate && (
+                          <div>
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">
+                              {t('utility.dueDate')}
+                            </p>
+                            <p className="text-slate-200">
+                              {balance.utilityData.dueDate}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
 
-                  <Divider sx={{ my: 2 }} />
+                    <Separator className="bg-slate-600" />
 
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Amount to Pay
-                  </Typography>
-                  <Typography variant="h4" color="primary">
-                    {balance.balance.toFixed(2)} {balance.currency}
-                  </Typography>
-                </Paper>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                        {t('utility.amountToPay')}
+                      </p>
+                      <p className="text-3xl font-bold text-blue-400">
+                        {balance.balance.toFixed(2)} {balance.currency}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <Alert severity="info">
-                  {mode === 'landlord'
-                    ? 'As landlord, this payment will be charged to your account.'
-                    : 'This payment will be processed immediately.'}
+                <Alert className="bg-blue-900/30 border-blue-600">
+                  <AlertCircle className="h-4 w-4 text-blue-400" />
+                  <AlertDescription className="text-blue-200">
+                    {mode === 'landlord'
+                      ? t('utility.landlordPaymentNote')
+                      : t('utility.renterPaymentNote')}
+                  </AlertDescription>
                 </Alert>
               </>
             )}
 
             {transaction && (
-              <Alert severity="success" sx={{ mt: 2 }}>
-                Payment successful! Transaction ID: {transaction.transactionId}
+              <Alert className="bg-emerald-900/30 border-emerald-600">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                <AlertDescription className="text-emerald-200">
+                  {t('utility.paymentSuccess')} {t('utility.transactionId')}: {transaction.transactionId}
+                </AlertDescription>
               </Alert>
             )}
-          </Box>
+          </div>
         );
 
       default:
@@ -320,13 +377,20 @@ export function UtilityPaymentDialog({
       case 0:
         return (
           <>
-            <Button onClick={handleClose}>Cancel</Button>
+            <Button variant="outline" onClick={handleClose} className="border-slate-600 text-slate-300 hover:bg-slate-700">
+              {t('common.cancel')}
+            </Button>
             <Button
-              variant="contained"
               onClick={handleMatchBarcode}
               disabled={loading || !paymentFields.barcode}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              {loading ? <CircularProgress size={24} /> : 'Find Supplier'}
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <ChevronRight className="w-4 h-4 mr-2" />
+              )}
+              {t('utility.findSupplier')}
             </Button>
           </>
         );
@@ -334,13 +398,21 @@ export function UtilityPaymentDialog({
       case 1:
         return (
           <>
-            <Button onClick={() => setActiveStep(0)}>Back</Button>
+            <Button variant="outline" onClick={() => setActiveStep(0)} className="border-slate-600 text-slate-300 hover:bg-slate-700">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('common.back')}
+            </Button>
             <Button
-              variant="contained"
               onClick={() => handleGetBalance()}
               disabled={loading || !selectedSupplier}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              {loading ? <CircularProgress size={24} /> : 'Get Balance'}
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <ChevronRight className="w-4 h-4 mr-2" />
+              )}
+              {t('utility.getBalance')}
             </Button>
           </>
         );
@@ -348,16 +420,26 @@ export function UtilityPaymentDialog({
       case 2:
         return (
           <>
-            <Button onClick={() => setActiveStep(1)} disabled={loading || !!transaction}>
-              Back
+            <Button 
+              variant="outline" 
+              onClick={() => setActiveStep(1)} 
+              disabled={loading || !!transaction}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('common.back')}
             </Button>
             <Button
-              variant="contained"
-              color="primary"
               onClick={handlePayment}
               disabled={loading || !!transaction}
+              className={transaction ? 'bg-emerald-600' : 'bg-blue-600 hover:bg-blue-700'}
             >
-              {loading ? <CircularProgress size={24} /> : transaction ? 'Paid' : 'Confirm Payment'}
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : transaction ? (
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+              ) : null}
+              {transaction ? t('utility.paid') : t('utility.confirmPaymentBtn')}
             </Button>
           </>
         );
@@ -368,26 +450,32 @@ export function UtilityPaymentDialog({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Pay Utility Bill Online</DialogTitle>
-      <DialogContent>
-        <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-slate-100">{t('utility.payOnline')}</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            {t('utility.payOnlineDescription')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <StepIndicator />
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={clearError}>
-            {error}
+          <Alert className="bg-red-900/30 border-red-600">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <AlertDescription className="text-red-200">
+              {error}
+            </AlertDescription>
           </Alert>
         )}
 
         {renderStepContent()}
+
+        <DialogFooter className="flex gap-2 mt-4">
+          {getActionButtons()}
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>{getActionButtons()}</DialogActions>
     </Dialog>
   );
 }

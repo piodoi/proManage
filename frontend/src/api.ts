@@ -30,7 +30,7 @@ import {
 // Utility Payment API Functions
 
 export async function matchBarcodeAPI(barcode: string): Promise<SupplierMatch[]> {
-  const response = await fetch(`/api/utility/match-barcode?barcode=${encodeURIComponent(barcode)}`, {
+  const response = await fetch(`${API_URL}/api/utility/match-barcode?barcode=${encodeURIComponent(barcode)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -47,7 +47,7 @@ export async function matchBarcodeAPI(barcode: string): Promise<SupplierMatch[]>
 }
 
 export async function getUtilityBalanceAPI(request: BalanceRequest): Promise<BalanceResponse> {
-  const response = await fetch('/api/utility/balance', {
+  const response = await fetch(`${API_URL}/api/utility/balance`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ export async function getUtilityBalanceAPI(request: BalanceRequest): Promise<Bal
 }
 
 export async function payUtilityBillAPI(request: PaymentRequest): Promise<TransactionResponse> {
-  const response = await fetch('/api/utility/pay', {
+  const response = await fetch(`${API_URL}/api/utility/pay`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -83,7 +83,7 @@ export async function payUtilityBillAPI(request: PaymentRequest): Promise<Transa
 }
 
 export async function getSuppliersAPI(): Promise<SupplierInfo[]> {
-  const response = await fetch('/api/utility/suppliers', {
+  const response = await fetch(`${API_URL}/api/utility/suppliers`, {
     headers: {
       Authorization: `Bearer ${localStorage.getItem('token')}`,
     },
@@ -97,7 +97,7 @@ export async function getSuppliersAPI(): Promise<SupplierInfo[]> {
 }
 
 export async function getSupplierAPI(supplierUid: string): Promise<SupplierInfo> {
-  const response = await fetch(`/api/utility/suppliers/${supplierUid}`, {
+  const response = await fetch(`${API_URL}/api/utility/suppliers/${supplierUid}`, {
     headers: {
       Authorization: `Bearer ${localStorage.getItem('token')}`,
     },
@@ -111,7 +111,7 @@ export async function getSupplierAPI(supplierUid: string): Promise<SupplierInfo>
 }
 
 export async function getSupplierProductsAPI(supplierUid: string): Promise<ProductInfo[]> {
-  const response = await fetch(`/api/utility/suppliers/${supplierUid}/products`, {
+  const response = await fetch(`${API_URL}/api/utility/suppliers/${supplierUid}/products`, {
     headers: {
       Authorization: `Bearer ${localStorage.getItem('token')}`,
     },
@@ -125,7 +125,7 @@ export async function getSupplierProductsAPI(supplierUid: string): Promise<Produ
 }
 
 export async function getAllProductsAPI(): Promise<ProductInfo[]> {
-  const response = await fetch('/api/utility/products', {
+  const response = await fetch(`${API_URL}/api/utility/products`, {
     headers: {
       Authorization: `Bearer ${localStorage.getItem('token')}`,
     },
@@ -133,6 +133,33 @@ export async function getAllProductsAPI(): Promise<ProductInfo[]> {
 
   if (!response.ok) {
     throw new Error('Failed to fetch products');
+  }
+
+  return response.json();
+}
+
+export interface BarcodeExtractionResult {
+  primary_barcode: string | null;
+  all_barcodes: Array<{
+    data: string;
+    type: string;
+    page: number;
+    rect: { x: number; y: number; width: number; height: number };
+  }>;
+  bill_id: string;
+  bill_number: string | null;
+}
+
+export async function extractBarcodeFromBillAPI(billId: string): Promise<BarcodeExtractionResult> {
+  const response = await fetch(`${API_URL}/api/utility/extract-barcode/${billId}`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to extract barcode' }));
+    throw new Error(error.detail || 'Failed to extract barcode');
   }
 
   return response.json();

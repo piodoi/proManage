@@ -6,7 +6,7 @@ import {
   PaymentRequest,
   TransactionResponse,
   PaymentFieldsData,
-} from '../types/utility';
+} from '../utils/utility';
 import {
   matchBarcodeAPI,
   getUtilityBalanceAPI,

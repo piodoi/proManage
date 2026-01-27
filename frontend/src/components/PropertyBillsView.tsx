@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { api, Bill, Renter, ExtractionResult, BillType, BILL_TYPES, PropertySupplier } from '../api';
+import { api, Bill, Renter, ExtractionResult, BillType, BILL_TYPES, PropertySupplier, extractBarcodeFromBillAPI } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,12 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight, FileText, CreditCard, Loader2 } from 'lucide-react';
 import BillConfirmDialog from './dialogs/BillConfirmDialog';
+import { UtilityPaymentDialog } from './dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { formatDateWithPreferences } from '../lib/utils';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
+import { TransactionResponse } from '../utils/utility';
 
 type PropertyBillsViewProps = {
   token: string | null;
@@ -137,6 +139,35 @@ export default function PropertyBillsView({
   const [showContractSelector, setShowContractSelector] = useState(false);
   const [multipleContracts, setMultipleContracts] = useState<Record<string, { supplier_name: string; contracts: Array<{ contract_id: string; address?: string }> }>>({});
   const [selectedContracts, setSelectedContracts] = useState<Record<string, string>>({});
+  
+  // Utility payment dialog state
+  const [showUtilityPayment, setShowUtilityPayment] = useState(false);
+  const [utilityPaymentBill, setUtilityPaymentBill] = useState<Bill | null>(null);
+  const [extractedBarcode, setExtractedBarcode] = useState<string>('');
+  const [extractingBarcode, setExtractingBarcode] = useState(false);
+
+  // Function to open utility payment dialog with barcode extraction
+  const openUtilityPaymentDialog = async (bill: Bill) => {
+    setUtilityPaymentBill(bill);
+    setExtractedBarcode(bill.bill_number || '');
+    setShowUtilityPayment(true);
+    
+    // If bill has PDF, try to extract barcode
+    if (bill.has_pdf) {
+      setExtractingBarcode(true);
+      try {
+        const result = await extractBarcodeFromBillAPI(bill.id);
+        if (result.primary_barcode) {
+          setExtractedBarcode(result.primary_barcode);
+        }
+      } catch (err) {
+        console.log('Barcode extraction not available or failed:', err);
+        // Fall back to bill_number if extraction fails
+      } finally {
+        setExtractingBarcode(false);
+      }
+    }
+  };
 
   const handleError = (err: unknown) => {
     console.error('[PropertyBillsView] Error:', err);
@@ -859,6 +890,23 @@ export default function PropertyBillsView({
                               <FileText className="w-3 h-3" />
                             </Button>
                           )}
+                          {/* Pay Online button - show for utility bills with bill number or PDF (for barcode extraction) */}
+                          {bill.bill_type !== 'rent' && (bill.bill_number || bill.has_pdf) && getEffectiveStatus(bill) !== 'paid' && (
+                            <Button
+                              size="sm"
+                              onClick={() => openUtilityPaymentDialog(bill)}
+                              disabled={extractingBarcode}
+                              className="bg-emerald-700 text-emerald-100 hover:bg-emerald-600 hover:text-white border border-emerald-600 h-6 px-2"
+                              title={t('utility.payOnlineBtn')}
+                            >
+                              {extractingBarcode && utilityPaymentBill?.id === bill.id ? (
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              ) : (
+                                <CreditCard className="w-3 h-3 mr-1" />
+                              )}
+                              <span className="text-xs">{t('utility.payOnlineBtn')}</span>
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             onClick={() => handleEditBill(bill)}
@@ -1032,6 +1080,31 @@ export default function PropertyBillsView({
           </div>
         </DialogContent>
       </Dialog>
+      {/* Utility Payment Dialog */}
+      <UtilityPaymentDialog
+        open={showUtilityPayment}
+        onClose={() => {
+          setShowUtilityPayment(false);
+          setUtilityPaymentBill(null);
+          setExtractedBarcode('');
+        }}
+        billBarcode={extractedBarcode || utilityPaymentBill?.bill_number || ''}
+        mode="landlord"
+        onSuccess={(transaction: TransactionResponse) => {
+          // Mark bill as paid after successful payment
+          if (utilityPaymentBill && token) {
+            api.bills.update(token, utilityPaymentBill.id, { status: 'paid' })
+              .then(() => {
+                if (onBillsChange) {
+                  onBillsChange();
+                }
+              })
+              .catch(handleError);
+          }
+          setShowUtilityPayment(false);
+          setUtilityPaymentBill(null);
+        }}
+      />
     </>
   );
 }

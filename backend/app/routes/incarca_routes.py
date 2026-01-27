@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List
+from typing import List, Optional
 import logging
 
 from app.auth import require_landlord, TokenData
@@ -8,6 +8,8 @@ from app.models import (
     SupplierMatch, BalanceRequest, BalanceResponse,
     PaymentRequest, TransactionResponse, SupplierInfo, ProductInfo
 )
+from app.database import db
+from app.paths import get_bill_pdf_path, bill_pdf_exists
 
 logger = logging.getLogger(__name__)
 
@@ -175,3 +177,68 @@ async def list_products(
     except Exception as e:
         logger.error(f"Error listing products: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch products")
+
+
+@router.get("/extract-barcode/{bill_id}")
+async def extract_barcode_from_bill(
+    bill_id: str,
+    current_user: TokenData = Depends(require_landlord)
+):
+    """
+    Extract barcode from a bill's PDF file.
+    
+    Uses pyzbar to detect and extract barcodes from the bill's PDF.
+    Returns the primary barcode suitable for utility payment.
+    """
+    # Get the bill
+    bill = db.get_bill(bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    # Check ownership
+    prop = db.get_property(bill.property_id)
+    if not prop or prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if PDF exists
+    if not bill_pdf_exists(current_user.user_id, bill_id):
+        raise HTTPException(status_code=404, detail="No PDF file found for this bill")
+    
+    # Get PDF path and read file
+    pdf_path = get_bill_pdf_path(current_user.user_id, bill_id)
+    
+    try:
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+    except Exception as e:
+        logger.error(f"Error reading PDF file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read PDF file")
+    
+    # Extract barcodes
+    try:
+        from app.utils.barcode_extractor import extract_barcodes_from_pdf, get_primary_barcode, is_barcode_extraction_available
+        
+        if not is_barcode_extraction_available():
+            raise HTTPException(
+                status_code=503, 
+                detail="Barcode extraction not available - missing dependencies (pyzbar, pillow)"
+            )
+        
+        # Get all barcodes
+        all_barcodes = extract_barcodes_from_pdf(pdf_bytes)
+        
+        # Get the primary barcode
+        primary_barcode = get_primary_barcode(pdf_bytes)
+        
+        return {
+            "primary_barcode": primary_barcode,
+            "all_barcodes": all_barcodes,
+            "bill_id": bill_id,
+            "bill_number": bill.bill_number
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error extracting barcodes: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to extract barcodes: {str(e)}")

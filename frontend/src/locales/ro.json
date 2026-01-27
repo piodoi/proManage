@@ -39,7 +39,8 @@
     "reject": "Respinge",
     "pending": "În așteptare",
     "confirmed": "Confirmat",
-    "rejected": "Respins"
+    "rejected": "Respins",
+    "optional": "opțional"
   },
   "app": {
     "title": "ProManage",
@@ -745,6 +746,38 @@
       "proFeature3": "10 Chiriași per proprietate",
       "proFeature4": "Funcția de sincronizare email activată"
     }
+  },
+  "utility": {
+    "payOnline": "Plătește Factura Online",
+    "payOnlineDescription": "Plătește factura de utilități direct prin sistemul nostru securizat",
+    "step": {
+      "identify": "Identifică",
+      "verify": "Verifică",
+      "confirm": "Confirmă"
+    },
+    "enterBarcode": "Introdu codul de bare de pe factura de utilități pentru a identifica furnizorul.",
+    "barcode": "Cod de bare",
+    "barcodePlaceholder": "Introdu codul de bare de pe factură",
+    "invoiceNumber": "Număr factură",
+    "customerCode": "Cod client",
+    "multipleSuppliers": "Mai mulți furnizori găsiți. Te rugăm să selectezi unul:",
+    "supplierIdentified": "Furnizor identificat:",
+    "fetchingBalance": "Se încarcă suma de plată...",
+    "noSupplierMatch": "Niciun furnizor nu corespunde acestui cod de bare.",
+    "confirmPayment": "Te rugăm să confirmi detaliile plății:",
+    "supplier": "Furnizor",
+    "customerName": "Nume client",
+    "dueDate": "Data scadentă",
+    "amountToPay": "Sumă de plată",
+    "landlordPaymentNote": "Ca proprietar, această plată va fi debitată din contul tău.",
+    "renterPaymentNote": "Această plată va fi procesată imediat.",
+    "paymentSuccess": "Plată efectuată cu succes!",
+    "transactionId": "ID Tranzacție",
+    "findSupplier": "Găsește Furnizor",
+    "getBalance": "Obține Sold",
+    "confirmPaymentBtn": "Confirmă Plata",
+    "paid": "Plătit",
+    "payOnlineBtn": "Plătește Online"
   }
 }
 

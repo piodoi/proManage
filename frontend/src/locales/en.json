@@ -39,7 +39,8 @@
     "reject": "Reject",
     "pending": "Pending",
     "confirmed": "Confirmed",
-    "rejected": "Rejected"
+    "rejected": "Rejected",
+    "optional": "optional"
   },
   "app": {
     "title": "ProManage",
@@ -752,5 +753,37 @@
       "proFeature3": "10 renters per property",
       "proFeature4": "Email sync feature enabled"
     }
+  },
+  "utility": {
+    "payOnline": "Pay Utility Bill Online",
+    "payOnlineDescription": "Pay your utility bill directly through our secure payment system",
+    "step": {
+      "identify": "Identify",
+      "verify": "Verify",
+      "confirm": "Confirm"
+    },
+    "enterBarcode": "Enter the barcode from your utility bill to identify the supplier.",
+    "barcode": "Barcode",
+    "barcodePlaceholder": "Enter barcode from bill",
+    "invoiceNumber": "Invoice Number",
+    "customerCode": "Customer Code",
+    "multipleSuppliers": "Multiple suppliers matched. Please select one:",
+    "supplierIdentified": "Supplier identified:",
+    "fetchingBalance": "Fetching bill amount...",
+    "noSupplierMatch": "No suppliers matched this barcode.",
+    "confirmPayment": "Please confirm the payment details:",
+    "supplier": "Supplier",
+    "customerName": "Customer Name",
+    "dueDate": "Due Date",
+    "amountToPay": "Amount to Pay",
+    "landlordPaymentNote": "As landlord, this payment will be charged to your account.",
+    "renterPaymentNote": "This payment will be processed immediately.",
+    "paymentSuccess": "Payment successful!",
+    "transactionId": "Transaction ID",
+    "findSupplier": "Find Supplier",
+    "getBalance": "Get Balance",
+    "confirmPaymentBtn": "Confirm Payment",
+    "paid": "Paid",
+    "payOnlineBtn": "Pay Online"
   }
 }
