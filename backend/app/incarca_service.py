@@ -164,6 +164,9 @@ class IncarcaService:
             payload = request.dict(exclude_none=True)
             
             response = await self.http_client.post(url, headers=headers, json=payload)
+
+            logger.info(f"BalanceResponse response {response} recieved.")
+
             response.raise_for_status()
             
             data = response.json()

@@ -784,6 +784,14 @@
     "getBalance": "Get Balance",
     "confirmPaymentBtn": "Confirm Payment",
     "paid": "Paid",
-    "payOnlineBtn": "Pay Online"
+    "payOnlineBtn": "Pay Online",
+    "billToPay": "Bill to Pay",
+    "selectSupplier": "Select Supplier",
+    "searchSupplier": "Search supplier...",
+    "selectSupplierPlaceholder": "Select a supplier",
+    "loadingSuppliers": "Loading suppliers...",
+    "noSuppliersFound": "No suppliers found",
+    "barcodeNoMatch": "Barcode did not match any supplier. Please select from the list below.",
+    "barcodeMatched": "{{count}} supplier(s) matched from barcode"
   }
 }

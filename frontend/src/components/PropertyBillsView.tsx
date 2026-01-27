@@ -1096,6 +1096,13 @@ export default function PropertyBillsView({
           setExtractedBarcode('');
         }}
         billBarcode={extractedBarcode || utilityPaymentBill?.bill_number || ''}
+        billInfo={utilityPaymentBill ? {
+          description: utilityPaymentBill.description,
+          amount: utilityPaymentBill.amount,
+          currency: utilityPaymentBill.currency,
+          due_date: utilityPaymentBill.due_date,
+          bill_type: utilityPaymentBill.bill_type,
+        } : undefined}
         mode="landlord"
         onSuccess={(transaction: TransactionResponse) => {
           // Mark bill as paid after successful payment

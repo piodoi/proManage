@@ -777,7 +777,15 @@
     "getBalance": "Obține Sold",
     "confirmPaymentBtn": "Confirmă Plata",
     "paid": "Plătit",
-    "payOnlineBtn": "Plătește Online"
+    "payOnlineBtn": "Plătește Online",
+    "billToPay": "Factură de plătit",
+    "selectSupplier": "Selectează Furnizor",
+    "searchSupplier": "Caută furnizor...",
+    "selectSupplierPlaceholder": "Selectează un furnizor",
+    "loadingSuppliers": "Se încarcă furnizorii...",
+    "noSuppliersFound": "Niciun furnizor găsit",
+    "barcodeNoMatch": "Codul de bare nu a corespuns niciunui furnizor. Te rugăm să selectezi din lista de mai jos.",
+    "barcodeMatched": "{{count}} furnizor(i) găsit(i) din codul de bare"
   }
 }
 
