@@ -1,8 +1,100 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
 import uuid
+
+
+# INCARCA API Models
+
+class PaymentLimitInfo(BaseModel):
+    acceptsLessPrice: bool
+    acceptsMorePrice: bool
+    maxValue: Optional[float] = None
+    minValue: Optional[float] = None
+
+class PaymentField(BaseModel):
+    name: str
+    type: str
+    required: bool
+    label: Optional[str] = None
+    validation: Optional[Dict[str, Any]] = None
+
+class SupplierMatch(BaseModel):
+    uid: str
+    name: str
+    module: str
+    paymentLimit: PaymentLimitInfo
+    paymentFields: List[PaymentField]
+
+class PaymentFieldsData(BaseModel):
+    barcode: Optional[str] = None
+    invoiceNumber: Optional[str] = None
+    invoiceCustomerCode: Optional[str] = None
+    # Add other fields as needed based on supplier requirements
+
+class UtilityData(BaseModel):
+    """Utility bill details returned by balance API"""
+    supplierName: Optional[str] = None
+    customerName: Optional[str] = None
+    invoiceNumber: Optional[str] = None
+    dueDate: Optional[str] = None
+    additionalInfo: Optional[Dict[str, Any]] = None
+
+class BalanceRequest(BaseModel):
+    supplierUid: str
+    productUid: str
+    paymentFields: PaymentFieldsData
+    transactionId: Optional[str] = None
+    partnerTransactionId: Optional[str] = None
+    terminalType: str = "terminal"
+
+class BalanceResponse(BaseModel):
+    balance: float
+    currency: str = "RON"
+    utilityData: Optional[UtilityData] = None
+    success: bool = True
+    message: Optional[str] = None
+
+class PaymentRequest(BaseModel):
+    supplierUid: str
+    productUid: str
+    paymentFields: PaymentFieldsData
+    amount: Optional[float] = None  # Optional - can be auto-filled from balance
+    transactionId: Optional[str] = None
+    partnerTransactionId: Optional[str] = None
+    terminalType: str = "terminal"
+
+class TransactionStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+class TransactionResponse(BaseModel):
+    transactionId: str
+    status: TransactionStatus
+    amount: float
+    currency: str = "RON"
+    timestamp: datetime
+    receiptData: Optional[Dict[str, Any]] = None
+    success: bool = True
+    message: Optional[str] = None
+
+class SupplierInfo(BaseModel):
+    uid: str
+    name: str
+    category: Optional[str] = None
+    logoUrl: Optional[str] = None
+    description: Optional[str] = None
+
+class ProductInfo(BaseModel):
+    uid: str
+    name: str
+    supplierUid: str
+    description: Optional[str] = None
+    price: Optional[float] = None
+
 
 
 class UserRole(str, Enum):

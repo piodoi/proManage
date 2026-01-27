@@ -38,7 +38,25 @@ async def send_contract_expiry_email(
     days_until_expiry: int
 ) -> bool:
     """Send email notification about expiring contract to admin."""
-    subject = f"Contract Expiring: {renter_name} at {property_name}"
+    # Handle both upcoming and past expiry
+    if days_until_expiry < 0:
+        days_text = f"Contract expired {abs(days_until_expiry)} day(s) ago"
+        subject = f"Contract Expired: {renter_name} at {property_name}"
+        alert_color = "#fee2e2"  # Red background for expired
+        border_color = "#ef4444"
+        icon = "🚨"
+    elif days_until_expiry == 0:
+        days_text = "Contract expires today"
+        subject = f"Contract Expires Today: {renter_name} at {property_name}"
+        alert_color = "#fef3c7"  # Yellow background
+        border_color = "#f59e0b"
+        icon = "⚠️"
+    else:
+        days_text = f"Contract expiring in {days_until_expiry} day(s)"
+        subject = f"Contract Expiring: {renter_name} at {property_name}"
+        alert_color = "#fef3c7"  # Yellow background
+        border_color = "#f59e0b"
+        icon = "⚠️"
     
     expiry_str = expiry_date.strftime("%B %d, %Y")
     
@@ -49,15 +67,15 @@ async def send_contract_expiry_email(
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .alert {{ 
-                background-color: #fef3c7; 
-                border: 1px solid #f59e0b; 
+            .alert {{
+                background-color: {alert_color};
+                border: 1px solid {border_color};
                 border-radius: 6px;
                 padding: 15px;
                 margin: 20px 0;
             }}
-            .details {{ 
-                background-color: #f3f4f6; 
+            .details {{
+                background-color: #f3f4f6;
                 border-radius: 6px;
                 padding: 15px;
                 margin: 20px 0;
@@ -69,7 +87,7 @@ async def send_contract_expiry_email(
         <div class="container">
             <h2>Contract Expiry Notice</h2>
             <div class="alert">
-                <strong>⚠️ Contract expiring in {days_until_expiry} day(s)</strong>
+                <strong>{icon} {days_text}</strong>
             </div>
             <div class="details">
                 <p><strong>Renter:</strong> {renter_name}</p>
@@ -89,7 +107,7 @@ async def send_contract_expiry_email(
     text_body = f"""
 Contract Expiry Notice
 
-⚠️ Contract expiring in {days_until_expiry} day(s)
+{icon} {days_text}
 
 Renter: {renter_name}
 Property: {property_name}
@@ -112,8 +130,13 @@ def create_contract_expiry_notification(
     days_until_expiry: int
 ) -> PaymentNotification:
     """Create a payment notification for contract expiry (for non-admin users)."""
-    # Use renter_note for the expiry message
-    renter_note = f"Contract expires on {expiry_date.strftime('%Y-%m-%d')} ({days_until_expiry} days)"
+    # Use renter_note for the expiry message - handle past/future expiry
+    if days_until_expiry < 0:
+        renter_note = f"Contract expired on {expiry_date.strftime('%Y-%m-%d')} ({abs(days_until_expiry)} days ago)"
+    elif days_until_expiry == 0:
+        renter_note = f"Contract expires today ({expiry_date.strftime('%Y-%m-%d')})"
+    else:
+        renter_note = f"Contract expires on {expiry_date.strftime('%Y-%m-%d')} ({days_until_expiry} days)"
     
     notification = PaymentNotification(
         id=gen_id(),
@@ -133,14 +156,18 @@ def create_contract_expiry_notification(
 
 def get_expiring_contracts(warning_days: int = 5) -> List[Dict[str, Any]]:
     """
-    Find all renters with contracts expiring within the warning period.
+    Find all renters with contract anniversary dates within the warning period.
+    
+    This checks for the annual contract renewal/anniversary date based on start_contract_date.
+    The notification triggers every year on (anniversary_date - warning_days) through
+    (anniversary_date + warning_days) to catch both upcoming and recently passed dates.
     
     Returns a list of dicts with:
     - renter: Renter object
     - property: Property object
     - landlord: User object
-    - expiry_date: date
-    - days_until_expiry: int
+    - expiry_date: date (the anniversary date for this year)
+    - days_until_expiry: int (negative if already passed this year)
     - preferences: UserPreferences
     """
     today = date.today()
@@ -153,20 +180,18 @@ def get_expiring_contracts(warning_days: int = 5) -> List[Dict[str, Any]]:
         if not renter.start_contract_date:
             continue
         
-        # Calculate contract expiry (1 year from start)
-        # Note: This assumes 1-year contracts. Adjust if needed.
         start_date = renter.start_contract_date
         if isinstance(start_date, str):
             start_date = date.fromisoformat(start_date)
         
-        # Calculate next expiry date (could be multiple years)
-        expiry_date = start_date
-        while expiry_date <= today:
-            expiry_date = date(expiry_date.year + 1, expiry_date.month, expiry_date.day)
+        # Calculate this year's anniversary date (same month/day as start, current year)
+        try:
+            anniversary_this_year = date(today.year, start_date.month, start_date.day)
+        except ValueError:
+            # Handle Feb 29 for non-leap years - use Feb 28
+            anniversary_this_year = date(today.year, start_date.month, 28)
         
-        days_until_expiry = (expiry_date - today).days
-        
-        # Get property and landlord
+        # Get property and landlord first to get user preferences
         property_obj = db.get_property(renter.property_id)
         if not property_obj:
             continue
@@ -179,14 +204,18 @@ def get_expiring_contracts(warning_days: int = 5) -> List[Dict[str, Any]]:
         preferences = db.get_user_preferences(landlord.id)
         user_warning_days = (preferences.rent_warning_days if preferences and preferences.rent_warning_days else 5)
         
-        # Check if within warning period
-        if days_until_expiry <= user_warning_days:
+        # Calculate days until/since this year's anniversary
+        days_diff = (anniversary_this_year - today).days
+        
+        # Check if within warning window (before or after the anniversary date)
+        # This allows notifications from (anniversary - warning_days) to (anniversary + warning_days)
+        if -user_warning_days <= days_diff <= user_warning_days:
             results.append({
                 'renter': renter,
                 'property': property_obj,
                 'landlord': landlord,
-                'expiry_date': expiry_date,
-                'days_until_expiry': days_until_expiry,
+                'expiry_date': anniversary_this_year,
+                'days_until_expiry': days_diff,
                 'preferences': preferences
             })
     
@@ -212,6 +241,13 @@ async def check_and_notify_expiring_contracts() -> Dict[str, int]:
     
     expiring = get_expiring_contracts()
     logger.info(f"[ContractExpiry] Found {len(expiring)} expiring contracts")
+    
+    # Log details for debugging
+    for item in expiring:
+        renter = item['renter']
+        expiry_date = item['expiry_date']
+        days = item['days_until_expiry']
+        logger.info(f"[ContractExpiry] - {renter.name}: expiry={expiry_date}, days={days}")
     
     # Process in batches to avoid overwhelming the system
     batch_size = 10

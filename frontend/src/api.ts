@@ -17,6 +17,127 @@ type RequestOptions = {
   token?: string | null;
 };
 
+import {
+  SupplierMatch,
+  BalanceRequest,
+  BalanceResponse,
+  PaymentRequest,
+  TransactionResponse,
+  SupplierInfo,
+  ProductInfo,
+} from './utils/utility';
+
+// Utility Payment API Functions
+
+export async function matchBarcodeAPI(barcode: string): Promise<SupplierMatch[]> {
+  const response = await fetch(`/api/utility/match-barcode?barcode=${encodeURIComponent(barcode)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to match barcode');
+  }
+
+  return response.json();
+}
+
+export async function getUtilityBalanceAPI(request: BalanceRequest): Promise<BalanceResponse> {
+  const response = await fetch('/api/utility/balance', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to get utility balance');
+  }
+
+  return response.json();
+}
+
+export async function payUtilityBillAPI(request: PaymentRequest): Promise<TransactionResponse> {
+  const response = await fetch('/api/utility/pay', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Payment failed');
+  }
+
+  return response.json();
+}
+
+export async function getSuppliersAPI(): Promise<SupplierInfo[]> {
+  const response = await fetch('/api/utility/suppliers', {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch suppliers');
+  }
+
+  return response.json();
+}
+
+export async function getSupplierAPI(supplierUid: string): Promise<SupplierInfo> {
+  const response = await fetch(`/api/utility/suppliers/${supplierUid}`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch supplier details');
+  }
+
+  return response.json();
+}
+
+export async function getSupplierProductsAPI(supplierUid: string): Promise<ProductInfo[]> {
+  const response = await fetch(`/api/utility/suppliers/${supplierUid}/products`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch supplier products');
+  }
+
+  return response.json();
+}
+
+export async function getAllProductsAPI(): Promise<ProductInfo[]> {
+  const response = await fetch('/api/utility/products', {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch products');
+  }
+
+  return response.json();
+}
+
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, token } = options;
   const headers: Record<string, string> = {

@@ -26,7 +26,10 @@ from app.routes.subscription_routes import router as subscription_router
 from app.routes.text_pattern_routes import router as text_pattern_router
 from app.routes.stripe_routes import router as stripe_router
 from app.utils.suppliers import initialize_suppliers
+from app.utils.currency import initialize_exchange_rates, shutdown_exchange_rates
 from app.contract_expiry_checker import check_and_notify_expiring_contracts
+from app.routes import incarca_routes
+
 
 load_dotenv()
 
@@ -111,6 +114,8 @@ app.include_router(preferences_router)
 app.include_router(text_pattern_router)
 app.include_router(stripe_router)
 app.include_router(payment_notifications_router)
+app.include_router(incarca_routes.router)
+
 
 
 # Background task for contract expiry check
@@ -168,9 +173,13 @@ async def contract_expiry_scheduler():
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize suppliers from JSON files on startup."""
+    """Initialize suppliers and exchange rates on startup."""
     global _scheduler_task
     initialize_suppliers()
+    
+    # Initialize exchange rates (fetch immediately so they're available for all users)
+    await initialize_exchange_rates()
+    logger.info("[Startup] Exchange rates initialized")
     
     # Start the contract expiry scheduler
     _scheduler_task = asyncio.create_task(contract_expiry_scheduler())
@@ -192,6 +201,9 @@ async def shutdown_event():
             await _scheduler_task
         except asyncio.CancelledError:
             pass
+    
+    # Stop exchange rate background refresh
+    await shutdown_exchange_rates()
     
     # Give connections time to close gracefully
     await asyncio.sleep(0.1)
