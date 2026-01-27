@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/utility", tags=["Utility Payments"])
 
-@router.post("/match-barcode", response_model=List[SupplierMatch])
+@router.get("/match-barcode", response_model=List[SupplierMatch])
 async def match_barcode(
     barcode: str = Query(..., description="Barcode extracted from utility bill PDF"),
     current_user: TokenData = Depends(require_landlord),

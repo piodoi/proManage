@@ -95,8 +95,6 @@ def extract_barcodes_from_pdf(pdf_bytes: bytes, max_pages: int = 3) -> List[Dict
                         'height': rect.height
                     }
                 })
-                
-                logger.info(f"Found barcode on page {page_num + 1}: {barcode_type} - {barcode_data[:50]}...")
         
         doc.close()
         
@@ -112,7 +110,6 @@ def extract_barcodes_from_pdf(pdf_bytes: bytes, max_pages: int = 3) -> List[Dict
             seen.add(key)
             unique_barcodes.append(bc)
     
-    logger.info(f"Extracted {len(unique_barcodes)} unique barcodes from PDF")
     return unique_barcodes
 
 
@@ -175,7 +172,7 @@ def get_primary_barcode(pdf_bytes: bytes) -> Optional[str]:
     
     if sorted_barcodes:
         best = sorted_barcodes[0]
-        logger.info(f"Selected primary barcode: {best['type']} - {best['data'][:50]}...")
+        logger.info(f"Selected primary barcode: {best['type']} - {best['data']}")
         return best['data']
     
     return None

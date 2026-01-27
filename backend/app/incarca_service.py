@@ -114,15 +114,17 @@ class IncarcaService:
             List of matching suppliers with payment configuration
         """
         try:
-            url = f"{self.base_url}/webapi/transactions/utility/match-barcode"
+            url = f"{self.base_url}/webapi/v2/transactions/utility/match-barcode"
             headers = await self._get_headers()
             params = {"barcode": barcode}
             
             response = await self.http_client.get(url, headers=headers, params=params)
+
+            logger.info(f"Matched barcode response {response} recieved.")
+
             response.raise_for_status()
             
             data = response.json()
-            
             # Parse response into SupplierMatch models
             suppliers = [SupplierMatch(**item) for item in data]
             

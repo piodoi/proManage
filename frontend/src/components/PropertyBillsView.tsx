@@ -144,29 +144,36 @@ export default function PropertyBillsView({
   const [showUtilityPayment, setShowUtilityPayment] = useState(false);
   const [utilityPaymentBill, setUtilityPaymentBill] = useState<Bill | null>(null);
   const [extractedBarcode, setExtractedBarcode] = useState<string>('');
-  const [extractingBarcode, setExtractingBarcode] = useState(false);
+  const [extractingBarcode, setExtractingBarcode] = useState<string | null>(null); // bill.id being extracted
 
   // Function to open utility payment dialog with barcode extraction
   const openUtilityPaymentDialog = async (bill: Bill) => {
     setUtilityPaymentBill(bill);
-    setExtractedBarcode(bill.bill_number || '');
-    setShowUtilityPayment(true);
     
-    // If bill has PDF, try to extract barcode
+    // If bill has PDF, try to extract barcode first before showing dialog
     if (bill.has_pdf) {
-      setExtractingBarcode(true);
+      setExtractingBarcode(bill.id);
       try {
         const result = await extractBarcodeFromBillAPI(bill.id);
         if (result.primary_barcode) {
           setExtractedBarcode(result.primary_barcode);
+        } else {
+          // Fall back to bill_number if no barcode found
+          setExtractedBarcode(bill.bill_number || '');
         }
       } catch (err) {
-        console.log('Barcode extraction not available or failed:', err);
         // Fall back to bill_number if extraction fails
+        setExtractedBarcode(bill.bill_number || '');
       } finally {
-        setExtractingBarcode(false);
+        setExtractingBarcode(null);
       }
+    } else {
+      // No PDF, use bill_number directly
+      setExtractedBarcode(bill.bill_number || '');
     }
+    
+    // Show dialog after barcode is ready
+    setShowUtilityPayment(true);
   };
 
   const handleError = (err: unknown) => {
@@ -895,16 +902,16 @@ export default function PropertyBillsView({
                             <Button
                               size="sm"
                               onClick={() => openUtilityPaymentDialog(bill)}
-                              disabled={extractingBarcode}
+                              disabled={extractingBarcode !== null}
                               className="bg-emerald-700 text-emerald-100 hover:bg-emerald-600 hover:text-white border border-emerald-600 h-6 px-2"
                               title={t('utility.payOnlineBtn')}
                             >
-                              {extractingBarcode && utilityPaymentBill?.id === bill.id ? (
+                              {extractingBarcode === bill.id ? (
                                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                               ) : (
                                 <CreditCard className="w-3 h-3 mr-1" />
                               )}
-                              <span className="text-xs">{t('utility.payOnlineBtn')}</span>
+                              <span className="text-xs">{extractingBarcode === bill.id ? t('common.loading') : t('utility.payOnlineBtn')}</span>
                             </Button>
                           )}
                           <Button

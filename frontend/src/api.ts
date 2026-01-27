@@ -31,9 +31,8 @@ import {
 
 export async function matchBarcodeAPI(barcode: string): Promise<SupplierMatch[]> {
   const response = await fetch(`${API_URL}/api/utility/match-barcode?barcode=${encodeURIComponent(barcode)}`, {
-    method: 'POST',
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
       Authorization: `Bearer ${localStorage.getItem('token')}`,
     },
   });
