@@ -1,23 +1,19 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { 
-  Building2, 
-  FileText, 
-  Users, 
-  Settings, 
-  Bell, 
-  Wrench, 
-  Mail, 
-  Upload, 
-  Download, 
+import {
+  Building2,
+  Users,
+  Settings,
+  Bell,
+  Wrench,
+  Mail,
+  Download,
   CheckCircle,
   AlertTriangle,
   Info,
   Home,
-  CreditCard,
-  Calendar,
-  Search
+  CreditCard
 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 

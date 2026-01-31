@@ -23,7 +23,7 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
   const { t, language } = useI18n();
   const { preferences } = usePreferences();
   const [notifications, setNotifications] = useState<PaymentNotificationWithDetails[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [_properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('pending');

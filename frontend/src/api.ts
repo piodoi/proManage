@@ -547,7 +547,7 @@ export type Bill = {
 };
 
 // Helper function to get PDF download URL for landlord view
-export const getBillPdfUrl = (token: string, billId: string): string => {
+export const getBillPdfUrl = (_token: string, billId: string): string => {
   return `${API_URL}/bills/${billId}/pdf`;
 };
 

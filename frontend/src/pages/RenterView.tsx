@@ -14,7 +14,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, CheckCircle, XCircle, Send, CreditCard } from 'lucide-react';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard } from 'lucide-react';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -1254,7 +1254,7 @@ export default function RenterView() {
           }}
           billBarcode={utilityPaymentBill?.bill.bill_number || ''}
           mode="renter"
-          onSuccess={(transaction: TransactionResponse) => {
+          onSuccess={(_transaction: TransactionResponse) => {
             // Reload bills to show updated status
             if (token) {
               api.renter.bills(token)

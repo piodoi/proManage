@@ -11,7 +11,6 @@ import AllPropertiesSyncDialog from './dialogs/AllPropertiesSyncDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
-import { FileText } from 'lucide-react';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 
 type LandlordViewProps = {
@@ -28,7 +27,7 @@ type PropertyWithBills = {
   billsLoaded: boolean;
 };
 
-export default function LandlordView({ token, onError, hideSettings = false, onNavigateToSubscription }: LandlordViewProps) {
+export default function LandlordView({ token, onError, hideSettings: _hideSettings = false, onNavigateToSubscription }: LandlordViewProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { preferences, loading: preferencesLoading, setPropertyOrder, setViewMode } = usePreferences();

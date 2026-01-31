@@ -1,3 +1,9 @@
+# Most used:
+# Get your public IP
+curl ifconfig.me
+gcloud sql instances patch promanage-db --authorized-networks=34.90.188.113/32,82.79.210.116/32
+
+
 
 ### While you answer, let's prep Cloud Shell:
 
@@ -3009,3 +3015,212 @@ gcloud run deploy promanage-backend-eu \
     --set-env-vars="FRONTEND_URL=https://placeholder.run.app,SMTP_PORT=587"
 ```
 
+# DNS domain setup:
+Part 1: Map US Services to Subdomains
+Backend Setup (api.promanage.urun.me)
+bash
+
+
+# Create domain mapping for backend
+gcloud beta run domain-mappings create \
+  --service=promanage-backend \
+  --domain=api.imanage.urun.me \
+  --region=us-central1
+# Verify the mapping
+gcloud beta run domain-mappings describe api.iomanage.urun.me \
+  --region=us-central1
+Frontend Setup (imanage.urun.me)
+bash
+
+
+# Create domain mapping for frontend
+gcloud beta run domain-mappings create \
+  --service=promanage-frontend \
+  --domain=promanage.urun.me \
+  --region=us-central1
+# Verify the mapping
+gcloud beta run domain-mappings describe promanage.urun.me \
+  --region=us-central1
+Part 2: Configure DNS on Spaceship (urun.me)
+After running the commands above, you need to add these DNS records in Spaceship:
+
+Log into Spaceship
+Go to https://spaceship.com
+Navigate to Domains → urun.me → DNS Settings
+Add CNAME Records
+Record 1 - Frontend:
+
+Type: CNAME
+Host: promanage
+Value: ghs.googlehosted.com
+TTL: 3600
+Record 2 - Backend API:
+
+Type: CNAME
+Host: api.promanage
+Value: ghs.googlehosted.com
+TTL: 3600
+Click Save for each record.
+
+Part 3: Deploy to Europe (europe-west1)
+Step 1: Set Your Project (if not already set)
+bash
+
+
+# Get your project ID
+gcloud config get-value project
+# Or list projects
+gcloud projects list
+# Set project if needed
+gcloud config set project YOUR_PROJECT_ID
+Step 2: Clone Repository (if you haven't already)
+bash
+
+
+# Clone the repository
+git clone https://github.com/piodoi/proManage.git
+cd proManage
+Step 3: Deploy Backend to Europe
+bash
+
+
+# Navigate to backend directory (adjust path as needed)
+cd backend  # or wherever your backend code is
+# Deploy to europe-west1
+gcloud run deploy promanage-backend-eu \
+  --source . \
+  --region=europe-west1 \
+  --platform=managed \
+  --allow-unauthenticated
+# Map to European subdomain
+gcloud beta run domain-mappings create \
+  --service=promanage-backend-eu \
+  --domain=api.imanage.urun.me \
+  --region=europe-west1
+Step 4: Deploy Frontend to Europe
+bash
+
+
+# Navigate to frontend directory
+cd ../frontend  # adjust path as needed
+# Deploy to europe-west1
+gcloud run deploy promanage-frontend-eu \
+  --source . \
+  --region=europe-west1 \
+  --platform=managed \
+  --allow-unauthenticated
+# Map to European subdomain
+gcloud beta run domain-mappings create \
+  --service=promanage-frontend-eu \
+  --domain=imanage.urun.me \
+  --region=europe-west1
+Part 4: Add European DNS Records to Spaceship
+Go back to Spaceship DNS settings and add:
+
+Record 3 - EU Frontend:
+
+Type: CNAME
+Host: imanage
+Value: ghs.googlehosted.com
+TTL: 3600
+Record 4 - EU Backend API:
+
+Type: CNAME
+Host: api.imanage
+Value: ghs.googlehosted.com
+TTL: 3600
+Part 5: Verify All Deployments
+Check Cloud Run Services
+bash
+
+
+# List all services in both regions
+gcloud run services list --region=us-central1
+gcloud run services list --region=europe-west1
+Check Domain Mappings
+bash
+
+
+# US mappings
+gcloud beta run domain-mappings list --region=us-central1
+# EU mappings
+gcloud beta run domain-mappings list --region=europe-west1
+Check Detailed Status
+bash
+
+
+# US Backend
+gcloud beta run domain-mappings describe api.promanage.urun.me --region=us-central1
+# US Frontend
+gcloud beta run domain-mappings describe promanage.urun.me --region=us-central1
+# EU Backend
+gcloud beta run domain-mappings describe api.imanage.urun.me --region=europe-west1
+# EU Frontend
+gcloud beta run domain-mappings describe imanage.urun.me --region=europe-west1
+Part 6: Test Your Domains (After DNS Propagation)
+Wait 30-60 minutes for DNS propagation and SSL certificate provisioning, then test:
+
+bash
+
+
+# Test US deployments
+curl https://promanage.urun.me
+curl https://api.promanage.urun.me
+# Test EU deployments
+curl https://imanage.urun.me
+curl https://api.imanage.urun.me
+# Check DNS resolution
+nslookup promanage.urun.me
+nslookup api.promanage.urun.me
+nslookup imanage.urun.me
+nslookup api.imanage.urun.me
+Summary of Your Final Setup
+Service	Region	Domain	Cloud Run URL
+Frontend (US)	us-central1	promanage.urun.me	https://promanage-frontend-329418258863.us-central1.run.app
+Backend (US)	us-central1	api.promanage.urun.me	https://promanage-backend-329418258863.us-central1.run.app
+Frontend (EU)	europe-west1	imanage.urun.me	Will be generated after deployment
+Backend (EU)	europe-west1	api.imanage.urun.me	Will be generated after deployment
+Complete DNS Records Summary for Spaceship
+
+
+Type: CNAME | Host: promanage     | Value: ghs.googlehosted.com | TTL: 3600
+Type: CNAME | Host: api.promanage | Value: ghs.googlehosted.com | TTL: 3600
+Type: CNAME | Host: imanage       | Value: ghs.googlehosted.com | TTL: 3600
+Type: CNAME | Host: api.imanage   | Value: ghs.googlehosted.com | TTL: 3600
+Important Notes
+If Your Repository Has Dockerfiles
+If your backend/frontend have Dockerfiles, the deploy will use them automatically. Otherwise, Cloud Run will use buildpacks.
+
+If You Need to Specify Dockerfile Location
+bash
+
+
+gcloud run deploy SERVICE_NAME \
+  --source . \
+  --dockerfile=./Dockerfile \
+  --region=REGION \
+  --allow-unauthenticated
+Environment Variables
+If your services need environment variables, add them during deployment:
+
+bash
+
+
+gcloud run deploy promanage-backend-eu \
+  --source . \
+  --region=europe-west1 \
+  --set-env-vars="DATABASE_URL=your-db-url,API_KEY=your-key" \
+  --allow-unauthenticated
+Or update existing services:
+
+bash
+
+
+gcloud run services update promanage-backend \
+  --region=us-central1 \
+  --set-env-vars="KEY1=value1,KEY2=value2"
+Update Frontend API Endpoint
+Make sure your frontend points to the correct backend API:
+
+US frontend (promanage.urun.me) → US backend (api.promanage.urun.me)
+EU frontend (imanage.urun.me) → EU backend (api.imanage.urun.me)
