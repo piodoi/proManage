@@ -111,9 +111,6 @@ export default defineConfig({
               id.includes('@radix-ui/react-use-')) {
             return 'ui-radix-primitives';
           }
-          if (id.includes('@radix-ui')) {
-            return 'ui-radix-other';
-          }
           
           // Icons - split lucide
           if (id.includes('lucide-react')) {
