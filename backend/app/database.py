@@ -18,9 +18,7 @@ from app.models import (
     UserPreferences, UserRole
 )
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "sqlite:///./promanage.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./promanage.db"
 )
 
 # Auto-detect database type

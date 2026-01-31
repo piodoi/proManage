@@ -75,7 +75,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 cors_origins = [
     FRONTEND_URL,
     "http://localhost:5173",  # Dev
-    "http://localhost:5174",  # Dev (alternate port)
+    "http://localhost:4173",  # Dev (alternate port)
 ]
 # Add additional origins from env (comma-separated)
 extra_origins = os.getenv("CORS_ORIGINS", "")
