@@ -897,7 +897,7 @@ export default function PropertyBillsView({
                               <FileText className="w-3 h-3" />
                             </Button>
                           )}
-                          {/* Pay Online button - show for utility bills with bill number or PDF (for barcode extraction) */}
+                          {/* Pay Online button - show for utility bills with bill number or PDF (for barcode extraction) 
                           {bill.bill_type !== 'rent' && (bill.bill_number || bill.has_pdf) && getEffectiveStatus(bill) !== 'paid' && (
                             <Button
                               size="sm"
@@ -913,7 +913,7 @@ export default function PropertyBillsView({
                               )}
                               <span className="text-xs">{extractingBarcode === bill.id ? t('common.loading') : t('utility.payOnlineBtn')}</span>
                             </Button>
-                          )}
+                          )} */}
                           <Button
                             size="sm"
                             onClick={() => handleEditBill(bill)}
