@@ -51,6 +51,3 @@ build/
 .DS_Store
 Thumbs.db
 
-# Poetry
-poetry.lock
-backend/test_credentials.json
