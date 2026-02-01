@@ -186,7 +186,6 @@
     "settings": "Settings",
     "settingsDesc": "Manage your language and notification preferences",
     "password": "Password",
-    "passwordPlaceholder": "Leave empty if renter will create their own",
     "passwordPlaceholderUpdate": "Leave empty to keep current password",
     "passwordHelp": "Optional: Set a password for the renter, or let them create one",
     "languageHelp": "Language for renter's portal and email notifications",

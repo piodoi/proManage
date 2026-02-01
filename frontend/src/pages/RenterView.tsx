@@ -558,7 +558,7 @@ export default function RenterView() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <header className="bg-slate-800 border-b border-slate-700 px-3 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Building2 className="w-6 h-6 text-emerald-500" />
@@ -655,7 +655,7 @@ export default function RenterView() {
         </div>
       </header>
 
-      <main className="p-6 max-w-4xl mx-auto">
+      <main className="p-3 sm:p-6 max-w-4xl mx-auto mobile-scroll">
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
             {error}
@@ -690,20 +690,20 @@ export default function RenterView() {
               {t('renter.bills')}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto mobile-scroll">
             {bills.length === 0 ? (
               <div className="p-6 text-center text-slate-400">{t('renter.noBills')}</div>
             ) : (
-              <Table>
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow className="border-slate-700">
-                    <TableHead className="text-slate-400">{t('common.description')}</TableHead>
-                    <TableHead className="text-slate-400">{t('bill.billType')}</TableHead>
-                    <TableHead className="text-slate-400">{t('common.amount')}</TableHead>
-                    <TableHead className="text-slate-400">{t('renter.remaining')}</TableHead>
-                    <TableHead className="text-slate-400">{t('bill.dueDate')}</TableHead>
-                    <TableHead className="text-slate-400">{t('common.status')}</TableHead>
-                    <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('common.description')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('bill.billType')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('common.amount')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('renter.remaining')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('bill.dueDate')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('common.status')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -870,11 +870,11 @@ export default function RenterView() {
           });
 
           return (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4">
             <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">{t('renter.totalThisMonth') || 'Total This Month'}</p>
-                <p className="text-2xl font-bold text-slate-100">
+              <CardContent className="pt-3 sm:pt-4 px-2 sm:px-4 pb-3 sm:pb-4">
+                <p className="text-slate-400 text-xs sm:text-sm">{t('renter.totalThisMonth') || 'Total This Month'}</p>
+                <p className="text-xl sm:text-2xl font-bold text-slate-100">
                   {thisMonthBills
                     .reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
@@ -887,9 +887,9 @@ export default function RenterView() {
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm">{t('renter.totalPaid')}</p>
-                <p className="text-2xl font-bold text-green-400">
+              <CardContent className="pt-3 sm:pt-4 px-2 sm:px-4 pb-3 sm:pb-4">
+                <p className="text-slate-400 text-xs sm:text-sm">{t('renter.totalPaid')}</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-400">
                   {thisMonthBills
                     .filter(b => b.bill.status === 'paid')
                     .reduce((sum, b) => {
@@ -903,27 +903,24 @@ export default function RenterView() {
               </CardContent>
             </Card>
             <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-6">
-                <p className="text-slate-400 text-sm mb-3">{t('renter.balance')}</p>
+              <CardContent className="pt-3 sm:pt-4 px-2 sm:px-4 pb-3 sm:pb-4">
+                <p className="text-slate-400 text-xs sm:text-sm mb-1 sm:mb-2">{t('renter.balance')}</p>
                 
                 {/* Bills breakdown inside balance card - bills with non-zero remaining within warning days */}
                 {balanceBills.filter(b => b.remaining !== 0).length > 0 && (
-                  <div className="mb-3 space-y-0.5 text-xs">
+                  <div className="mb-2 space-y-0 text-xs">
                     {balanceBills.filter(b => b.remaining !== 0).map((item) => (
                       <div key={item.bill.id} className={`flex justify-between items-center ${item.remaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
-                        <span className="truncate mr-2">{item.bill.description}</span>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {item.bill.currency && item.bill.currency !== 'RON' && (
-                            <span className="whitespace-nowrap">{item.remaining.toFixed(2)} {item.bill.currency} /</span>
+                        <span className="truncate mr-1">{item.bill.description}</span>
+                        <span className="tabular-nums text-right flex-shrink-0 whitespace-nowrap">
+                           {item.bill.currency && item.bill.currency !== 'RON' && (
+                          <> {item.remaining.toFixed(2)} {item.bill.currency} / </>
                           )}
-                          <span className="tabular-nums text-right min-w-[60px]">
-                            {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON'
-                              ? (item.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
-                              : item.remaining.toFixed(2)
-                            }
-                          </span>
-                          <span className="w-8 text-left">RON</span>
-                        </div>
+                          {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON'
+                            ? (item.remaining * (balance.exchange_rates.RON) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
+                            : item.remaining.toFixed(2)
+                          } RON
+                        </span>
                       </div>
                     ))}
                     <div className="border-t border-slate-700 mt-1 pt-1"></div>
@@ -931,7 +928,7 @@ export default function RenterView() {
                 )}
                 
                 <div className="flex justify-end items-baseline gap-1">
-                  <p className={`text-2xl font-bold tabular-nums ${
+                  <p className={`text-xl sm:text-2xl font-bold tabular-nums ${
                     balanceBills.reduce((sum, b) => {
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
                         ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
@@ -948,7 +945,7 @@ export default function RenterView() {
                       }, 0)
                       .toFixed(2)}
                   </p>
-                  <p className={`text-lg font-medium ${
+                  <p className={`text-base sm:text-lg font-medium ${
                     balanceBills.reduce((sum, b) => sum + b.remaining, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     RON
@@ -1605,7 +1602,7 @@ export default function RenterView() {
                     value={accountForm.password}
                     onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })}
                     className="bg-slate-700 border-slate-600 text-slate-100 pr-10"
-                    placeholder={t('renter.passwordPlaceholder')}
+                    placeholder={t('auth.passwordPlaceholder')}
                   />
                   <button
                     type="button"

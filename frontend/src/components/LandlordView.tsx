@@ -261,13 +261,13 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
       >
         {isDraggable && (
           <div 
-            className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center cursor-grab active:cursor-grabbing z-10 bg-gradient-to-r from-slate-800/80 to-transparent rounded-l-lg"
+            className="absolute left-0 top-0 bottom-0 w-7 flex items-center justify-center cursor-grab active:cursor-grabbing z-10 bg-gradient-to-r from-slate-800/80 to-transparent rounded-l-lg"
             title={t('property.dragToReorder')}
           >
             <GripVertical className="w-5 h-5 text-slate-500 hover:text-slate-300" />
           </div>
         )}
-        <div className={isDraggable ? 'ml-6' : ''}>
+        <div className={isDraggable ? 'ml-1' : ''}>
           <div className="relative">
             {pwb.billsLoading && (
               <div className="absolute top-2 right-2 z-10">
@@ -309,14 +309,14 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
 
     if (viewMode === 'grid') {
       return (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           {propertiesWithBills.map((pwb, index) => renderPropertyCard(pwb, index, true))}
         </div>
       );
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {propertiesWithBills.map((pwb, index) => renderPropertyCard(pwb, index, true))}
       </div>
     );
@@ -331,7 +331,7 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Button

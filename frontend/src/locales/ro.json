@@ -194,7 +194,6 @@
     "settings": "Setări",
     "settingsDesc": "Gestionează preferințele de limbă și notificări",
     "password": "Parolă",
-    "passwordPlaceholder": "Lasă gol dacă chiriaș își va crea singur",
     "passwordPlaceholderUpdate": "Lasă gol pentru a păstra parola curentă",
     "passwordHelp": "Opțional: Setează o parolă pentru chiriaș, sau lasă-l să-și creeze una",
     "languageHelp": "Limba pentru portalul chiriașului și notificări email",

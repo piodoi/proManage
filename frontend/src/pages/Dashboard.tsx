@@ -248,7 +248,8 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-900 flex flex-col">
       <HeaderBar />
 
-      <main className="flex-1 p-6">
+      <main className="flex-1 p-3 overflow-x-auto">
+        <div className="min-w-[1080px]">
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
             {error}
@@ -296,36 +297,36 @@ export default function Dashboard() {
           </TabsList>
 
           <div className="bg-slate-800 border border-t-0 border-slate-700 rounded-b-lg">
-            <TabsContent value="summary" className="m-0 p-6 space-y-4">
+            <TabsContent value="summary" className="m-0 p-3 space-y-3">
               <SummaryView />
             </TabsContent>
 
-            <TabsContent value="property" className="m-0 p-6 space-y-4">
+            <TabsContent value="property" className="m-0 p-3 space-y-3">
               <LandlordView token={token} onError={setError} hideSettings onNavigateToSubscription={() => setActiveTab('subscription')} />
             </TabsContent>
 
-            <TabsContent value="settings" className="m-0 p-6 space-y-4">
+            <TabsContent value="settings" className="m-0 p-3 space-y-3">
               <SettingsView token={token} user={user} onError={setError} onNavigateToSubscription={() => setActiveTab('subscription')} />
             </TabsContent>
 
-            <TabsContent value="subscription" className="m-0 p-6 space-y-4">
+            <TabsContent value="subscription" className="m-0 p-3 space-y-3">
               <SettingsView token={token} user={user} onError={setError} forceTab="subscription" hideTabBar />
             </TabsContent>
 
-            <TabsContent value="notifications" className="m-0 p-6 space-y-4">
+            <TabsContent value="notifications" className="m-0 p-3 space-y-3">
               <NotificationsView onCountChange={setNotificationCount} />
             </TabsContent>
 
-            <TabsContent value="tools" className="m-0 p-6 space-y-4">
+            <TabsContent value="tools" className="m-0 p-3 space-y-3">
               <TextPatternView />
             </TabsContent>
 
-            <TabsContent value="help" className="m-0 p-6 space-y-4">
+            <TabsContent value="help" className="m-0 p-3 space-y-3">
               <HelpManualView />
             </TabsContent>
 
             {isAdmin && (
-              <TabsContent value="admin" className="m-0 p-6 space-y-0">
+              <TabsContent value="admin" className="m-0 p-3 space-y-0">
                 <AdminTabsContent
                   token={token}
                   users={users}
@@ -366,6 +367,7 @@ export default function Dashboard() {
             )}
           </div>
         </Tabs>
+        </div>
       </main>
       <Footer />
     </div>

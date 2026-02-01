@@ -251,7 +251,7 @@ export default function RenterDialog({
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="bg-slate-700 border-slate-600 text-slate-100 pr-10"
-                placeholder={renter ? t('renter.passwordPlaceholderUpdate') : t('renter.passwordPlaceholder')}
+                placeholder={renter ? t('renter.passwordPlaceholderUpdate') : t('auth.passwordPlaceholder')}
               />
               <button
                 type="button"
