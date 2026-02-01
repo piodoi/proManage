@@ -64,6 +64,22 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  // Sync preferences.language to localStorage and trigger i18n update
+  useEffect(() => {
+    if (preferences.language) {
+      const currentLang = localStorage.getItem('language');
+      if (currentLang !== preferences.language) {
+        localStorage.setItem('language', preferences.language);
+        // Dispatch storage event to notify i18n context
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'language',
+          newValue: preferences.language,
+          oldValue: currentLang,
+        }));
+      }
+    }
+  }, [preferences.language]);
+
   // Save preferences with debouncing
   const savePreferences = useCallback((updates: Partial<Preferences>) => {
     if (!token) return;

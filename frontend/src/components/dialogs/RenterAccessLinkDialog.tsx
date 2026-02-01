@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Copy, MessageCircle } from 'lucide-react';
+import { Copy, MessageCircle, ExternalLink } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 import { usePreferences } from '../../hooks/usePreferences';
 import { formatDateWithPreferences } from '../../lib/utils';
@@ -144,8 +144,17 @@ export default function RenterAccessLinkDialog({
               onClick={handleCopyLink}
               variant="outline"
               className="border-slate-600"
+              title={t('common.copy')}
             >
               <Copy className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => renterLink && window.open(`/renter/${renterLink.token}`, '_blank')}
+              variant="outline"
+              className="border-slate-600"
+              title={t('common.open')}
+            >
+              <ExternalLink className="w-4 h-4" />
             </Button>
           </div>
           
