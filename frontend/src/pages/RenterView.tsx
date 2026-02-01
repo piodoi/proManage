@@ -585,7 +585,7 @@ export default function RenterView() {
                                 >
                                   {t('renter.pay')}
                                 </Button>
-                                {/* Pay Online button - show for utility bills with bill number (used as barcode) */}
+                                {/* Pay Online button - show for utility bills with bill number (used as barcode) }
                                 {item.bill.bill_type !== 'rent' && item.bill.bill_number && (
                                   <Button
                                     size="sm"
@@ -599,7 +599,7 @@ export default function RenterView() {
                                     <CreditCard className="w-4 h-4 mr-1" />
                                     {t('utility.payOnlineBtn')}
                                   </Button>
-                                )}
+                                )} */}
                                 {item.is_direct_debit && (
                                   <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
                                     {t('bill.directDebit')}

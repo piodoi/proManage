@@ -3,6 +3,8 @@
 curl ifconfig.me
 gcloud sql instances patch promanage-db --authorized-networks=34.90.188.113/32,82.79.210.116/32
 
+# remove all rev but active on region:
+gcloud run revisions list --region=europe-west1 --filter="status.conditions.type:Active AND status.conditions.status:'False'" --format='value(metadata.name)' | xargs -r -L1 gcloud run revisions delete --region=europe-west1 --quiet
 
 
 ### While you answer, let's prep Cloud Shell:
