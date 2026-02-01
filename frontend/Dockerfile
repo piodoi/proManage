@@ -17,7 +17,7 @@ COPY . .
 
 # Build arguments for environment variables
 ARG VITE_API_URL=https://promanage-be-329418258863.europe-west1.run.app
-ARG VITE_GOOGLE_CLIENT_ID=""
+ARG VITE_GOOGLE_CLIENT_ID="772060848256-6qfq4c93c5d4vgf09on7mkejqs0lp4h5.apps.googleusercontent.com"
 ARG VITE_FACEBOOK_APP_ID=""
 
 # Set environment variables for build

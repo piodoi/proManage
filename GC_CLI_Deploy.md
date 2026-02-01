@@ -2152,6 +2152,12 @@ gcloud beta run domain-mappings create \
   --service=promanage-backend \
   --domain=api.imanage.urun.me \
   --region=us-central1
+# eu
+gcloud beta run domain-mappings create \
+  --service=promanage-backend \
+  --domain=api.promanage.urun.me \
+  --region=europe-west1
+
 # Verify the mapping
 gcloud beta run domain-mappings describe api.iomanage.urun.me \
   --region=us-central1
