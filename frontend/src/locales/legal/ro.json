@@ -1,0 +1,128 @@
+{
+  "footer": {
+    "allRightsReserved": "Toate drepturile rezervate.",
+    "privacyPolicy": "Politica de Confidențialitate",
+    "termsOfService": "Termeni și Condiții",
+    "contactSupport": "Contactează Suportul"
+  },
+  "privacy": {
+    "title": "Politica de Confidențialitate",
+    "lastUpdated": "Ultima actualizare",
+    "lastUpdatedDate": "Ianuarie 2025",
+    "introduction": {
+      "title": "Introducere",
+      "content": "Bun venit la ProManage. Respectăm confidențialitatea dumneavoastră și ne angajăm să vă protejăm datele personale. Această politică de confidențialitate vă va informa despre modul în care avem grijă de datele dumneavoastră personale când vizitați site-ul nostru și utilizați serviciile noastre, și vă va spune despre drepturile dumneavoastră de confidențialitate și cum vă protejează legea."
+    },
+    "dataCollection": {
+      "title": "Informațiile pe care le colectăm",
+      "content": "Colectăm și procesăm următoarele tipuri de informații personale:",
+      "item1": "Date de identitate: nume, adresă de email",
+      "item2": "Date de contact: adresă de email, număr de telefon (opțional)",
+      "item3": "Date tehnice: adresă IP, tip și versiune browser, setare fus orar, sistem de operare",
+      "item4": "Date de utilizare: informații despre cum utilizați site-ul și serviciile noastre",
+      "item5": "Date proprietăți: informații despre proprietățile pe care le gestionați, inclusiv adrese și facturi de utilități"
+    },
+    "dataUse": {
+      "title": "Cum utilizăm informațiile dumneavoastră",
+      "content": "Utilizăm datele dumneavoastră personale în următoarele scopuri:",
+      "item1": "Pentru a furniza și menține serviciul nostru",
+      "item2": "Pentru a vă notifica despre modificările serviciului nostru",
+      "item3": "Pentru a oferi suport clienți",
+      "item4": "Pentru a aduna analize sau informații valoroase pentru a îmbunătăți serviciul nostru",
+      "item5": "Pentru a detecta, preveni și rezolva problemele tehnice",
+      "item6": "Pentru a procesa plățile și gestiona abonamentele"
+    },
+    "dataStorage": {
+      "title": "Stocarea și securitatea datelor",
+      "content": "Implementăm măsuri tehnice și organizatorice adecvate pentru a proteja datele dumneavoastră personale împotriva procesării neautorizate sau ilegale, pierderii accidentale, distrugerii sau deteriorării. Datele dumneavoastră sunt stocate pe servere securizate și folosim criptare pentru a proteja informațiile sensibile."
+    },
+    "dataSharing": {
+      "title": "Partajarea datelor",
+      "content": "Nu vindem, nu comercializăm și nu transferăm în alt mod informațiile dumneavoastră personale către părți externe, cu excepția furnizării serviciilor noastre. Aceasta poate include:",
+      "item1": "Procesatori de plăți (pentru plăți abonament)",
+      "item2": "Furnizori de servicii email (pentru emailuri tranzacționale)",
+      "item3": "Furnizori de hosting cloud (pentru stocarea datelor)"
+    },
+    "cookies": {
+      "title": "Cookie-uri",
+      "content": "Folosim cookie-uri esențiale pentru a asigura funcționalitatea de bază a site-ului nostru, cum ar fi menținerea sesiunii și stocarea preferințelor dumneavoastră. Nu folosim cookie-uri de urmărire sau publicitate."
+    },
+    "userRights": {
+      "title": "Drepturile dumneavoastră",
+      "content": "Conform legilor de protecție a datelor, aveți drepturi inclusiv:",
+      "item1": "Dreptul de acces: Puteți solicita copii ale datelor dumneavoastră personale",
+      "item2": "Dreptul la rectificare: Ne puteți cere să corectăm informații inexacte",
+      "item3": "Dreptul la ștergere: Ne puteți cere să ștergem datele dumneavoastră personale",
+      "item4": "Dreptul la portabilitate: Puteți solicita să transferăm datele dumneavoastră către altă organizație",
+      "item5": "Dreptul de opoziție: Vă puteți opune anumitor tipuri de procesare"
+    },
+    "changes": {
+      "title": "Modificări ale acestei politici",
+      "content": "Este posibil să actualizăm această politică de confidențialitate din când în când. Vă vom notifica despre orice modificări prin postarea noii politici de confidențialitate pe această pagină și actualizarea datei \"Ultima actualizare\"."
+    },
+    "contact": {
+      "title": "Contactați-ne",
+      "content": "Dacă aveți întrebări despre această politică de confidențialitate sau practicile noastre de confidențialitate, vă rugăm să ne contactați prin opțiunea Contactează Suportul din aplicație."
+    }
+  },
+  "terms": {
+    "title": "Termeni și Condiții",
+    "lastUpdated": "Ultima actualizare",
+    "lastUpdatedDate": "Ianuarie 2025",
+    "acceptance": {
+      "title": "Acceptarea termenilor",
+      "content": "Prin accesarea sau utilizarea ProManage, sunteți de acord să fiți obligat de acești Termeni și Condiții. Dacă nu sunteți de acord cu acești termeni, vă rugăm să nu utilizați serviciul nostru."
+    },
+    "description": {
+      "title": "Descrierea serviciului",
+      "content": "ProManage este o platformă de gestionare a proprietăților și chiriilor care permite proprietarilor să gestioneze proprietățile, să urmărească facturile de utilități și să comunice cu chiriașii. Ne rezervăm dreptul de a modifica, suspenda sau întrerupe serviciul în orice moment."
+    },
+    "accounts": {
+      "title": "Conturile utilizatorilor",
+      "content": "Când creați un cont, trebuie să furnizați informații exacte și complete. Sunteți responsabil pentru:",
+      "item1": "Menținerea confidențialității credențialelor contului dumneavoastră",
+      "item2": "Toate activitățile care au loc în contul dumneavoastră",
+      "item3": "Notificarea noastră imediată despre orice utilizare neautorizată"
+    },
+    "acceptableUse": {
+      "title": "Utilizare acceptabilă",
+      "content": "Sunteți de acord să nu utilizați serviciul pentru:",
+      "item1": "Încălcarea oricăror legi sau reglementări aplicabile",
+      "item2": "Încărcarea de software malițios sau conținut dăunător",
+      "item3": "Încercarea de a obține acces neautorizat la sistemele noastre",
+      "item4": "Interferarea cu sau perturbarea serviciului"
+    },
+    "intellectualProperty": {
+      "title": "Proprietate intelectuală",
+      "content": "Serviciul și conținutul său original, caracteristicile și funcționalitatea sunt deținute de ProManage și sunt protejate de legile internaționale privind drepturile de autor, mărcile comerciale și alte legi privind proprietatea intelectuală."
+    },
+    "payment": {
+      "title": "Termeni de plată",
+      "content": "Unele caracteristici ale ProManage necesită un abonament plătit. Prin abonare, sunteți de acord să plătiți taxele aplicabile. Taxele de abonament sunt facturate în avans și nu sunt rambursabile, cu excepția cazului în care este cerut de lege."
+    },
+    "termination": {
+      "title": "Încetare",
+      "content": "Putem rezilia sau suspenda contul dumneavoastră imediat, fără notificare prealabilă sau răspundere, din orice motiv, inclusiv încălcarea acestor Termeni. La încetare, dreptul dumneavoastră de a utiliza serviciul va înceta imediat."
+    },
+    "disclaimer": {
+      "title": "Excluderea garanțiilor",
+      "content": "Serviciul este furnizat \"ca atare\" și \"așa cum este disponibil\" fără nicio garanție de niciun fel, fie expresă sau implicită, inclusiv, dar fără a se limita la garanțiile implicite de comercializare, adecvare pentru un anumit scop și neîncălcare."
+    },
+    "liability": {
+      "title": "Limitarea răspunderii",
+      "content": "În niciun caz ProManage nu va fi răspunzător pentru daune indirecte, incidentale, speciale, consecințiale sau punitive, inclusiv pierderea profiturilor, datelor sau altor pierderi necorporale rezultate din utilizarea serviciului."
+    },
+    "changes": {
+      "title": "Modificări ale termenilor",
+      "content": "Ne rezervăm dreptul de a modifica acești termeni în orice moment. Vom furniza notificare despre modificările semnificative prin postarea noilor termeni pe această pagină. Utilizarea continuă a serviciului după astfel de modificări constituie acceptarea noilor termeni."
+    },
+    "governingLaw": {
+      "title": "Legea aplicabilă",
+      "content": "Acești Termeni vor fi guvernați și interpretați în conformitate cu legile aplicabile, fără a ține cont de prevederile privind conflictul de legi."
+    },
+    "contact": {
+      "title": "Informații de contact",
+      "content": "Pentru orice întrebări despre acești Termeni și Condiții, vă rugăm să ne contactați prin opțiunea Contactează Suportul din aplicație."
+    }
+  }
+}

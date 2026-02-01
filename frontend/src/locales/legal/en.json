@@ -1,0 +1,128 @@
+{
+  "footer": {
+    "allRightsReserved": "All rights reserved.",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "contactSupport": "Contact Support"
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "lastUpdated": "Last Updated",
+    "lastUpdatedDate": "January 2025",
+    "introduction": {
+      "title": "Introduction",
+      "content": "Welcome to ProManage. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we look after your personal data when you visit our website and use our services, and tell you about your privacy rights and how the law protects you."
+    },
+    "dataCollection": {
+      "title": "Information We Collect",
+      "content": "We collect and process the following types of personal information:",
+      "item1": "Identity Data: name, email address",
+      "item2": "Contact Data: email address, phone number (optional)",
+      "item3": "Technical Data: IP address, browser type and version, time zone setting, operating system",
+      "item4": "Usage Data: information about how you use our website and services",
+      "item5": "Property Data: information about properties you manage, including addresses and utility bills"
+    },
+    "dataUse": {
+      "title": "How We Use Your Information",
+      "content": "We use your personal data for the following purposes:",
+      "item1": "To provide and maintain our service",
+      "item2": "To notify you about changes to our service",
+      "item3": "To provide customer support",
+      "item4": "To gather analysis or valuable information to improve our service",
+      "item5": "To detect, prevent and address technical issues",
+      "item6": "To process payments and manage subscriptions"
+    },
+    "dataStorage": {
+      "title": "Data Storage and Security",
+      "content": "We implement appropriate technical and organizational measures to protect your personal data against unauthorized or unlawful processing, accidental loss, destruction or damage. Your data is stored on secure servers and we use encryption to protect sensitive information."
+    },
+    "dataSharing": {
+      "title": "Data Sharing",
+      "content": "We do not sell, trade, or otherwise transfer your personal information to outside parties except to provide our services. This may include:",
+      "item1": "Payment processors (for subscription payments)",
+      "item2": "Email service providers (for transactional emails)",
+      "item3": "Cloud hosting providers (for data storage)"
+    },
+    "cookies": {
+      "title": "Cookies",
+      "content": "We use essential cookies to ensure the basic functionality of our website, such as maintaining your session and storing your preferences. We do not use tracking or advertising cookies."
+    },
+    "userRights": {
+      "title": "Your Rights",
+      "content": "Under data protection laws, you have rights including:",
+      "item1": "Right to access: You can request copies of your personal data",
+      "item2": "Right to rectification: You can ask us to correct inaccurate information",
+      "item3": "Right to erasure: You can ask us to delete your personal data",
+      "item4": "Right to portability: You can request we transfer your data to another organization",
+      "item5": "Right to object: You can object to certain types of processing"
+    },
+    "changes": {
+      "title": "Changes to This Policy",
+      "content": "We may update this privacy policy from time to time. We will notify you of any changes by posting the new privacy policy on this page and updating the \"Last Updated\" date."
+    },
+    "contact": {
+      "title": "Contact Us",
+      "content": "If you have any questions about this privacy policy or our privacy practices, please contact us through the Contact Support option in the application."
+    }
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "lastUpdated": "Last Updated",
+    "lastUpdatedDate": "January 2025",
+    "acceptance": {
+      "title": "Acceptance of Terms",
+      "content": "By accessing or using ProManage, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service."
+    },
+    "description": {
+      "title": "Description of Service",
+      "content": "ProManage is a property and rent management platform that allows landlords to manage properties, track utility bills, and communicate with renters. We reserve the right to modify, suspend, or discontinue the service at any time."
+    },
+    "accounts": {
+      "title": "User Accounts",
+      "content": "When you create an account, you must provide accurate and complete information. You are responsible for:",
+      "item1": "Maintaining the confidentiality of your account credentials",
+      "item2": "All activities that occur under your account",
+      "item3": "Notifying us immediately of any unauthorized use"
+    },
+    "acceptableUse": {
+      "title": "Acceptable Use",
+      "content": "You agree not to use the service to:",
+      "item1": "Violate any applicable laws or regulations",
+      "item2": "Upload malicious software or harmful content",
+      "item3": "Attempt to gain unauthorized access to our systems",
+      "item4": "Interfere with or disrupt the service"
+    },
+    "intellectualProperty": {
+      "title": "Intellectual Property",
+      "content": "The service and its original content, features, and functionality are owned by ProManage and are protected by international copyright, trademark, and other intellectual property laws."
+    },
+    "payment": {
+      "title": "Payment Terms",
+      "content": "Some features of ProManage require a paid subscription. By subscribing, you agree to pay the applicable fees. Subscription fees are billed in advance and are non-refundable except as required by law."
+    },
+    "termination": {
+      "title": "Termination",
+      "content": "We may terminate or suspend your account immediately, without prior notice or liability, for any reason, including breach of these Terms. Upon termination, your right to use the service will cease immediately."
+    },
+    "disclaimer": {
+      "title": "Disclaimer of Warranties",
+      "content": "The service is provided \"as is\" and \"as available\" without any warranties of any kind, either express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement."
+    },
+    "liability": {
+      "title": "Limitation of Liability",
+      "content": "In no event shall ProManage be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or other intangible losses resulting from your use of the service."
+    },
+    "changes": {
+      "title": "Changes to Terms",
+      "content": "We reserve the right to modify these terms at any time. We will provide notice of significant changes by posting the new terms on this page. Your continued use of the service after such changes constitutes acceptance of the new terms."
+    },
+    "governingLaw": {
+      "title": "Governing Law",
+      "content": "These Terms shall be governed by and construed in accordance with applicable laws, without regard to conflict of law provisions."
+    },
+    "contact": {
+      "title": "Contact Information",
+      "content": "For any questions about these Terms of Service, please contact us through the Contact Support option in the application."
+    }
+  }
+}

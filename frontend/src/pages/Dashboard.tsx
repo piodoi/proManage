@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import HeaderBar from '@/components/HeaderBar';
+import Footer from '@/components/Footer';
 import { Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, FolderSearch, Crown, Bell } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
@@ -244,10 +245,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen bg-slate-900 flex flex-col">
       <HeaderBar />
 
-      <main className="p-6">
+      <main className="flex-1 p-6">
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
             {error}
@@ -366,6 +367,7 @@ export default function Dashboard() {
           </div>
         </Tabs>
       </main>
+      <Footer />
     </div>
   );
 }

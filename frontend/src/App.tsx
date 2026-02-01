@@ -6,6 +6,8 @@ import RenterView from './pages/RenterView';
 import Login from './pages/Login';
 import ConfirmEmail from './pages/ConfirmEmail';
 import HelpManualView from './components/HelpManualView';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import { I18nProvider, useI18n } from './lib/i18n';
 import { PreferencesProvider } from './hooks/usePreferences.tsx';
 import { SubscriptionProvider } from './hooks/useSubscription.tsx';
@@ -84,6 +86,8 @@ function App() {
                 <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
                 <Route path="/confirm-email" element={<ConfirmEmail />} />
                 <Route path="/help" element={<HelpManualView />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
                 <Route path="/renter/:token" element={<RenterView />} />
                 <Route
                   path="/*"

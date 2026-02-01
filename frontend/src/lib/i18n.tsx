@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import enTranslations from '../locales/en.json';
 import roTranslations from '../locales/ro.json';
+import enLegal from '../locales/legal/en.json';
+import roLegal from '../locales/legal/ro.json';
 
 type TranslationKey = string;
 
+// Merge main translations with legal documents
 const translations: Record<string, any> = {
-  en: enTranslations,
-  ro: roTranslations, // Allow for missing keys (fallback to English at runtime)
+  en: { ...enTranslations, ...enLegal },
+  ro: { ...roTranslations, ...roLegal },
 };
 
 type Language = 'en' | 'ro';

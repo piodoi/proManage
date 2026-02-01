@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../App';
 import { Button } from '@/components/ui/button';
 import HeaderBar from '@/components/HeaderBar';
+import Footer from '@/components/Footer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -227,9 +228,9 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen bg-slate-900 flex flex-col">
       <HeaderBar />
-      <div className="flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-slate-800 border-slate-700">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-slate-100">{t('app.title')}</CardTitle>
@@ -399,6 +400,7 @@ export default function Login() {
           </CardContent>
         </Card>
       </div>
+      <Footer />
     </div>
   );
 }
