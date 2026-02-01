@@ -6,10 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useI18n } from '../lib/i18n';
+import { featureFlags } from '../lib/featureFlags';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const FACEBOOK_LOGIN = import.meta.env.VITE_FACEBOOK_LOGIN === 'true';
 
 interface GooglePromptNotification {
   isNotDisplayed: () => boolean;
@@ -47,7 +47,6 @@ export default function Login() {
   const [authMode, setAuthMode] = useState<AuthMode>('main');
   const [demoEmail, setDemoEmail] = useState('');
   const [demoName, setDemoName] = useState('');
-  const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formName, setFormName] = useState('');
@@ -71,13 +70,6 @@ export default function Login() {
       setError('Could not connect to backend. Make sure it is running.');
     }
   }, [login]);
-
-  useEffect(() => {
-    fetch(`${API_URL}/auth/has-admin`)
-      .then(res => res.json())
-      .then(data => setHasAdmin(data.has_admin))
-      .catch(() => setHasAdmin(false));
-  }, []);
 
   useEffect(() => {
     console.log('[Google OAuth] Initializing, GOOGLE_CLIENT_ID present:', !!GOOGLE_CLIENT_ID);
@@ -275,13 +267,13 @@ export default function Login() {
 
                 <div id="google-button" className="w-full [&>div]:w-full [&>div>div]:w-full" />
 
-                {FACEBOOK_LOGIN && (
+                {featureFlags.facebookLogin && (
                   <Button onClick={handleFacebookLogin} className="w-full bg-blue-600 hover:bg-blue-700">
                     {t('auth.continueWithFacebook')}
                   </Button>
                 )}
 
-                {!hasAdmin && (
+                {featureFlags.demoLogin && (
                   <React.Fragment>
                     <div className="relative">
                       <div className="absolute inset-0 flex items-center">
