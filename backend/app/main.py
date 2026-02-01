@@ -76,6 +76,8 @@ cors_origins = [
     FRONTEND_URL,
     "http://localhost:5173",  # Dev
     "http://localhost:4173",  # Dev (alternate port)
+    "https://promanage.urun.me",
+    "https://imanage.urun.me",
 ]
 # Add additional origins from env (comma-separated)
 extra_origins = os.getenv("CORS_ORIGINS", "")
