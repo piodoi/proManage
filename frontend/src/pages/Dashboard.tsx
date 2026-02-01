@@ -249,7 +249,7 @@ export default function Dashboard() {
       <HeaderBar />
 
       <main className="flex-1 p-3 overflow-x-auto">
-        <div className="min-w-[1080px]">
+        <div className="md:min-w-[1080px]">
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
             {error}
