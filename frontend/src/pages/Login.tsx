@@ -358,7 +358,13 @@ export default function Login() {
                   type="password"
                   value={formPassword}
                   onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder={t('auth.passwordPlaceholder')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleEmailLogin();
+                    }
+                  }}
+                  placeholder={t('renter.passwordPlaceholder')}
                   className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
