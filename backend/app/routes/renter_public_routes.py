@@ -7,11 +7,16 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from app.models import PaymentNotification, PaymentNotificationCreate, PaymentNotificationStatus, BillStatus, Bill, RenterAccountCreate, RenterPreferencesUpdate
 from app.database import db
-from app.routes.auth_routes import hash_password
+from app.routes.auth_routes import hash_password, verify_password
 from app.utils.currency import get_exchange_rates, convert_currency
 from app.paths import get_bill_pdf_path, bill_pdf_exists
 
 router = APIRouter(prefix="/renter", tags=["renter-public"])
+
+
+class RenterLogin(BaseModel):
+    """For renter to login with password"""
+    password: str
 
 
 def calculate_bill_status(bill: Bill) -> Bill:
@@ -439,6 +444,36 @@ async def create_renter_account(token: str, data: RenterAccountCreate):
             "name": renter.name,
             "email": renter.email,
             "has_account": True,
+        }
+    }
+
+
+@router.post("/{token}/login")
+async def renter_login(token: str, data: RenterLogin):
+    """
+    Login for renter with password.
+    Returns success if password matches, allowing access to settings.
+    """
+    renter = db.get_renter_by_token(token)
+    if not renter:
+        raise HTTPException(status_code=404, detail="Invalid access token")
+    
+    # Check if renter has an account
+    if not renter.password_hash:
+        raise HTTPException(status_code=400, detail="No account exists. Please create an account first.")
+    
+    # Verify password
+    if not verify_password(data.password, renter.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    return {
+        "message": "Login successful",
+        "renter": {
+            "id": renter.id,
+            "name": renter.name,
+            "email": renter.email,
+            "language": renter.language or "ro",
+            "email_notifications": renter.email_notifications or False,
         }
     }
 

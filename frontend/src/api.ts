@@ -291,6 +291,8 @@ export const api = {
       request<PaymentNotificationResponse>(`/renter/${token}/notify-payment`, { method: 'POST', body: data }),
     createAccount: (token: string, data: RenterAccountCreate) =>
       request<{ message: string; renter: { id: string; name: string; email?: string; has_account: boolean } }>(`/renter/${token}/create-account`, { method: 'POST', body: data }),
+    login: (token: string, password: string) =>
+      request<{ message: string; renter: { id: string; name: string; email?: string; language: string; email_notifications: boolean } }>(`/renter/${token}/login`, { method: 'POST', body: { password } }),
     updatePreferences: (token: string, data: RenterPreferencesUpdate) =>
       request<{ message: string; renter: { id: string; name: string; email?: string; language: string; email_notifications: boolean } }>(`/renter/${token}/preferences`, { method: 'PUT', body: data }),
     updateEmail: (token: string, email: string) =>

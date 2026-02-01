@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell } from 'lucide-react';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell, LogIn } from 'lucide-react';
 import { featureFlags } from '../lib/featureFlags';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
@@ -55,6 +55,10 @@ export default function RenterView() {
   // Account and settings dialog state
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const [accountForm, setAccountForm] = useState({
     password: '',
     passwordConfirm: '',
@@ -179,26 +183,35 @@ export default function RenterView() {
     }
   }, [groupedBills, expandedGroups]);
 
-  // Default to Romanian for renters
+  // Apply language from backend (DB) - works even without login
   useEffect(() => {
-    const savedLang = localStorage.getItem('language');
-    if (!savedLang && info?.renter.language) {
-      // Use language from backend if available
+    if (info?.renter.language) {
       const renterLang = info.renter.language as 'en' | 'ro';
       if (renterLang === 'en' || renterLang === 'ro') {
         setLanguage(renterLang);
       }
-    } else if (!savedLang) {
-      setLanguage('ro');
+    } else {
+      // Default to Romanian for renters if no language set
+      const savedLang = localStorage.getItem('language');
+      if (!savedLang) {
+        setLanguage('ro');
+      }
     }
   }, [setLanguage, info?.renter.language]);
 
-  // Save language preference to backend when changed
+  // Save language preference to backend when changed (only if logged in)
   const handleLanguageChange = async (newLanguage: 'en' | 'ro') => {
     setLanguage(newLanguage);
-    if (token && info?.renter.has_account) {
+    if (token && isLoggedIn) {
       try {
         await api.renter.updatePreferences(token, { language: newLanguage });
+        // Update local info
+        if (info) {
+          setInfo({
+            ...info,
+            renter: { ...info.renter, language: newLanguage }
+          });
+        }
       } catch (err) {
         console.error('Failed to save language preference:', err);
       }
@@ -361,10 +374,37 @@ export default function RenterView() {
       
       setShowAccountDialog(false);
       setAccountForm({ password: '', passwordConfirm: '', email: '' });
+      // Auto-login after account creation
+      setIsLoggedIn(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
       setCreatingAccount(false);
+    }
+  };
+
+  // Handle login
+  const handleLogin = async () => {
+    if (!token) return;
+    
+    if (!loginPassword) {
+      setError(t('renter.passwordRequired'));
+      return;
+    }
+    
+    setLoggingIn(true);
+    try {
+      await api.renter.login(token, loginPassword);
+      
+      setIsLoggedIn(true);
+      setShowLoginDialog(false);
+      setLoginPassword('');
+      // Open settings after successful login
+      setShowSettingsDialog(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setLoggingIn(false);
     }
   };
 
@@ -529,19 +569,31 @@ export default function RenterView() {
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Account/Settings Button */}
+            {/* Account/Login/Settings Button */}
             {info && (
               <>
                 {info.renter.has_account ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowSettingsDialog(true)}
-                    className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
-                  >
-                    <Settings className="w-4 h-4 mr-1" />
-                    {t('renter.settings')}
-                  </Button>
+                  isLoggedIn ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowSettingsDialog(true)}
+                      className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+                    >
+                      <Settings className="w-4 h-4 mr-1" />
+                      {t('renter.settings')}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowLoginDialog(true)}
+                      className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+                    >
+                      <LogIn className="w-4 h-4 mr-1" />
+                      {t('auth.signInButton')}
+                    </Button>
+                  )
                 ) : (
                   <Button
                     variant="ghost"
@@ -1458,6 +1510,61 @@ export default function RenterView() {
             setUtilityPaymentBill(null);
           }}
         />
+
+        {/* Login Dialog */}
+        <Dialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
+          <DialogContent className="bg-slate-800 border-slate-700">
+            <DialogHeader>
+              <DialogTitle className="text-slate-100">{t('auth.signInButton')}</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                {t('renter.loginDesc')}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-slate-300">{t('common.password')} *</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-slate-100 pr-10"
+                    placeholder={t('auth.passwordPlaceholder')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleLogin();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowLoginDialog(false);
+                  setLoginPassword('');
+                }}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                onClick={handleLogin}
+                disabled={loggingIn || !loginPassword}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {loggingIn ? t('auth.signingIn') : t('auth.signInButton')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Create Account Dialog */}
         <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>

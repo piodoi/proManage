@@ -184,6 +184,7 @@
     "account": "Cont",
     "createAccount": "Creează Cont",
     "createAccountDesc": "Creează o parolă pentru a gestiona setările contului",
+    "loginDesc": "Introdu parola pentru a accesa setările",
     "settings": "Setări",
     "settingsDesc": "Gestionează preferințele de limbă și notificări",
     "password": "Parolă",

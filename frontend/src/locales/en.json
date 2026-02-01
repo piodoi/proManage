@@ -176,6 +176,7 @@
     "account": "Account",
     "createAccount": "Create Account",
     "createAccountDesc": "Create a password to manage your account settings",
+    "loginDesc": "Enter your password to access settings",
     "settings": "Settings",
     "settingsDesc": "Manage your language and notification preferences",
     "password": "Password",
