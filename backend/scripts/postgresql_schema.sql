@@ -52,11 +52,15 @@ CREATE TABLE renters (
     rent_amount REAL NULL,
     rent_currency VARCHAR(10) DEFAULT 'EUR',
     access_token VARCHAR(36) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NULL,
+    language VARCHAR(10) DEFAULT 'ro',
+    email_notifications BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_renters_property ON renters(property_id);
 CREATE INDEX idx_renters_token ON renters(access_token);
 CREATE INDEX idx_renters_email ON renters(email);
+CREATE INDEX idx_renters_email_login ON renters(email) WHERE email IS NOT NULL AND password_hash IS NOT NULL;
 
 -- SUPPLIERS TABLE
 CREATE TABLE suppliers (

@@ -4,6 +4,7 @@ from app.models import (
     Renter, RenterCreate, RenterUpdate, TokenData, UserRole
 )
 from app.auth import require_landlord
+from app.routes.auth_routes import hash_password
 from app.database import db
 from app.limits import check_can_add_renter
 
@@ -41,6 +42,11 @@ async def create_renter(
         if not can_add:
             raise HTTPException(status_code=403, detail=message)
     
+    # Hash password if provided
+    password_hash = None
+    if data.password:
+        password_hash = hash_password(data.password)
+    
     renter = Renter(
         property_id=property_id,
         name=data.name,
@@ -49,7 +55,9 @@ async def create_renter(
         rent_day=data.rent_day,
         start_contract_date=data.start_contract_date,
         rent_amount=data.rent_amount,
-        rent_currency=data.rent_currency or 'EUR'
+        rent_currency=data.rent_currency or 'EUR',
+        password_hash=password_hash,
+        language=data.language or 'ro',
     )
     db.save_renter(renter)
     return renter
@@ -94,6 +102,12 @@ async def update_renter(
         renter.rent_amount = data.rent_amount
     if data.rent_currency is not None:
         renter.rent_currency = data.rent_currency
+    # Hash password if provided
+    if data.password is not None:
+        renter.password_hash = hash_password(data.password)
+    # Update language if provided
+    if data.language is not None:
+        renter.language = data.language
     db.save_renter(renter)
     return renter
 

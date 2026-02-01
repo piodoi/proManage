@@ -187,6 +187,9 @@ class Renter(BaseModel):
     rent_amount: Optional[float] = None  # Rent amount
     rent_currency: Optional[str] = "EUR"  # Currency for rent: "EUR", "RON", or "USD"
     access_token: str = Field(default_factory=gen_token)
+    password_hash: Optional[str] = None  # Password hash for renter account (optional)
+    language: Optional[str] = "ro"  # Language preference: "en" or "ro"
+    email_notifications: bool = False  # Whether to receive email notifications for new bills
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -346,6 +349,8 @@ class RenterCreate(BaseModel):
     start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount: Optional[float] = None  # Rent amount
     rent_currency: Optional[str] = "EUR"  # Currency for rent: "EUR", "RON", or "USD"
+    password: Optional[str] = None  # Plain password (will be hashed) - landlord can set initial password
+    language: Optional[str] = "ro"  # Language preference: "en" or "ro"
 
 
 class RenterUpdate(BaseModel):
@@ -356,6 +361,21 @@ class RenterUpdate(BaseModel):
     start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount: Optional[float] = None  # Rent amount
     rent_currency: Optional[str] = None  # Currency for rent: "EUR", "RON", or "USD"
+    password: Optional[str] = None  # Plain password (will be hashed) - landlord can update password
+    language: Optional[str] = None  # Language preference: "en" or "ro"
+
+
+class RenterAccountCreate(BaseModel):
+    """For renter to create their own account (set password)"""
+    password: str  # Plain password (will be hashed)
+    password_confirm: str  # Password confirmation
+    email: Optional[str] = None  # Optional - renter can add email if landlord didn't set it
+
+
+class RenterPreferencesUpdate(BaseModel):
+    """For renter to update their own preferences"""
+    language: Optional[str] = None  # Language preference: "en" or "ro"
+    email_notifications: Optional[bool] = None  # Whether to receive email notifications
 
 
 class BillCreate(BaseModel):

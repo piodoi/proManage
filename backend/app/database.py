@@ -277,7 +277,7 @@ class Database:
         existing = self._impl.get_renter_by_id(renter.id)
         if existing:
             updates = {}
-            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'rent_currency']:
+            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'rent_currency', 'password_hash', 'language', 'email_notifications']:
                 if getattr(renter, field) != getattr(existing, field):
                     updates[field] = getattr(renter, field)
             if updates:

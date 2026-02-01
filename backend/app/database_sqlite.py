@@ -269,6 +269,9 @@ class SQLiteDatabase:
                     rent_amount=float(row.rent_amount) if row.rent_amount else None,
                     rent_currency=row.rent_currency or 'EUR',
                     access_token=row.access_token,
+                    password_hash=getattr(row, 'password_hash', None),
+                    language=getattr(row, 'language', 'ro') or 'ro',
+                    email_notifications=getattr(row, 'email_notifications', False) or False,
                     created_at=row.created_at
                 )
             return None
@@ -293,6 +296,9 @@ class SQLiteDatabase:
                     rent_amount=float(row.rent_amount) if row.rent_amount else None,
                     rent_currency=row.rent_currency or 'EUR',
                     access_token=row.access_token,
+                    password_hash=getattr(row, 'password_hash', None),
+                    language=getattr(row, 'language', 'ro') or 'ro',
+                    email_notifications=getattr(row, 'email_notifications', False) or False,
                     created_at=row.created_at
                 )
             return None
@@ -304,10 +310,12 @@ class SQLiteDatabase:
                 text("""
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
-                        start_contract_date, rent_amount, rent_currency, access_token, created_at
+                        start_contract_date, rent_amount, rent_currency, access_token,
+                        password_hash, language, email_notifications, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
-                        :start_contract_date, :rent_amount, :rent_currency, :access_token, :created_at
+                        :start_contract_date, :rent_amount, :rent_currency, :access_token,
+                        :password_hash, :language, :email_notifications, :created_at
                     )
                 """),
                 {
@@ -321,6 +329,9 @@ class SQLiteDatabase:
                     "rent_amount": renter.rent_amount,
                     "rent_currency": renter.rent_currency or 'EUR',
                     "access_token": renter.access_token,
+                    "password_hash": renter.password_hash,
+                    "language": renter.language or 'ro',
+                    "email_notifications": renter.email_notifications or False,
                     "created_at": renter.created_at or datetime.now().isoformat()
                 }
             )

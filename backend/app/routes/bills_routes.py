@@ -5,7 +5,7 @@ import logging
 import sys
 import base64
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query, BackgroundTasks
 from fastapi.responses import FileResponse
 from app.models import (
     Bill, BillCreate, BillUpdate, TokenData, UserRole, BillType, BillStatus, PropertySupplier
@@ -16,6 +16,7 @@ from app.text_pattern_extractor import extract_bill_from_pdf_auto
 from app.utils.suppliers import initialize_suppliers
 from app.routes.sync_routes import resolve_property_supplier_id
 from app.paths import delete_bill_pdf, bill_pdf_exists, get_bill_pdf_path, save_bill_pdf
+from app.email_sender import send_bill_notification_email, is_email_configured
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -56,6 +57,47 @@ def bill_to_dict_with_pdf(bill: Bill, user_id: str) -> dict:
     return bill_dict
 
 
+async def notify_renters_about_bill(bill: Bill, property_name: str):
+    """Send email notifications to renters who have opted in for the property."""
+    if not is_email_configured():
+        logger.info("[BillNotification] Email not configured, skipping notifications")
+        return
+    
+    # Get renters for this property who have email_notifications enabled
+    renters = db.list_renters(property_id=bill.property_id)
+    
+    for renter in renters:
+        # Check if renter has email notifications enabled and has an email
+        if not renter.email or not renter.email_notifications:
+            continue
+        
+        # If bill is assigned to a specific renter, only notify that renter
+        if bill.renter_id and bill.renter_id != 'all' and bill.renter_id != renter.id:
+            continue
+        
+        try:
+            # Format due date
+            if isinstance(bill.due_date, datetime):
+                due_date_str = bill.due_date.strftime("%d/%m/%Y")
+            else:
+                due_date_str = str(bill.due_date)
+            
+            await send_bill_notification_email(
+                to_email=renter.email,
+                renter_name=renter.name,
+                property_name=property_name,
+                bill_description=bill.description,
+                bill_amount=bill.amount,
+                bill_currency=bill.currency or "RON",
+                due_date=due_date_str,
+                access_token=renter.access_token,
+                language=renter.language or "ro"
+            )
+            logger.info(f"[BillNotification] Sent bill notification to {renter.email} for bill {bill.id}")
+        except Exception as e:
+            logger.error(f"[BillNotification] Failed to send notification to {renter.email}: {e}")
+
+
 @router.get("")
 async def list_bills(current_user: TokenData = Depends(require_landlord)):
     # User isolation: all users (including admins) only see bills for their own properties
@@ -82,7 +124,7 @@ async def list_bills_by_property(property_id: str, current_user: TokenData = Dep
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_bill(data: BillCreate, current_user: TokenData = Depends(require_landlord)):
+async def create_bill(data: BillCreate, background_tasks: BackgroundTasks, current_user: TokenData = Depends(require_landlord)):
     prop = db.get_property(data.property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -107,6 +149,10 @@ async def create_bill(data: BillCreate, current_user: TokenData = Depends(requir
         property_supplier_id=data.property_supplier_id,
     )
     db.save_bill(bill)
+    
+    # Send email notifications to opted-in renters
+    background_tasks.add_task(notify_renters_about_bill, bill, prop.name)
+    
     return bill
 
 
@@ -454,6 +500,7 @@ async def parse_bill_pdf(
 @router.post("/create-from-pdf")
 async def create_bill_from_pdf(
     data: dict,
+    background_tasks: BackgroundTasks,
     current_user: TokenData = Depends(require_landlord),
 ):
     """Create a bill from parsed PDF data."""
@@ -611,6 +658,9 @@ async def create_bill_from_pdf(
         status=BillStatus.PENDING,
     )
     db.save_bill(bill)
+    
+    # Send email notifications to opted-in renters
+    background_tasks.add_task(notify_renters_about_bill, bill, prop.name)
     
     # Save PDF file if pdf_data_base64 is provided
     pdf_data_base64 = data.get("pdf_data_base64")

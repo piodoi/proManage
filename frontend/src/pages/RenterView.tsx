@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl, PaymentNotificationCreate } from '../api';
+import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl, PaymentNotificationCreate, RenterAccountCreate, RenterPreferencesUpdate } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +14,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell } from 'lucide-react';
 import { featureFlags } from '../lib/featureFlags';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
@@ -49,6 +51,19 @@ export default function RenterView() {
   // Utility payment dialog state
   const [showUtilityPayment, setShowUtilityPayment] = useState(false);
   const [utilityPaymentBill, setUtilityPaymentBill] = useState<RenterBill | null>(null);
+
+  // Account and settings dialog state
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [accountForm, setAccountForm] = useState({
+    password: '',
+    passwordConfirm: '',
+    email: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
 
   // Toggle group expansion
   const toggleGroup = (groupKey: string) => {
@@ -167,10 +182,28 @@ export default function RenterView() {
   // Default to Romanian for renters
   useEffect(() => {
     const savedLang = localStorage.getItem('language');
-    if (!savedLang) {
+    if (!savedLang && info?.renter.language) {
+      // Use language from backend if available
+      const renterLang = info.renter.language as 'en' | 'ro';
+      if (renterLang === 'en' || renterLang === 'ro') {
+        setLanguage(renterLang);
+      }
+    } else if (!savedLang) {
       setLanguage('ro');
     }
-  }, [setLanguage]);
+  }, [setLanguage, info?.renter.language]);
+
+  // Save language preference to backend when changed
+  const handleLanguageChange = async (newLanguage: 'en' | 'ro') => {
+    setLanguage(newLanguage);
+    if (token && info?.renter.has_account) {
+      try {
+        await api.renter.updatePreferences(token, { language: newLanguage });
+      } catch (err) {
+        console.error('Failed to save language preference:', err);
+      }
+    }
+  };
 
   useEffect(() => {
     if (token) {
@@ -293,6 +326,99 @@ export default function RenterView() {
     }
   };
 
+  // Handle account creation
+  const handleCreateAccount = async () => {
+    if (!token) return;
+    
+    if (!accountForm.password || !accountForm.passwordConfirm) {
+      setError(t('renter.passwordRequired'));
+      return;
+    }
+    
+    if (accountForm.password !== accountForm.passwordConfirm) {
+      setError(t('renter.passwordMismatch'));
+      return;
+    }
+    
+    if (accountForm.password.length < 6) {
+      setError(t('renter.passwordTooShort'));
+      return;
+    }
+    
+    setCreatingAccount(true);
+    try {
+      const data: RenterAccountCreate = {
+        password: accountForm.password,
+        password_confirm: accountForm.passwordConfirm,
+        email: accountForm.email || undefined,
+      };
+      
+      await api.renter.createAccount(token, data);
+      
+      // Reload info to get updated account status
+      const infoData = await api.renter.info(token);
+      setInfo(infoData);
+      
+      setShowAccountDialog(false);
+      setAccountForm({ password: '', passwordConfirm: '', email: '' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
+
+  // Handle email notifications toggle
+  const handleEmailNotificationsToggle = async (enabled: boolean) => {
+    if (!token || !info) return;
+    
+    // Check if email is available
+    if (enabled && !info.renter.email) {
+      setError(t('renter.emailRequiredForNotifications'));
+      return;
+    }
+    
+    setSavingPreferences(true);
+    try {
+      const data: RenterPreferencesUpdate = {
+        email_notifications: enabled,
+      };
+      
+      await api.renter.updatePreferences(token, data);
+      
+      // Reload info to get updated preferences
+      const infoData = await api.renter.info(token);
+      setInfo(infoData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
+
+  // Handle adding email (for renters without email set by landlord)
+  const handleAddEmail = async (email: string) => {
+    if (!token) return;
+    
+    if (!email || !email.includes('@')) {
+      setError(t('renter.invalidEmail'));
+      return;
+    }
+    
+    setSavingPreferences(true);
+    try {
+      await api.renter.updateEmail(token, email);
+      
+      // Reload info to get updated email
+      const infoData = await api.renter.info(token);
+      setInfo(infoData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
+
   // Copy to clipboard helper
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {
@@ -402,49 +528,78 @@ export default function RenterView() {
             </div>
           </div>
           
-          {/* Language Selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
-              >
-                <img 
-                  src={language === 'en' ? '/flags/uk-flag.gif' : '/flags/ro-flag.gif'} 
-                  alt={`${language} flag`}
-                  className="h-4 w-auto mr-2"
-                />
-                <span className="text-xs uppercase">{language}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
-              <DropdownMenuItem
-                onClick={() => setLanguage('en')}
-                className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
-              >
-                <img 
-                  src="/flags/uk-flag.gif" 
-                  alt="UK flag"
-                  className="h-5 w-8 object-cover mr-3 flex-shrink-0"
-                />
-                <span className="flex-1 text-left">English</span>
-                {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setLanguage('ro')}
-                className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
-              >
-                <img 
-                  src="/flags/ro-flag.gif" 
-                  alt="Romanian flag"
-                  className="h-5 w-8 object-cover mr-3 flex-shrink-0"
-                />
-                <span className="flex-1 text-left">Română</span>
-                {language === 'ro' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            {/* Account/Settings Button */}
+            {info && (
+              <>
+                {info.renter.has_account ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSettingsDialog(true)}
+                    className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+                  >
+                    <Settings className="w-4 h-4 mr-1" />
+                    {t('renter.settings')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAccountDialog(true)}
+                    className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+                  >
+                    <User className="w-4 h-4 mr-1" />
+                    {t('renter.createAccount')}
+                  </Button>
+                )}
+              </>
+            )}
+            
+            {/* Language Selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+                >
+                  <img 
+                    src={language === 'en' ? '/flags/uk-flag.gif' : '/flags/ro-flag.gif'} 
+                    alt={`${language} flag`}
+                    className="h-4 w-auto mr-2"
+                  />
+                  <span className="text-xs uppercase">{language}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
+                <DropdownMenuItem
+                  onClick={() => handleLanguageChange('en')}
+                  className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
+                >
+                  <img 
+                    src="/flags/uk-flag.gif" 
+                    alt="UK flag"
+                    className="h-5 w-8 object-cover mr-3 flex-shrink-0"
+                  />
+                  <span className="flex-1 text-left">English</span>
+                  {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleLanguageChange('ro')}
+                  className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
+                >
+                  <img 
+                    src="/flags/ro-flag.gif" 
+                    alt="Romanian flag"
+                    className="h-5 w-8 object-cover mr-3 flex-shrink-0"
+                  />
+                  <span className="flex-1 text-left">Română</span>
+                  {language === 'ro' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
@@ -1303,6 +1458,171 @@ export default function RenterView() {
             setUtilityPaymentBill(null);
           }}
         />
+
+        {/* Create Account Dialog */}
+        <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>
+          <DialogContent className="bg-slate-800 border-slate-700">
+            <DialogHeader>
+              <DialogTitle className="text-slate-100">{t('renter.createAccount')}</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                {t('renter.createAccountDesc')}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {/* Email (only if not set by landlord) */}
+              {info && !info.renter.email && (
+                <div>
+                  <Label className="text-slate-300">
+                    <Mail className="w-4 h-4 inline mr-1" />
+                    {t('common.email')} ({t('common.optional').toLowerCase()})
+                  </Label>
+                  <Input
+                    type="email"
+                    value={accountForm.email}
+                    onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-slate-100"
+                    placeholder={t('auth.emailPlaceholder')}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    {t('renter.addEmailNote')}
+                  </p>
+                </div>
+              )}
+              
+              {/* Password */}
+              <div>
+                <Label className="text-slate-300">{t('renter.password')} *</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={accountForm.password}
+                    onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-slate-100 pr-10"
+                    placeholder={t('renter.passwordPlaceholder')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Confirm Password */}
+              <div>
+                <Label className="text-slate-300">{t('renter.confirmPassword')} *</Label>
+                <div className="relative">
+                  <Input
+                    type={showPasswordConfirm ? 'text' : 'password'}
+                    value={accountForm.passwordConfirm}
+                    onChange={(e) => setAccountForm({ ...accountForm, passwordConfirm: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-slate-100 pr-10"
+                    placeholder={t('renter.confirmPasswordPlaceholder')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showPasswordConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowAccountDialog(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                onClick={handleCreateAccount}
+                disabled={creatingAccount || !accountForm.password || !accountForm.passwordConfirm}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {creatingAccount ? t('common.saving') : t('renter.createAccount')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Settings Dialog */}
+        <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+          <DialogContent className="bg-slate-800 border-slate-700">
+            <DialogHeader>
+              <DialogTitle className="text-slate-100">{t('renter.settings')}</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                {t('renter.settingsDesc')}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {/* Email display/add */}
+              <div>
+                <Label className="text-slate-300">
+                  <Mail className="w-4 h-4 inline mr-1" />
+                  {t('common.email')}
+                </Label>
+                {info?.renter.email ? (
+                  <div className="mt-1">
+                    <p className="text-slate-200">{info.renter.email}</p>
+                    {info.renter.email_set_by_landlord && (
+                      <p className="text-xs text-slate-500">{t('renter.emailSetByLandlord')}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      type="email"
+                      placeholder={t('auth.emailPlaceholder')}
+                      className="bg-slate-700 border-slate-600 text-slate-100"
+                      id="add-email-input"
+                    />
+                    <Button
+                      onClick={() => {
+                        const input = document.getElementById('add-email-input') as HTMLInputElement;
+                        if (input?.value) handleAddEmail(input.value);
+                      }}
+                      disabled={savingPreferences}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {t('common.add')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Email notifications toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-slate-300">
+                    <Bell className="w-4 h-4 inline mr-1" />
+                    {t('renter.emailNotifications')}
+                  </Label>
+                  <p className="text-xs text-slate-500">{t('renter.emailNotificationsDesc')}</p>
+                </div>
+                <Checkbox
+                  checked={info?.renter.email_notifications || false}
+                  onCheckedChange={(checked) => handleEmailNotificationsToggle(!!checked)}
+                  disabled={savingPreferences || !info?.renter.email}
+                  className="border-slate-600 data-[state=checked]:bg-emerald-600"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowSettingsDialog(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                {t('common.close')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

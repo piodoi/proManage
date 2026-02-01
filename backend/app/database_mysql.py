@@ -279,6 +279,9 @@ class MySQLDatabase:
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     access_token=row.access_token,
+                    password_hash=getattr(row, 'password_hash', None),
+                    language=getattr(row, 'language', 'ro') or 'ro',
+                    email_notifications=getattr(row, 'email_notifications', False) or False,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
             return None
@@ -311,6 +314,9 @@ class MySQLDatabase:
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     access_token=row.access_token,
+                    password_hash=getattr(row, 'password_hash', None),
+                    language=getattr(row, 'language', 'ro') or 'ro',
+                    email_notifications=getattr(row, 'email_notifications', False) or False,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
             return None
@@ -322,10 +328,12 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
-                        start_contract_date, rent_amount, rent_currency, access_token, created_at
+                        start_contract_date, rent_amount, rent_currency, access_token,
+                        password_hash, language, email_notifications, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
-                        :start_contract_date, :rent_amount, :rent_currency, :access_token, :created_at
+                        :start_contract_date, :rent_amount, :rent_currency, :access_token,
+                        :password_hash, :language, :email_notifications, :created_at
                     )
                 """),
                 {
@@ -339,6 +347,9 @@ class MySQLDatabase:
                     "rent_amount": renter.rent_amount,
                     "rent_currency": renter.rent_currency or 'EUR',
                     "access_token": renter.access_token,
+                    "password_hash": renter.password_hash,
+                    "language": renter.language or 'ro',
+                    "email_notifications": renter.email_notifications or False,
                     "created_at": renter.created_at or datetime.now().isoformat()
                 }
             )

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Users } from 'lucide-react';
+import { Users, Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 
 type RenterDialogProps = {
@@ -27,7 +27,8 @@ export default function RenterDialog({
   onSuccess,
   onError,
 }: RenterDialogProps) {
-  const { t } = useI18n();
+  const { t, language: currentLanguage } = useI18n();
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     name: '',
     rent_day: '',
@@ -36,6 +37,8 @@ export default function RenterDialog({
     rent_currency: 'EUR' as 'EUR' | 'RON' | 'USD',
     email: '',
     phone: '',
+    password: '',
+    language: currentLanguage as 'en' | 'ro',
   });
 
   // Sync form when renter changes
@@ -61,6 +64,8 @@ export default function RenterDialog({
         rent_currency: (renter.rent_currency || 'EUR') as 'EUR' | 'RON' | 'USD',
         email: renter.email || '',
         phone: renter.phone || '',
+        password: '',  // Don't populate password (can't retrieve)
+        language: (renter.language || currentLanguage) as 'en' | 'ro',
       });
     } else {
       setForm({
@@ -71,6 +76,8 @@ export default function RenterDialog({
         rent_currency: 'EUR',
         email: '',
         phone: '',
+        password: '',
+        language: currentLanguage as 'en' | 'ro',
       });
     }
   }, [renter]);
@@ -96,6 +103,8 @@ export default function RenterDialog({
           start_contract_date: startContractDate,
           rent_amount: rentAmount,
           rent_currency: form.rent_currency,
+          password: form.password || undefined,  // Only send if provided
+          language: form.language,
         });
       } else {
         await api.renters.create(token, propertyId, {
@@ -106,6 +115,8 @@ export default function RenterDialog({
           start_contract_date: startContractDate,
           rent_amount: rentAmount,
           rent_currency: form.rent_currency,
+          password: form.password || undefined,  // Only send if provided
+          language: form.language,
         });
       }
 
@@ -228,6 +239,50 @@ export default function RenterDialog({
               className="bg-slate-700 border-slate-600 text-slate-100"
               placeholder={t('auth.emailPlaceholder')}
             />
+          </div>
+          <div>
+            <Label className="text-slate-300">
+              {t('renter.password')} ({t('common.optional').toLowerCase()})
+            </Label>
+            <div className="relative">
+              <Input
+                key={`password-${renter?.id || 'new'}`}
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="bg-slate-700 border-slate-600 text-slate-100 pr-10"
+                placeholder={renter ? t('renter.passwordPlaceholderUpdate') : t('renter.passwordPlaceholder')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {t('renter.passwordHelp')}
+            </p>
+          </div>
+          <div>
+            <Label className="text-slate-300">{t('app.language')}</Label>
+            <Select
+              key={`language-${renter?.id || 'new'}`}
+              value={form.language}
+              onValueChange={(v) => setForm({ ...form, language: v as 'en' | 'ro' })}
+            >
+              <SelectTrigger className="w-full bg-slate-700 border-slate-600 text-slate-100">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-700 border-slate-600">
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="ro">Română</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500 mt-1">
+              {t('renter.languageHelp')}
+            </p>
           </div>
           <Button
             onClick={handleSubmit}

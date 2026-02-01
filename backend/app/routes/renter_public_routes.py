@@ -5,8 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from app.models import PaymentNotification, PaymentNotificationCreate, PaymentNotificationStatus, BillStatus, Bill
+from app.models import PaymentNotification, PaymentNotificationCreate, PaymentNotificationStatus, BillStatus, Bill, RenterAccountCreate, RenterPreferencesUpdate
 from app.database import db
+from app.routes.auth_routes import hash_password
 from app.utils.currency import get_exchange_rates, convert_currency
 from app.paths import get_bill_pdf_path, bill_pdf_exists
 
@@ -72,7 +73,15 @@ async def renter_info(token: str):
                 rent_warning_days = landlord_preferences.rent_warning_days
     
     return {
-        "renter": {"id": renter.id, "name": renter.name},
+        "renter": {
+            "id": renter.id,
+            "name": renter.name,
+            "email": renter.email,
+            "has_account": renter.password_hash is not None,
+            "language": renter.language or "ro",
+            "email_notifications": renter.email_notifications or False,
+            "email_set_by_landlord": renter.email is not None,  # If email exists, landlord set it
+        },
         "property": {"id": prop.id, "name": prop.name, "address": prop.address} if prop else None,
         "date_format": date_format,
         "landlord_iban": landlord_iban,
@@ -388,3 +397,107 @@ async def download_bill_pdf(token: str, bill_id: str):
         media_type="application/pdf",
         filename=filename
     )
+
+
+@router.post("/{token}/create-account")
+async def create_renter_account(token: str, data: RenterAccountCreate):
+    """
+    Create account for renter (set password).
+    Renter can optionally add email if landlord didn't set it.
+    """
+    renter = db.get_renter_by_token(token)
+    if not renter:
+        raise HTTPException(status_code=404, detail="Invalid access token")
+    
+    # Check if account already exists
+    if renter.password_hash:
+        raise HTTPException(status_code=400, detail="Account already exists")
+    
+    # Validate passwords match
+    if data.password != data.password_confirm:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    
+    # Validate password length
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Hash password and save
+    renter.password_hash = hash_password(data.password)
+    
+    # Allow renter to add email only if landlord didn't set it
+    if data.email:
+        if renter.email:
+            raise HTTPException(status_code=400, detail="Email already set by landlord")
+        renter.email = data.email
+    
+    db.save_renter(renter)
+    
+    return {
+        "message": "Account created successfully",
+        "renter": {
+            "id": renter.id,
+            "name": renter.name,
+            "email": renter.email,
+            "has_account": True,
+        }
+    }
+
+
+@router.put("/{token}/preferences")
+async def update_renter_preferences(token: str, data: RenterPreferencesUpdate):
+    """
+    Update renter preferences (language, email notifications).
+    """
+    renter = db.get_renter_by_token(token)
+    if not renter:
+        raise HTTPException(status_code=404, detail="Invalid access token")
+    
+    # Update language
+    if data.language is not None:
+        if data.language not in ["en", "ro"]:
+            raise HTTPException(status_code=400, detail="Invalid language. Supported: 'en', 'ro'")
+        renter.language = data.language
+    
+    # Update email notifications (requires email to be set)
+    if data.email_notifications is not None:
+        if data.email_notifications and not renter.email:
+            raise HTTPException(status_code=400, detail="Email required to enable notifications")
+        renter.email_notifications = data.email_notifications
+    
+    db.save_renter(renter)
+    
+    return {
+        "message": "Preferences updated",
+        "renter": {
+            "id": renter.id,
+            "name": renter.name,
+            "email": renter.email,
+            "language": renter.language,
+            "email_notifications": renter.email_notifications,
+        }
+    }
+
+
+@router.put("/{token}/email")
+async def update_renter_email(token: str, email: str):
+    """
+    Allow renter to add email if landlord didn't set it.
+    """
+    renter = db.get_renter_by_token(token)
+    if not renter:
+        raise HTTPException(status_code=404, detail="Invalid access token")
+    
+    # Only allow adding email if landlord didn't set it
+    if renter.email:
+        raise HTTPException(status_code=400, detail="Email already set by landlord and cannot be changed")
+    
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    
+    renter.email = email
+    db.save_renter(renter)
+    
+    return {
+        "message": "Email added successfully",
+        "email": renter.email
+    }

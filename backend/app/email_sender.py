@@ -127,3 +127,100 @@ ProManage - Property & Rent Management
     """
     
     return await send_email(to_email, subject, html_body, text_body)
+
+
+async def send_bill_notification_email(
+    to_email: str,
+    renter_name: str,
+    property_name: str,
+    bill_description: str,
+    bill_amount: float,
+    bill_currency: str,
+    due_date: str,
+    access_token: str,
+    language: str = "ro"
+) -> bool:
+    """Send email notification to renter about a new bill."""
+    config = get_smtp_config()
+    renter_url = f"{config['frontend_url']}/renter/{access_token}"
+    
+    # Translations
+    if language == "ro":
+        subject = f"Factură nouă: {bill_description}"
+        greeting = f"Bună, {renter_name}!"
+        intro = f"O factură nouă a fost adăugată pentru proprietatea <strong>{property_name}</strong>."
+        details_title = "Detalii factură:"
+        description_label = "Descriere"
+        amount_label = "Sumă"
+        due_label = "Data scadenței"
+        view_btn = "Vizualizează Factura"
+        footer = "Acest email a fost trimis automat deoarece ai activat notificările prin email."
+    else:
+        subject = f"New Bill: {bill_description}"
+        greeting = f"Hello, {renter_name}!"
+        intro = f"A new bill has been added for property <strong>{property_name}</strong>."
+        details_title = "Bill Details:"
+        description_label = "Description"
+        amount_label = "Amount"
+        due_label = "Due Date"
+        view_btn = "View Bill"
+        footer = "This email was sent automatically because you have enabled email notifications."
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .button {{ 
+                display: inline-block; 
+                padding: 12px 24px; 
+                background-color: #10b981; 
+                color: white; 
+                text-decoration: none; 
+                border-radius: 6px;
+                margin: 20px 0;
+            }}
+            .details {{ background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>{greeting}</h2>
+            <p>{intro}</p>
+            <div class="details">
+                <h3>{details_title}</h3>
+                <p><strong>{description_label}:</strong> {bill_description}</p>
+                <p><strong>{amount_label}:</strong> {bill_amount:.2f} {bill_currency}</p>
+                <p><strong>{due_label}:</strong> {due_date}</p>
+            </div>
+            <a href="{renter_url}" class="button">{view_btn}</a>
+            <div class="footer">
+                <p>{footer}</p>
+                <p>ProManage - Property & Rent Management</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+{greeting}
+
+{intro.replace('<strong>', '').replace('</strong>', '')}
+
+{details_title}
+- {description_label}: {bill_description}
+- {amount_label}: {bill_amount:.2f} {bill_currency}
+- {due_label}: {due_date}
+
+{view_btn}: {renter_url}
+
+{footer}
+
+ProManage - Property & Rent Management
+    """
+    
+    return await send_email(to_email, subject, html_body, text_body)

@@ -289,6 +289,12 @@ export const api = {
     balance: (token: string) => request<RenterBalance>(`/renter/${token}/balance`),
     notifyPayment: (token: string, data: PaymentNotificationCreate) =>
       request<PaymentNotificationResponse>(`/renter/${token}/notify-payment`, { method: 'POST', body: data }),
+    createAccount: (token: string, data: RenterAccountCreate) =>
+      request<{ message: string; renter: { id: string; name: string; email?: string; has_account: boolean } }>(`/renter/${token}/create-account`, { method: 'POST', body: data }),
+    updatePreferences: (token: string, data: RenterPreferencesUpdate) =>
+      request<{ message: string; renter: { id: string; name: string; email?: string; language: string; email_notifications: boolean } }>(`/renter/${token}/preferences`, { method: 'PUT', body: data }),
+    updateEmail: (token: string, email: string) =>
+      request<{ message: string; email: string }>(`/renter/${token}/email?email=${encodeURIComponent(email)}`, { method: 'PUT' }),
   },
 
   paymentNotifications: {
@@ -504,6 +510,9 @@ export type Renter = {
   rent_amount?: number;  // Rent amount
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
   access_token: string;
+  password_hash?: string;  // Not sent to frontend, but presence indicates account exists
+  language?: string;  // Language preference: "en" or "ro"
+  email_notifications?: boolean;  // Whether to receive email notifications
   created_at: string;
 };
 
@@ -515,6 +524,8 @@ export type RenterCreate = {
   start_contract_date?: string;  // Optional start date of contract
   rent_amount?: number;  // Rent amount
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
+  password?: string;  // Optional password (landlord can set for renter)
+  language?: string;  // Language preference: "en" or "ro"
 };
 export type RenterUpdate = {
   name?: string;
@@ -524,6 +535,19 @@ export type RenterUpdate = {
   start_contract_date?: string;  // Optional start date of contract
   rent_amount?: number;  // Rent amount
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
+  password?: string;  // Optional password (landlord can update for renter)
+  language?: string;  // Language preference: "en" or "ro"
+};
+
+export type RenterAccountCreate = {
+  password: string;
+  password_confirm: string;
+  email?: string;
+};
+
+export type RenterPreferencesUpdate = {
+  language?: string;
+  email_notifications?: boolean;
 };
 
 export type Bill = {
@@ -616,7 +640,15 @@ export type AuthResponse = {
 };
 
 export type RenterInfo = {
-  renter: { id: string; name: string };
+  renter: {
+    id: string;
+    name: string;
+    email?: string | null;
+    has_account: boolean;  // Whether renter has created account (password set)
+    language: string;  // Language preference: "en" or "ro"
+    email_notifications: boolean;  // Whether email notifications are enabled
+    email_set_by_landlord: boolean;  // Whether email was set by landlord (renter can't change)
+  };
   property: { id: string; name: string; address: string } | null;
   date_format?: string;
   landlord_iban?: string | null;  // Landlord's RON IBAN for rent payments
