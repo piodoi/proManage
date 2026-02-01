@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import enTranslations from '../locales/en.json';
 import roTranslations from '../locales/ro.json';
 
@@ -24,25 +24,29 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('language') as Language;
     return saved && (saved === 'en' || saved === 'ro') ? saved : 'en';
   });
-
-  // Listen for language changes from preferences
+  
+  // Use ref to track current language for storage event handler
+  const languageRef = useRef(language);
   useEffect(() => {
-    const handleStorageChange = () => {
+    languageRef.current = language;
+  }, [language]);
+
+  // Listen for language changes from preferences (storage events)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Only react to language key changes
+      if (e.key !== 'language' && e.key !== null) return;
+      
       const saved = localStorage.getItem('language') as Language;
-      if (saved && (saved === 'en' || saved === 'ro')) {
+      // Only update if the language is valid AND different from current
+      if (saved && (saved === 'en' || saved === 'ro') && saved !== languageRef.current) {
         setLanguageState(saved);
       }
     };
     
     window.addEventListener('storage', handleStorageChange);
-    // Also check on mount/update
-    const saved = localStorage.getItem('language') as Language;
-    if (saved && (saved === 'en' || saved === 'ro') && saved !== language) {
-      setLanguageState(saved);
-    }
-    
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [language]);
+  }, []); // Empty deps - handler uses ref for current value
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

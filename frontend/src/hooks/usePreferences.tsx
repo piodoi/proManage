@@ -102,8 +102,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         pendingSaveRef.current = null;
         
         api.preferences.save(token, toSave)
-          .then(saved => {
-            setPreferences(saved);
+          .then(() => {
+            // Don't update state here - we already updated optimistically
+            // Updating again would create a new object reference and trigger re-renders
           })
           .catch(err => {
             console.error('[usePreferences] Failed to save preferences:', err);
