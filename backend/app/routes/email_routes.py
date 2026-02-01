@@ -1,7 +1,8 @@
 """Email processing routes."""
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from app.models import Bill, BillType, TokenData, UserRole
 from app.auth import require_landlord
@@ -10,6 +11,7 @@ from app.email_scraper import extract_bill_info, match_address_to_property
 from app.email_monitor import email_monitor
 from app.limits import check_email_sync_allowed
 import logging
+from app.email_sender import send_email
 
 logger = logging.getLogger(__name__)
 
@@ -170,4 +172,61 @@ async def delete_emails(
         "message": f"Deletion scheduled for {len(request.email_ids)} emails",
         "email_ids": request.email_ids
     }
+
+
+
+@router.post("/contact")
+async def contact_support(
+    reason: str = Form(...),
+    message: str = Form(...),
+    from_email: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    current_user: TokenData = Depends(require_landlord)
+):
+    """Send a contact/support message to internal monitor email. Accepts optional PDF/image (<=3MB)."""
+    # Ensure email monitor configured
+    monitor_email = os.getenv("EMAIL_MONITOR_USERNAME") or os.getenv("EMAIL_MONITOR_ADDRESS")
+    if not monitor_email:
+        raise HTTPException(status_code=503, detail="Email monitor not configured")
+
+    # Validate file
+    attachments = None
+    if file is not None:
+        content = await file.read()
+        size_limit = 2 * 1024 * 1024  # 2 MB
+        if len(content) > size_limit:
+            raise HTTPException(status_code=400, detail="Attachment too large (max 3MB)")
+        allowed = file.content_type.startswith("image/") or file.content_type == "application/pdf"
+        if not allowed:
+            raise HTTPException(status_code=400, detail="Attachment must be PDF or image")
+
+        maintype, _, subtype = file.content_type.partition("/")
+        attachments = [{
+            "filename": file.filename or "attachment",
+            "content": content,
+            "maintype": maintype,
+            "subtype": subtype or "octet-stream",
+        }]
+
+    subject = f"Contact from {current_user.user_id} - {reason}"
+
+    html_body = f"<p><strong>From:</strong> {current_user.user_id} ({current_user.email})</p>"
+    html_body += f"<p><strong>Reason:</strong> {reason}</p>"
+    html_body += f"<p><strong>Message:</strong></p><p>{message}</p>"
+
+    text_body = f"From: {current_user.user_id} ({current_user.email})\nReason: {reason}\n\n{message}"
+
+    try:
+        sent = await send_email(monitor_email, subject, html_body, text_body, attachments)
+        if not sent:
+            raise Exception("Failed to send email")
+
+        # Logs in English and Romanian for auditing
+        logger.info(f"[Contact] Message sent from {current_user.email} (user_id={current_user.user_id}) reason={reason}")
+        logger.info(f"[Contact][RO] Mesaj trimis de {current_user.email} (user_id={current_user.user_id}) motiv={reason}")
+
+        return {"status": "sent"}
+    except Exception as e:
+        logger.error(f"[Email] Contact send failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 

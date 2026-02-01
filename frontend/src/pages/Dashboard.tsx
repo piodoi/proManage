@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown, Bell, HelpCircle } from 'lucide-react';
+import ContactDialog from '@/components/ContactDialog';
+import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown, Bell, HelpCircle, Mail } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const { user, token, logout } = useAuth();
   const { t } = useI18n();
   const [error, setError] = useState('');
+  const [contactOpen, setContactOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
 
   // Admin state
@@ -263,6 +265,15 @@ export default function Dashboard() {
             >
               <HelpCircle className="w-5 h-5" />
             </Button>
+            <Button
+              onClick={() => setContactOpen(true)}
+              variant="ghost"
+              className="text-slate-400 hover:text-slate-100"
+              title={t('common.contact') || 'Contact'}
+            >
+              <Mail className="w-5 h-5" />
+            </Button>
+            <ContactDialog open={contactOpen} onOpenChange={setContactOpen} />
             <LanguageSelector />
             <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
               <LogOut className="w-4 h-4 mr-2" />

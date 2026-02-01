@@ -3,6 +3,8 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
@@ -32,7 +34,7 @@ def is_email_configured() -> bool:
     return bool(config["user"] and config["password"])
 
 
-def _send_email_sync(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+def _send_email_sync(to_email: str, subject: str, html_body: str, text_body: str, attachments: list[dict] | None = None) -> bool:
     """Synchronous email sending (runs in threadpool)."""
     config = get_smtp_config()
     
@@ -43,13 +45,28 @@ def _send_email_sync(to_email: str, subject: str, html_body: str, text_body: str
     try:
         from_email = config["from_email"] or config["user"]
         
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart()
         msg["Subject"] = subject
         msg["From"] = from_email
         msg["To"] = to_email
-        
-        msg.attach(MIMEText(text_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
+
+        # Attach plain and html parts
+        alternative = MIMEMultipart("alternative")
+        alternative.attach(MIMEText(text_body, "plain"))
+        alternative.attach(MIMEText(html_body, "html"))
+        msg.attach(alternative)
+
+        # Attach any provided files
+        if attachments:
+            for att in attachments:
+                try:
+                    part = MIMEBase(att.get("maintype", "application"), att.get("subtype", "octet-stream"))
+                    part.set_payload(att["content"])
+                    encoders.encode_base64(part)
+                    part.add_header("Content-Disposition", f'attachment; filename="{att.get("filename","attachment")}"')
+                    msg.attach(part)
+                except Exception as e:
+                    logger.error(f"[Email] Failed to attach file {att.get('filename')}: {e}")
         
         with smtplib.SMTP(config["host"], config["port"]) as server:
             server.starttls()
@@ -63,10 +80,10 @@ def _send_email_sync(to_email: str, subject: str, html_body: str, text_body: str
         return False
 
 
-async def send_email(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+async def send_email(to_email: str, subject: str, html_body: str, text_body: str, attachments: list[dict] | None = None) -> bool:
     """Send email asynchronously using threadpool."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_executor, _send_email_sync, to_email, subject, html_body, text_body)
+    return await loop.run_in_executor(_executor, _send_email_sync, to_email, subject, html_body, text_body, attachments)
 
 
 async def send_confirmation_email(to_email: str, name: str, confirmation_token: str) -> bool:
