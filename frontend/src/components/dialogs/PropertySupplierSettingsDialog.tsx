@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Property, Supplier, PropertySupplier, TextPattern, SubscriptionStatus } from '../../api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -46,6 +46,10 @@ export default function PropertySupplierSettingsDialog({
   const prevOpenRef = useRef(open);
   const [addSupplierHovered, setAddSupplierHovered] = useState(false);
   const [addPatternHovered, setAddPatternHovered] = useState(false);
+  
+  // Debounced direct debit toggle state
+  const [pendingDirectDebit, setPendingDirectDebit] = useState<Record<string, boolean>>({});
+  const directDebitTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
   
   // Check if user can add more suppliers
   const canAddSupplier = subscription?.can_add_supplier ?? true;
@@ -96,12 +100,71 @@ export default function PropertySupplierSettingsDialog({
       setAllSuppliers(suppliers);
       setPropertySuppliers(propertySuppliersList);
       setTextPatterns(patternsResponse.patterns || []);
+      // Clear pending changes when fresh data loads
+      setPendingDirectDebit({});
     } catch (err) {
       onError(err instanceof Error ? err.message : t('supplier.loadError'));
     } finally {
       setLoading(false);
     }
   };
+
+  // Handle direct debit toggle with debounce
+  const handleDirectDebitToggle = useCallback((ps: PropertySupplier) => {
+    const currentValue = pendingDirectDebit[ps.id] ?? ps.direct_debit;
+    const newValue = !currentValue;
+    
+    // Update local state immediately for UI feedback
+    setPendingDirectDebit(prev => ({ ...prev, [ps.id]: newValue }));
+    
+    // Clear any existing timer for this supplier
+    if (directDebitTimerRef.current[ps.id]) {
+      clearTimeout(directDebitTimerRef.current[ps.id]);
+    }
+    
+    // Set new timer for debounced DB update
+    directDebitTimerRef.current[ps.id] = setTimeout(async () => {
+      // Only update if value actually changed from original
+      if (newValue !== ps.direct_debit && token) {
+        try {
+          await api.suppliers.updateForProperty(token, property.id, ps.id, {
+            direct_debit: newValue,
+          });
+          // Update local state to reflect saved value
+          setPropertySuppliers(prev => prev.map(item => 
+            item.id === ps.id ? { ...item, direct_debit: newValue } : item
+          ));
+          // Clear pending change
+          setPendingDirectDebit(prev => {
+            const updated = { ...prev };
+            delete updated[ps.id];
+            return updated;
+          });
+        } catch (err) {
+          // Revert on error
+          setPendingDirectDebit(prev => {
+            const updated = { ...prev };
+            delete updated[ps.id];
+            return updated;
+          });
+          onError(err instanceof Error ? err.message : t('supplier.updateError'));
+        }
+      } else {
+        // Value was toggled back to original, clear pending change
+        setPendingDirectDebit(prev => {
+          const updated = { ...prev };
+          delete updated[ps.id];
+          return updated;
+        });
+      }
+      delete directDebitTimerRef.current[ps.id];
+    }, 800); // 800ms debounce
+  }, [pendingDirectDebit, token, property.id, onError, t]);
+
+  // Get effective direct debit value for a supplier
+  const getEffectiveDirectDebit = useCallback((ps: PropertySupplier): boolean => {
+    return pendingDirectDebit[ps.id] ?? ps.direct_debit;
+  }, [pendingDirectDebit]);
 
   const handleAddSupplier = async () => {
     if (!token || !selectedSupplierId) {
@@ -414,12 +477,19 @@ export default function PropertySupplierSettingsDialog({
                           <TableCell className="text-slate-300">{ps.supplier.name}</TableCell>
                           <TableCell className="text-slate-400 capitalize">{t(`bill.${ps.supplier.bill_type}`)}</TableCell>
                           <TableCell className="text-slate-400">{ps.contract_id || <span className="text-slate-500">—</span>}</TableCell>
-                          <TableCell className="text-slate-400">
-                            {ps.direct_debit ? (
-                              <span className="text-emerald-400">✓ {t('common.yes') || 'Yes'}</span>
-                            ) : (
-                              <span className="text-slate-500">{t('common.no') || 'No'}</span>
-                            )}
+                          <TableCell>
+                            <div className="flex items-center justify-center">
+                              <Checkbox
+                                id={`direct-debit-${ps.id}`}
+                                checked={getEffectiveDirectDebit(ps)}
+                                onCheckedChange={() => handleDirectDebitToggle(ps)}
+                                className={`bg-slate-700 border-slate-600 transition-all ${
+                                  pendingDirectDebit[ps.id] !== undefined 
+                                    ? 'ring-2 ring-offset-1 ring-offset-slate-800 ring-indigo-400' 
+                                    : ''
+                                }`}
+                              />
+                            </div>
                           </TableCell>
                           <TableCell className="text-slate-400">
                             {ps.supplier_id === '0' ? (

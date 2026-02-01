@@ -1047,9 +1047,47 @@ export default function RenterView() {
               {/* No payment info available - show references and PDF link */}
               {!getPaymentInfo(payingBill) && (
                 <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-3">
-                  <p className="text-amber-400 text-sm text-center">
-                    {t('renter.checkBillForPaymentInfo') || 'Check the bill for payment information'}
-                  </p>
+                  {/* For direct debit bills without landlord IBAN, show specific message */}
+                  {payingBill?.is_direct_debit ? (
+                    <>
+                      <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-3">
+                        <p className="text-blue-300 text-sm text-center">
+                          {t('renter.directDebitNote') || 'This is a direct debit bill. The landlord pays the supplier and you pay the landlord.'}
+                        </p>
+                      </div>
+                      <p className="text-amber-400 text-sm text-center">
+                        {t('renter.landlordIbanNotConfigured') || 'Landlord bank details not configured. Please contact your landlord.'}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-amber-400 text-sm text-center">
+                      {t('renter.checkBillForPaymentInfo') || 'Check the bill for payment information'}
+                    </p>
+                  )}
+                  
+                  {/* Bill details section */}
+                  <div className="space-y-2 pt-2 border-t border-slate-700">
+                    {/* Amount */}
+                    <div className="space-y-1">
+                      <p className="text-slate-500 text-xs uppercase">{t('common.amount')}</p>
+                      <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
+                        <span className="text-emerald-400 font-mono text-sm font-bold">
+                          {payingBill?.remaining.toFixed(2)} {payingBill?.bill.currency || 'RON'}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(payingBill?.remaining.toFixed(2) || '', 'amount')}
+                          className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                          title={t('common.copy') || 'Copy'}
+                        >
+                          {copiedField === 'amount' ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   
                   {/* PDF Link if available */}
                   {payingBill?.has_pdf && token && (
@@ -1065,8 +1103,8 @@ export default function RenterView() {
                     </div>
                   )}
                   
-                  {/* Bill Number */}
-                  {payingBill?.bill.bill_number && (
+                  {/* Bill Number - only show for non-direct-debit bills */}
+                  {!payingBill?.is_direct_debit && payingBill?.bill.bill_number && (
                     <div className="space-y-1">
                       <p className="text-slate-500 text-xs uppercase">{t('renter.billNumber') || 'Bill Number'}</p>
                       <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
@@ -1086,8 +1124,8 @@ export default function RenterView() {
                     </div>
                   )}
                   
-                  {/* Contract ID */}
-                  {payingBill?.bill.contract_id && (
+                  {/* Contract ID - only show for non-direct-debit bills */}
+                  {!payingBill?.is_direct_debit && payingBill?.bill.contract_id && (
                     <div className="space-y-1">
                       <p className="text-slate-500 text-xs uppercase">{t('renter.reference') || 'Reference'}</p>
                       <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
