@@ -9,8 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import ContactDialog from '@/components/ContactDialog';
-import { LogOut, Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, ShieldCheck, FolderSearch, Crown, Bell, HelpCircle, Mail } from 'lucide-react';
+import HeaderBar from '@/components/HeaderBar';
+import { Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, FolderSearch, Crown, Bell } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
@@ -20,13 +20,11 @@ import NotificationsView from '../components/NotificationsView';
 import HelpManualView from '../components/HelpManualView';
 import UserPatternDialog from '../components/dialogs/UserPatternDialog';
 import { useI18n } from '../lib/i18n';
-import { LanguageSelector } from '../components/LanguageSelector';
 
 export default function Dashboard() {
-  const { user, token, logout } = useAuth();
+  const { user, token } = useAuth();
   const { t } = useI18n();
   const [error, setError] = useState('');
-  const [contactOpen, setContactOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
 
   // Admin state
@@ -247,41 +245,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Building2 className="w-6 h-6 text-emerald-500" />
-            <h1 className="text-xl font-semibold text-slate-100 flex items-center gap-2">
-              {t('app.title')} - {user?.name}
-              {isAdmin && <ShieldCheck className="w-5 h-5 text-emerald-500" />}
-            </h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button
-              onClick={() => setActiveTab('help')}
-              variant="ghost"
-              className="text-slate-400 hover:text-slate-100"
-              title={t('help.title')}
-            >
-              <HelpCircle className="w-5 h-5" />
-            </Button>
-            <Button
-              onClick={() => setContactOpen(true)}
-              variant="ghost"
-              className="text-slate-400 hover:text-slate-100"
-              title={t('common.contact') || 'Contact'}
-            >
-              <Mail className="w-5 h-5" />
-            </Button>
-            <ContactDialog open={contactOpen} onOpenChange={setContactOpen} />
-            <LanguageSelector />
-            <Button onClick={logout} variant="ghost" className="text-slate-400 hover:text-slate-100">
-              <LogOut className="w-4 h-4 mr-2" />
-              {t('app.logout')}
-            </Button>
-          </div>
-        </div>
-      </header>
+      <HeaderBar />
 
       <main className="p-6">
         {error && (

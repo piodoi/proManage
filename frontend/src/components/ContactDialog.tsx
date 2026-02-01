@@ -21,7 +21,10 @@ export default function ContactDialog({ open, onOpenChange }: Props) {
   const [fromEmail, setFromEmail] = useState(user?.email || '');
 
   const submit = async () => {
-    if (!token) return;
+    if (!token) {
+      alert(t('common.contactSignInRequired') || 'Please sign in to contact support');
+      return;
+    }
     setSending(true);
     try {
       const form = new FormData();
@@ -31,7 +34,7 @@ export default function ContactDialog({ open, onOpenChange }: Props) {
       if (fromEmail) form.append('from_email', fromEmail);
       if (file) form.append('file', file);
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/email/contact`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/email/contact`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: form,
@@ -108,10 +111,13 @@ export default function ContactDialog({ open, onOpenChange }: Props) {
             <Button onClick={() => onOpenChange(false)} variant="outline" className="bg-slate-700 text-slate-100 hover:bg-slate-600">
               {t('common.cancel')}
             </Button>
-            <Button onClick={submit} className="bg-emerald-600 hover:bg-emerald-700" disabled={sending}>
+            <Button onClick={submit} className="bg-emerald-600 hover:bg-emerald-700" disabled={sending || !token}>
               {sending ? `${t('common.sending') || 'Sending...'}` : (t('common.send') || 'Send')}
             </Button>
           </div>
+          {!token && (
+            <p className="text-amber-400 text-sm text-center mt-2">{t('common.contactSignInRequired') || 'Please sign in to contact support'}</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
