@@ -293,7 +293,7 @@ export const api = {
 
   paymentNotifications: {
     list: (token: string, status?: string) =>
-      request<PaymentNotificationWithDetails[]>(`/payment-notifications${status ? `?status=${status}` : ''}`, { token }),
+      request<PaymentNotificationWithDetails[]>(`/payment-notifications/${status ? `?status=${status}` : ''}`, { token }),
     count: (token: string) => request<{ count: number }>('/payment-notifications/count', { token }),
     get: (token: string, id: string) => request<PaymentNotificationWithDetails>(`/payment-notifications/${id}`, { token }),
     confirm: (token: string, id: string, note?: string) =>
