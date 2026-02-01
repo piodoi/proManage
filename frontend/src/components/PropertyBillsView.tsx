@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api, Bill, Renter, ExtractionResult, BillType, BILL_TYPES, PropertySupplier, extractBarcodeFromBillAPI } from '../api';
+import { featureFlags } from '../lib/featureFlags';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -146,33 +147,35 @@ export default function PropertyBillsView({
   const [extractedBarcode, setExtractedBarcode] = useState<string>('');
   const [extractingBarcode, setExtractingBarcode] = useState<string | null>(null); // bill.id being extracted
 
-  // Function to open utility payment dialog with barcode extraction
+  // Function to open utility payment dialog with barcode extraction (guarded by feature flags)
   const openUtilityPaymentDialog = async (bill: Bill) => {
     setUtilityPaymentBill(bill);
-    
-    // If bill has PDF, try to extract barcode first before showing dialog
-    if (bill.has_pdf) {
+    // If payOnline feature disabled, just open dialog
+    if (!featureFlags.payOnline) {
+      setShowUtilityPayment(true);
+      return;
+    }
+
+    // If barcode extraction enabled and bill has PDF, try extract first
+    if (featureFlags.barcodeExtraction && bill.has_pdf) {
       setExtractingBarcode(bill.id);
       try {
         const result = await extractBarcodeFromBillAPI(bill.id);
         if (result.primary_barcode) {
           setExtractedBarcode(result.primary_barcode);
         } else {
-          // Fall back to bill_number if no barcode found
           setExtractedBarcode(bill.bill_number || '');
         }
       } catch (err) {
-        // Fall back to bill_number if extraction fails
         setExtractedBarcode(bill.bill_number || '');
       } finally {
         setExtractingBarcode(null);
       }
     } else {
-      // No PDF, use bill_number directly
+      // No extraction requested - use bill number
       setExtractedBarcode(bill.bill_number || '');
     }
-    
-    // Show dialog after barcode is ready
+
     setShowUtilityPayment(true);
   };
 
@@ -897,23 +900,22 @@ export default function PropertyBillsView({
                               <FileText className="w-3 h-3" />
                             </Button>
                           )}
-                          {/* Pay Online button - show for utility bills with bill number or PDF (for barcode extraction) *}
-                          {bill.bill_type !== 'rent' && (bill.bill_number || bill.has_pdf) && getEffectiveStatus(bill) !== 'paid' && (
+                          {featureFlags.payOnline && bill.bill_type !== 'rent' && (bill.bill_number || bill.has_pdf) && getEffectiveStatus(bill) !== 'paid' && (
                             <Button
                               size="sm"
                               onClick={() => openUtilityPaymentDialog(bill)}
-                              disabled={extractingBarcode !== null}
+                              disabled={featureFlags.barcodeExtraction ? extractingBarcode !== null : false}
                               className="bg-emerald-700 text-emerald-100 hover:bg-emerald-600 hover:text-white border border-emerald-600 h-6 px-2"
                               title={t('utility.payOnlineBtn')}
                             >
-                              {extractingBarcode === bill.id ? (
+                              {featureFlags.barcodeExtraction && extractingBarcode === bill.id ? (
                                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                               ) : (
                                 <CreditCard className="w-3 h-3 mr-1" />
                               )}
-                              <span className="text-xs">{extractingBarcode === bill.id ? t('common.loading') : t('utility.payOnlineBtn')}</span>
+                              <span className="text-xs">{featureFlags.barcodeExtraction && extractingBarcode === bill.id ? t('common.loading') : t('utility.payOnlineBtn')}</span>
                             </Button>
-                          )} */}
+                          )}
                           <Button
                             size="sm"
                             onClick={() => handleEditBill(bill)}

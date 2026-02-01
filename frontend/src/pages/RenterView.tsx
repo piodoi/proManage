@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard } from 'lucide-react';
+import { featureFlags } from '../lib/featureFlags';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -585,8 +586,7 @@ export default function RenterView() {
                                 >
                                   {t('renter.pay')}
                                 </Button>
-                                {/* Pay Online button - show for utility bills with bill number (used as barcode) }
-                                {item.bill.bill_type !== 'rent' && item.bill.bill_number && (
+                                {featureFlags.payOnline && item.bill.bill_type !== 'rent' && item.bill.bill_number && (
                                   <Button
                                     size="sm"
                                     onClick={() => {
@@ -599,7 +599,7 @@ export default function RenterView() {
                                     <CreditCard className="w-4 h-4 mr-1" />
                                     {t('utility.payOnlineBtn')}
                                   </Button>
-                                )} */}
+                                )}
                                 {item.is_direct_debit && (
                                   <span className="px-2 py-1 rounded text-xs bg-blue-900 text-blue-200 whitespace-nowrap">
                                     {t('bill.directDebit')}
