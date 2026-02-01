@@ -16,7 +16,7 @@ RUN npm ci
 COPY . .
 
 # Build arguments for environment variables
-ARG VITE_API_URL=https://promanage.urun.me
+ARG VITE_API_URL=https://api.promanage.urun.me
 ARG VITE_GOOGLE_CLIENT_ID="772060848256-6qfq4c93c5d4vgf09on7mkejqs0lp4h5.apps.googleusercontent.com"
 ARG VITE_FACEBOOK_APP_ID=""
 
