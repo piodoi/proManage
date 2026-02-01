@@ -236,6 +236,16 @@ class MySQLDatabase:
                     else:
                         start_date_value = str(raw_start_date)
                 
+                # Handle email_notifications - MySQL stores as TINYINT(1)
+                email_notifications_value = getattr(row, 'email_notifications', None)
+                if email_notifications_value is None:
+                    email_notifications = False
+                elif isinstance(email_notifications_value, bool):
+                    email_notifications = email_notifications_value
+                else:
+                    # Handle integer 1/0 from MySQL TINYINT
+                    email_notifications = bool(email_notifications_value)
+                
                 renters.append(Renter(
                     id=row.id,
                     property_id=row.property_id,
@@ -247,6 +257,10 @@ class MySQLDatabase:
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     access_token=row.access_token,
+                    password_hash=getattr(row, 'password_hash', None),
+                    language=getattr(row, 'language', 'ro') or 'ro',
+                    email_notifications=email_notifications,
+                    has_account=bool(getattr(row, 'password_hash', None)),
                     created_at=row.created_at.isoformat() if row.created_at else None
                 ))
             return renters
@@ -268,6 +282,15 @@ class MySQLDatabase:
                     else:
                         start_date_value = str(raw_start_date)
                 
+                # Handle email_notifications - MySQL stores as TINYINT(1)
+                email_notifications_value = getattr(row, 'email_notifications', None)
+                if email_notifications_value is None:
+                    email_notifications = False
+                elif isinstance(email_notifications_value, bool):
+                    email_notifications = email_notifications_value
+                else:
+                    email_notifications = bool(email_notifications_value)
+                
                 return Renter(
                     id=row.id,
                     property_id=row.property_id,
@@ -281,7 +304,8 @@ class MySQLDatabase:
                     access_token=row.access_token,
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
-                    email_notifications=getattr(row, 'email_notifications', False) or False,
+                    email_notifications=email_notifications,
+                    has_account=bool(getattr(row, 'password_hash', None)),
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
             return None
@@ -303,6 +327,15 @@ class MySQLDatabase:
                     else:
                         start_date_value = str(raw_start_date)
                 
+                # Handle email_notifications - MySQL stores as TINYINT(1)
+                email_notifications_value = getattr(row, 'email_notifications', None)
+                if email_notifications_value is None:
+                    email_notifications = False
+                elif isinstance(email_notifications_value, bool):
+                    email_notifications = email_notifications_value
+                else:
+                    email_notifications = bool(email_notifications_value)
+                
                 return Renter(
                     id=row.id,
                     property_id=row.property_id,
@@ -316,7 +349,8 @@ class MySQLDatabase:
                     access_token=row.access_token,
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
-                    email_notifications=getattr(row, 'email_notifications', False) or False,
+                    email_notifications=email_notifications,
+                    has_account=bool(getattr(row, 'password_hash', None)),
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
             return None

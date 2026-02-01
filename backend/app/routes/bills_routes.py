@@ -4,6 +4,7 @@ import re
 import logging
 import sys
 import base64
+import asyncio
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query, BackgroundTasks
 from fastapi.responses import FileResponse
@@ -20,6 +21,35 @@ from app.email_sender import send_bill_notification_email, is_email_configured
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
+
+
+def auto_assign_renter_if_single(property_id: str, renter_id: str = None) -> str:
+    """
+    Auto-assign renter_id if property has only one renter and no renter_id is specified.
+    Returns the renter_id to use (original if set, single renter's ID, or None).
+    """
+    if renter_id:
+        return renter_id
+    
+    renters = db.list_renters(property_id=property_id)
+    if len(renters) == 1:
+        logger.info(f"[AutoAssignRenter] Property {property_id} has single renter {renters[0].id}, auto-assigning")
+        return renters[0].id
+    
+    return None
+
+
+def schedule_bill_notification(bill: Bill, property_name: str):
+    """Schedule bill notification as a background task that properly handles async."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(notify_renters_about_bill(bill, property_name))
+        else:
+            loop.run_until_complete(notify_renters_about_bill(bill, property_name))
+    except RuntimeError:
+        # No event loop, create a new one
+        asyncio.run(notify_renters_about_bill(bill, property_name))
 
 
 def calculate_bill_status(bill: Bill) -> Bill:
@@ -65,14 +95,23 @@ async def notify_renters_about_bill(bill: Bill, property_name: str):
     
     # Get renters for this property who have email_notifications enabled
     renters = db.list_renters(property_id=bill.property_id)
+    logger.info(f"[BillNotification] Found {len(renters)} renters for property {bill.property_id}")
     
     for renter in renters:
+        # Debug logging for notification checks
+        logger.info(f"[BillNotification] Checking renter {renter.name}: email={renter.email}, email_notifications={renter.email_notifications} (type={type(renter.email_notifications).__name__})")
+        
         # Check if renter has email notifications enabled and has an email
-        if not renter.email or not renter.email_notifications:
+        if not renter.email:
+            logger.info(f"[BillNotification] Skipping renter {renter.name} - no email")
+            continue
+        if not renter.email_notifications:
+            logger.info(f"[BillNotification] Skipping renter {renter.name} - notifications disabled")
             continue
         
         # If bill is assigned to a specific renter, only notify that renter
         if bill.renter_id and bill.renter_id != 'all' and bill.renter_id != renter.id:
+            logger.info(f"[BillNotification] Skipping renter {renter.name} - bill assigned to different renter")
             continue
         
         try:
@@ -82,6 +121,7 @@ async def notify_renters_about_bill(bill: Bill, property_name: str):
             else:
                 due_date_str = str(bill.due_date)
             
+            logger.info(f"[BillNotification] Sending notification to {renter.email} for bill {bill.id}")
             await send_bill_notification_email(
                 to_email=renter.email,
                 renter_name=renter.name,
@@ -131,14 +171,19 @@ async def create_bill(data: BillCreate, background_tasks: BackgroundTasks, curre
     # User isolation: all users (including admins) can only access their own properties
     if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Auto-assign renter if property has only one renter
+    renter_id = auto_assign_renter_if_single(data.property_id, data.renter_id)
+    
     # If renter_id is provided, verify it belongs to the property
-    if data.renter_id:
-        renter = db.get_renter(data.renter_id)
+    if renter_id:
+        renter = db.get_renter(renter_id)
         if not renter or renter.property_id != data.property_id:
             raise HTTPException(status_code=404, detail="Renter not found in this property")
+    
     bill = Bill(
         property_id=data.property_id,
-        renter_id=data.renter_id,
+        renter_id=renter_id,
         bill_type=data.bill_type,
         description=data.description,
         amount=data.amount,
@@ -151,7 +196,7 @@ async def create_bill(data: BillCreate, background_tasks: BackgroundTasks, curre
     db.save_bill(bill)
     
     # Send email notifications to opted-in renters
-    background_tasks.add_task(notify_renters_about_bill, bill, prop.name)
+    background_tasks.add_task(schedule_bill_notification, bill, prop.name)
     
     return bill
 
@@ -580,10 +625,13 @@ async def create_bill_from_pdf(
     pattern_bill_type = data.get("matched_pattern_bill_type") or data.get("bill_type", "utilities")
     resolved_bill_type = resolve_bill_type(pattern_bill_type)
     
-    # Handle renter_id - convert 'all' to None
+    # Handle renter_id - convert 'all' to None, then auto-assign if single renter
     renter_id = data.get("renter_id")
     if renter_id == "all" or not renter_id:
         renter_id = None
+    
+    # Auto-assign renter if property has only one renter
+    renter_id = auto_assign_renter_if_single(property_id, renter_id)
     
     # Get the new amount
     new_amount = float(data.get("amount", 0))
@@ -660,7 +708,7 @@ async def create_bill_from_pdf(
     db.save_bill(bill)
     
     # Send email notifications to opted-in renters
-    background_tasks.add_task(notify_renters_about_bill, bill, prop.name)
+    background_tasks.add_task(schedule_bill_notification, bill, prop.name)
     
     # Save PDF file if pdf_data_base64 is provided
     pdf_data_base64 = data.get("pdf_data_base64")

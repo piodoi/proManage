@@ -252,6 +252,16 @@ class PostgreSQLDatabase:
     
     def _row_to_renter(self, row) -> Renter:
         """Convert database row to Renter model"""
+        # Handle email_notifications - ensure boolean conversion
+        email_notifications_value = getattr(row, 'email_notifications', None)
+        if email_notifications_value is None:
+            email_notifications = False
+        elif isinstance(email_notifications_value, bool):
+            email_notifications = email_notifications_value
+        else:
+            # Handle string 'true'/'false' or integer 1/0
+            email_notifications = str(email_notifications_value).lower() in ('true', '1', 't', 'yes')
+        
         return Renter(
             id=row.id,
             property_id=row.property_id,
@@ -265,7 +275,8 @@ class PostgreSQLDatabase:
             access_token=row.access_token,
             password_hash=getattr(row, 'password_hash', None),
             language=getattr(row, 'language', 'ro') or 'ro',
-            email_notifications=getattr(row, 'email_notifications', False) or False,
+            email_notifications=email_notifications,
+            has_account=bool(getattr(row, 'password_hash', None)),
             created_at=row.created_at.isoformat() if row.created_at else None
         )
     
