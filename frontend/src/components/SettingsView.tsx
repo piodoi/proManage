@@ -10,6 +10,7 @@ import { Mail, AlertCircle, User, Copy, Check, Crown, Zap, Building2, Users, Fil
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { validateIban, formatIban } from '../utils/iban';
+import { getAvailableCurrencies, getDefaultCurrency } from '../lib/currencyConfig';
 
 // Cache lifetime for subscription data (15 minutes in milliseconds)
 const SUBSCRIPTION_CACHE_LIFETIME = 15 * 60 * 1000;
@@ -835,16 +836,16 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                   <div>
                     <Label className="text-slate-300">{t('settings.rentCurrency')}</Label>
                     <Select
-                      value={preferences.rent_currency || 'EUR'}
+                      value={preferences.rent_currency || getDefaultCurrency()}
                       onValueChange={(value) => setRentCurrency(value)}
                     >
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="RON">RON</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
+                        {getAvailableCurrencies().map((currency) => (
+                          <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-slate-500 mt-1">
@@ -854,16 +855,16 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                   <div>
                     <Label className="text-slate-300">{t('settings.billCurrency')}</Label>
                     <Select
-                      value={preferences.bill_currency || 'RON'}
+                      value={preferences.bill_currency || getDefaultCurrency()}
                       onValueChange={(value) => setBillCurrency(value)}
                     >
                       <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-700 border-slate-600">
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="RON">RON</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
+                        {getAvailableCurrencies().map((currency) => (
+                          <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-slate-500 mt-1">

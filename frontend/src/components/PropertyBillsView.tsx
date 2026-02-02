@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api, Bill, Renter, ExtractionResult, BillType, BILL_TYPES, PropertySupplier, extractBarcodeFromBillAPI } from '../api';
 import { featureFlags } from '../lib/featureFlags';
+import { getAvailableCurrencies } from '../lib/currencyConfig';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -718,16 +719,16 @@ export default function PropertyBillsView({
                           required
                         />
                         <Select
-                          value={billForm.currency || 'RON'}
+                          value={billForm.currency || 'USD'}
                           onValueChange={(value) => setBillForm({ ...billForm, currency: value })}
                         >
                           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100 w-24">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-700 border-slate-600">
-                            <SelectItem value="EUR">EUR</SelectItem>
-                            <SelectItem value="RON">RON</SelectItem>
-                            <SelectItem value="USD">USD</SelectItem>
+                            {getAvailableCurrencies().map((currency) => (
+                              <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>

@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell, LogIn } from 'lucide-react';
 import { featureFlags } from '../lib/featureFlags';
+import { getAvailableCurrencies, getDefaultCurrency } from '../lib/currencyConfig';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
 import { formatDateWithPreferences } from '../lib/utils';
@@ -45,8 +46,8 @@ export default function RenterView() {
   const [notifyingPayment, setNotifyingPayment] = useState(false);
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentAmount, setPaymentAmount] = useState<string>('');
-  const [paymentCurrency, setPaymentCurrency] = useState<string>('RON');
-  const [previousPaymentCurrency, setPreviousPaymentCurrency] = useState<string>('RON');
+  const [paymentCurrency, setPaymentCurrency] = useState<string>(getDefaultCurrency());
+  const [previousPaymentCurrency, setPreviousPaymentCurrency] = useState<string>(getDefaultCurrency());
   
   // Utility payment dialog state
   const [showUtilityPayment, setShowUtilityPayment] = useState(false);
@@ -1407,9 +1408,10 @@ export default function RenterView() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-600">
-                        <SelectItem value="RON" className="text-slate-200 hover:bg-slate-700">RON</SelectItem>
-                        <SelectItem value="EUR" className="text-slate-200 hover:bg-slate-700">EUR</SelectItem>
-                        <SelectItem value="USD" className="text-slate-200 hover:bg-slate-700">USD</SelectItem>
+                        {/* Show available currencies plus the bill's original currency if different */}
+                        {[...new Set([...getAvailableCurrencies(), payingBill?.bill.currency || getDefaultCurrency()])].map((currency) => (
+                          <SelectItem key={currency} value={currency} className="text-slate-200 hover:bg-slate-700">{currency}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

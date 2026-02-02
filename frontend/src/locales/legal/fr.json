@@ -1,0 +1,128 @@
+{
+  "footer": {
+    "allRightsReserved": "Tous droits réservés.",
+    "privacyPolicy": "Politique de confidentialité",
+    "termsOfService": "Conditions d'utilisation",
+    "contactSupport": "Contacter le support"
+  },
+  "privacy": {
+    "title": "Politique de confidentialité",
+    "lastUpdated": "Dernière mise à jour",
+    "lastUpdatedDate": "Janvier 2025",
+    "introduction": {
+      "title": "Introduction",
+      "content": "Bienvenue sur ProManage. Nous respectons votre vie privée et nous nous engageons à protéger vos données personnelles. Cette politique de confidentialité vous informera sur la manière dont nous traitons vos données personnelles lorsque vous visitez notre site web et utilisez nos services, et vous informera de vos droits en matière de confidentialité et de la manière dont la loi vous protège."
+    },
+    "dataCollection": {
+      "title": "Informations que nous collectons",
+      "content": "Nous collectons et traitons les types d'informations personnelles suivants :",
+      "item1": "Données d'identité : nom, adresse e-mail",
+      "item2": "Données de contact : adresse e-mail, numéro de téléphone (optionnel)",
+      "item3": "Données techniques : adresse IP, type et version du navigateur, paramètres de fuseau horaire, système d'exploitation",
+      "item4": "Données d'utilisation : informations sur la manière dont vous utilisez notre site web et nos services",
+      "item5": "Données de propriété : informations sur les propriétés que vous gérez, y compris les adresses et les factures de services"
+    },
+    "dataUse": {
+      "title": "Comment nous utilisons vos informations",
+      "content": "Nous utilisons vos données personnelles aux fins suivantes :",
+      "item1": "Pour fournir et maintenir notre service",
+      "item2": "Pour vous notifier des changements apportés à notre service",
+      "item3": "Pour fournir un support client",
+      "item4": "Pour recueillir des analyses ou des informations précieuses afin d'améliorer notre service",
+      "item5": "Pour détecter, prévenir et résoudre les problèmes techniques",
+      "item6": "Pour traiter les paiements et gérer les abonnements"
+    },
+    "dataStorage": {
+      "title": "Stockage et sécurité des données",
+      "content": "Nous mettons en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données personnelles contre tout traitement non autorisé ou illégal, perte accidentelle, destruction ou dommage. Vos données sont stockées sur des serveurs sécurisés et nous utilisons le chiffrement pour protéger les informations sensibles."
+    },
+    "dataSharing": {
+      "title": "Partage des données",
+      "content": "Nous ne vendons, n'échangeons ni ne transférons autrement vos informations personnelles à des tiers, sauf pour fournir nos services. Cela peut inclure :",
+      "item1": "Les processeurs de paiement (pour les paiements d'abonnement)",
+      "item2": "Les fournisseurs de services e-mail (pour les e-mails transactionnels)",
+      "item3": "Les fournisseurs d'hébergement cloud (pour le stockage des données)"
+    },
+    "cookies": {
+      "title": "Cookies",
+      "content": "Nous utilisons des cookies essentiels pour assurer la fonctionnalité de base de notre site web, comme le maintien de votre session et le stockage de vos préférences. Nous n'utilisons pas de cookies de suivi ou publicitaires."
+    },
+    "userRights": {
+      "title": "Vos droits",
+      "content": "En vertu des lois sur la protection des données, vous disposez de droits comprenant :",
+      "item1": "Droit d'accès : Vous pouvez demander des copies de vos données personnelles",
+      "item2": "Droit de rectification : Vous pouvez nous demander de corriger les informations inexactes",
+      "item3": "Droit à l'effacement : Vous pouvez nous demander de supprimer vos données personnelles",
+      "item4": "Droit à la portabilité : Vous pouvez demander que nous transférions vos données à une autre organisation",
+      "item5": "Droit d'opposition : Vous pouvez vous opposer à certains types de traitement"
+    },
+    "changes": {
+      "title": "Modifications de cette politique",
+      "content": "Nous pouvons mettre à jour cette politique de confidentialité de temps à autre. Nous vous informerons de tout changement en publiant la nouvelle politique de confidentialité sur cette page et en mettant à jour la date de \"Dernière mise à jour\"."
+    },
+    "contact": {
+      "title": "Nous contacter",
+      "content": "Si vous avez des questions sur cette politique de confidentialité ou nos pratiques de confidentialité, veuillez nous contacter via l'option Contacter le support dans l'application."
+    }
+  },
+  "terms": {
+    "title": "Conditions d'utilisation",
+    "lastUpdated": "Dernière mise à jour",
+    "lastUpdatedDate": "Janvier 2025",
+    "acceptance": {
+      "title": "Acceptation des conditions",
+      "content": "En accédant ou en utilisant ProManage, vous acceptez d'être lié par ces Conditions d'utilisation. Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser notre service."
+    },
+    "description": {
+      "title": "Description du service",
+      "content": "ProManage est une plateforme de gestion de propriétés et de loyers qui permet aux propriétaires de gérer leurs biens, de suivre les factures de services et de communiquer avec les locataires. Nous nous réservons le droit de modifier, suspendre ou interrompre le service à tout moment."
+    },
+    "accounts": {
+      "title": "Comptes utilisateurs",
+      "content": "Lorsque vous créez un compte, vous devez fournir des informations exactes et complètes. Vous êtes responsable de :",
+      "item1": "Maintenir la confidentialité de vos identifiants de compte",
+      "item2": "Toutes les activités qui se produisent sous votre compte",
+      "item3": "Nous notifier immédiatement de toute utilisation non autorisée"
+    },
+    "acceptableUse": {
+      "title": "Utilisation acceptable",
+      "content": "Vous acceptez de ne pas utiliser le service pour :",
+      "item1": "Violer les lois ou réglementations applicables",
+      "item2": "Télécharger des logiciels malveillants ou du contenu nuisible",
+      "item3": "Tenter d'obtenir un accès non autorisé à nos systèmes",
+      "item4": "Interférer avec ou perturber le service"
+    },
+    "intellectualProperty": {
+      "title": "Propriété intellectuelle",
+      "content": "Le service et son contenu original, ses fonctionnalités et sa fonctionnalité sont la propriété de ProManage et sont protégés par les lois internationales sur le droit d'auteur, les marques et autres lois sur la propriété intellectuelle."
+    },
+    "payment": {
+      "title": "Conditions de paiement",
+      "content": "Certaines fonctionnalités de ProManage nécessitent un abonnement payant. En vous abonnant, vous acceptez de payer les frais applicables. Les frais d'abonnement sont facturés à l'avance et ne sont pas remboursables, sauf si la loi l'exige."
+    },
+    "termination": {
+      "title": "Résiliation",
+      "content": "Nous pouvons résilier ou suspendre votre compte immédiatement, sans préavis ni responsabilité, pour quelque raison que ce soit, y compris en cas de violation de ces Conditions. À la résiliation, votre droit d'utiliser le service cessera immédiatement."
+    },
+    "disclaimer": {
+      "title": "Exclusion de garanties",
+      "content": "Le service est fourni \"tel quel\" et \"selon disponibilité\" sans aucune garantie d'aucune sorte, expresse ou implicite, y compris, mais sans s'y limiter, les garanties implicites de qualité marchande, d'adéquation à un usage particulier et de non-contrefaçon."
+    },
+    "liability": {
+      "title": "Limitation de responsabilité",
+      "content": "En aucun cas ProManage ne sera responsable de tout dommage indirect, accessoire, spécial, consécutif ou punitif, y compris la perte de profits, de données ou d'autres pertes intangibles résultant de votre utilisation du service."
+    },
+    "changes": {
+      "title": "Modifications des conditions",
+      "content": "Nous nous réservons le droit de modifier ces conditions à tout moment. Nous vous informerons des changements importants en publiant les nouvelles conditions sur cette page. Votre utilisation continue du service après ces changements constitue une acceptation des nouvelles conditions."
+    },
+    "governingLaw": {
+      "title": "Droit applicable",
+      "content": "Ces Conditions seront régies et interprétées conformément aux lois applicables, sans tenir compte des dispositions relatives aux conflits de lois."
+    },
+    "contact": {
+      "title": "Informations de contact",
+      "content": "Pour toute question concernant ces Conditions d'utilisation, veuillez nous contacter via l'option Contacter le support dans l'application."
+    }
+  }
+}

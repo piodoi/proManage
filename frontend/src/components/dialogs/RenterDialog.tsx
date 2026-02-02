@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Users, Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
+import { getAvailableCurrencies } from '../../lib/currencyConfig';
 
 type RenterDialogProps = {
   token: string | null;
@@ -208,9 +209,9 @@ export default function RenterDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-700 border-slate-600">
-                  <SelectItem value="EUR">EUR</SelectItem>
-                  <SelectItem value="RON">RON</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
+                  {getAvailableCurrencies().map((currency) => (
+                    <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
