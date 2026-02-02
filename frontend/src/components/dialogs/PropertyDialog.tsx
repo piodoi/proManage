@@ -58,25 +58,25 @@ export default function PropertyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <Button
         type="button"
-        className={needsUpgrade 
+        className={`px-2 sm:px-4 ${needsUpgrade 
           ? (isHovered 
               ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700" 
               : "bg-emerald-600 hover:bg-emerald-700")
           : "bg-emerald-600 hover:bg-emerald-700"
-        }
+        }`}
         onClick={handleTriggerClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
         {needsUpgrade && isHovered ? (
           <>
-            <Crown className="w-4 h-4 mr-2" />
-            {t('settings.upgradeToProTitle')}
+            <Crown className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">{t('settings.upgradeToProTitle')}</span>
           </>
         ) : (
           <>
-            <Plus className="w-4 h-4 mr-2" />
-            {t('property.addProperty')}
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">{t('property.addProperty')}</span>
           </>
         )}
       </Button>

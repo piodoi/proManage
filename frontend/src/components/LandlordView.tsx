@@ -332,29 +332,29 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
       )}
 
       <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
+          <div className="flex justify-between items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button
                 onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-                className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600"
+                className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 px-2 sm:px-4"
                 title={viewMode === 'list' ? t('property.switchToGrid') : t('property.switchToList')}
               >
-                {viewMode === 'list' ? <Grid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
-                {viewMode === 'list' ? t('property.gridView') : t('property.listView')}
+                {viewMode === 'list' ? <Grid className="w-4 h-4 sm:mr-2" /> : <List className="w-4 h-4 sm:mr-2" />}
+                <span className="hidden sm:inline">{viewMode === 'list' ? t('property.gridView') : t('property.listView')}</span>
               </Button>
               <Button
                 onClick={() => {
                   saveScroll();
                   setShowAllPropertiesSync(true);
                 }}
-                className="bg-emerald-600 text-white hover:bg-emerald-700 border border-emerald-700"
+                className="bg-emerald-600 text-white hover:bg-emerald-700 border border-emerald-700 px-2 sm:px-4"
                 title={t('supplier.syncAllProperties')}
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                {t('supplier.syncBills')}
+                <RefreshCw className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">{t('supplier.syncBills')}</span>
               </Button>
             </div>
-            <h2 className="text-lg font-medium text-slate-100">{t('property.properties')}</h2>
+            <h2 className="text-sm sm:text-lg font-medium text-slate-100 truncate">{t('property.properties')}</h2>
             <div className="flex gap-2">
               <EblocImportDialog
                 token={token}

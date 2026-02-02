@@ -130,9 +130,9 @@ export default function RenterDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600">
-          <Users className="w-4 h-4 mr-1" />
-          {renter ? t('renter.editRenter') : t('renter.addRenter')}
+        <Button size="sm" className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 px-2 sm:px-3" title={renter ? t('renter.editRenter') : t('renter.addRenter')}>
+          <Users className="w-4 h-4 sm:mr-1" />
+          <span className="hidden sm:inline">{renter ? t('renter.editRenter') : t('renter.addRenter')}</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700" key={`renter-dialog-${renter?.id || 'new'}`}>

@@ -93,22 +93,22 @@ export default function PropertyCard({
   return (
     <>
       <Card key={property.id} className="bg-slate-950 border-slate-700">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-slate-100">{property.name}</CardTitle>
-            <p className="text-sm text-slate-400">{property.address}</p>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div className="min-w-0 flex-shrink">
+            <CardTitle className="text-slate-100 text-sm sm:text-base truncate">{property.name}</CardTitle>
+            <p className="text-xs sm:text-sm text-slate-400 truncate">{property.address}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1 sm:gap-2 flex-shrink-0">
             <Button
               size="sm"
               onClick={() => {
                 saveScroll();
                 setShowSupplierSettings(true);
               }}
-              className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600"
+              className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 px-2 sm:px-3"
               title={t('supplier.manageSuppliers')}> 
-              <Factory className="w-4 h-4" />
-              {t('supplier.manageSuppliers')}
+              <Factory className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">{t('supplier.manageSuppliers')}</span>
             </Button>
             <PropertySupplierSettingsDialog
               token={token}
