@@ -57,6 +57,50 @@ const setCachedData = <T,>(cacheKey: string, cacheTimeKey: string, data: T): voi
   sessionStorage.setItem(cacheTimeKey, Date.now().toString());
 };
 
+/**
+ * Calculate subscription price based on tiered pricing:
+ * - First property: €4.99
+ * - Properties 2-4: €4.50 each
+ * - Properties 5-10: €3.00 each
+ * - Properties 11+: €2.75 each
+ */
+function calculateSubscriptionPrice(propertyCount: number): { total: number; perProperty: number; breakdown: string[] } {
+  if (propertyCount <= 0) return { total: 0, perProperty: 0, breakdown: [] };
+  
+  let total = 0;
+  const breakdown: string[] = [];
+  
+  // Tier 1: First property at €4.99
+  if (propertyCount >= 1) {
+    total += 4.99;
+    breakdown.push('1 × €4.99');
+  }
+  
+  // Tier 2: Properties 2-4 at €4.50 each
+  if (propertyCount >= 2) {
+    const tier2Count = Math.min(propertyCount - 1, 3); // 2nd, 3rd, 4th = max 3 properties
+    total += tier2Count * 4.50;
+    if (tier2Count > 0) breakdown.push(`${tier2Count} × €4.50`);
+  }
+  
+  // Tier 3: Properties 5-10 at €3.00 each
+  if (propertyCount >= 5) {
+    const tier3Count = Math.min(propertyCount - 4, 6); // 5th-10th = max 6 properties
+    total += tier3Count * 3.00;
+    if (tier3Count > 0) breakdown.push(`${tier3Count} × €3.00`);
+  }
+  
+  // Tier 4: Properties 11+ at €2.75 each
+  if (propertyCount >= 11) {
+    const tier4Count = propertyCount - 10;
+    total += tier4Count * 2.75;
+    if (tier4Count > 0) breakdown.push(`${tier4Count} × €2.75`);
+  }
+  
+  const perProperty = total / propertyCount;
+  return { total: Math.round(total * 100) / 100, perProperty: Math.round(perProperty * 100) / 100, breakdown };
+}
+
 export default function SettingsView({ token, user, onError, forceTab, hideTabBar = false, onNavigateToSubscription }: SettingsViewProps) {
   const { t, language } = useI18n();
   const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban, setIbanEur, setIbanUsd } = usePreferences();
@@ -592,6 +636,31 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                   <p className="text-slate-300 mb-6">
                     {t('settings.upgradeToProDesc')}
                   </p>
+                  
+                  {/* Price Display */}
+                  {(() => {
+                    const pricing = calculateSubscriptionPrice(propertyQuantity);
+                    return (
+                      <div className="mb-6 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                        {/* Price breakdown first */}
+                        <div className="mb-2 pb-2 border-b border-slate-700">
+                          <p className="text-sm text-slate-400">{pricing.breakdown.join(' + ')}</p>
+                        </div>
+                        {/* Total price */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-slate-300">{t('settings.totalPrice')}</span>
+                          <span className="text-2xl font-bold text-emerald-400">€{pricing.total.toFixed(2)}<span className="text-sm text-slate-400">/{t('settings.month')}</span></span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-400">{t('settings.averagePerProperty')}</span>
+                          <span className="text-slate-300">€{pricing.perProperty.toFixed(2)}/{t('settings.property')}</span>
+                        </div>
+                        <p className="text-xs text-emerald-500 mt-2 flex items-center gap-1">
+                          <span>💡</span> {t('settings.priceDecreaseHint')}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   
                   {/* Property Quantity Selector */}
                   <div className="mb-6">
