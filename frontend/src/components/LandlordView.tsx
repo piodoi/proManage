@@ -40,7 +40,21 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEblocDiscover, setShowEblocDiscover] = useState(false);
   const [showAllPropertiesSync, setShowAllPropertiesSync] = useState(false);
-  const viewMode = (preferences.view_mode as 'list' | 'grid') || 'list';
+  const storedViewMode = (preferences.view_mode as 'list' | 'grid') || 'list';
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+  
+  // Check screen size and auto-switch to list on small screens
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsSmallScreen(window.innerWidth < 1080);
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+  
+  // Force list view on small screens
+  const viewMode = isSmallScreen ? 'list' : storedViewMode;
   const { exchangeRates } = useExchangeRates();
   
   // Navigate to subscription tab (use parent callback if available)

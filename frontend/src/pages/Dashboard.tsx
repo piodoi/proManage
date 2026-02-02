@@ -258,25 +258,25 @@ export default function Dashboard() {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full justify-start">
-            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              <FileText className="w-4 h-4 mr-2" />
+          <TabsList className="bg-slate-800 border-b border-slate-700 rounded-none rounded-t-lg h-auto p-0 gap-0 w-full flex flex-wrap justify-start">
+            <TabsTrigger value="summary" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
+              <FileText className="w-4 h-4 mr-1 sm:mr-2" />
               {t('summary.summary')}
             </TabsTrigger>
-            <TabsTrigger value="property" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              <Building2 className="w-4 h-4 mr-2" />
+            <TabsTrigger value="property" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
+              <Building2 className="w-4 h-4 mr-1 sm:mr-2" />
               {t('property.properties')}
             </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              <Settings className="w-4 h-4 mr-2" />
+            <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
+              <Settings className="w-4 h-4 mr-1 sm:mr-2" />
               {t('settings.settings')}
             </TabsTrigger>
-            <TabsTrigger value="subscription" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              <Crown className="w-4 h-4 mr-2" />
+            <TabsTrigger value="subscription" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
+              <Crown className="w-4 h-4 mr-1 sm:mr-2" />
               {t('settings.subscriptions')}
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent relative">
-              <Bell className="w-4 h-4 mr-2" />
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent relative text-xs sm:text-sm">
+              <Bell className="w-4 h-4 mr-1 sm:mr-2" />
               {t('notifications.title')}
               {notificationCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
@@ -284,13 +284,13 @@ export default function Dashboard() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-              <FileText className="w-4 h-4 mr-2" />
+            <TabsTrigger value="tools" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
+              <FileText className="w-4 h-4 mr-1 sm:mr-2" />
               {t('tools.tools')}
             </TabsTrigger>
             {isAdmin && (
-              <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
-                <Users className="w-4 h-4 mr-2" />
+              <TabsTrigger value="admin" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
+                <Users className="w-4 h-4 mr-1 sm:mr-2" />
                 {t('admin.adminTab')}
               </TabsTrigger>
             )}
