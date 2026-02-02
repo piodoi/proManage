@@ -46,7 +46,7 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
   // Check screen size and auto-switch to list on small screens
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsSmallScreen(window.innerWidth < 1080);
+      setIsSmallScreen(window.innerWidth < 750);
     };
     checkScreenSize();
     window.addEventListener('resize', checkScreenSize);
