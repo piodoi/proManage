@@ -97,7 +97,9 @@ export default function Login() {
         try {
           const el = document.getElementById('google-button');
           if (el) {
-            window.google.accounts.id.renderButton(el, { theme: 'outline', size: 'large', width: 400 });
+            // Use container width or max 400px for responsive sizing
+            const buttonWidth = Math.min(el.offsetWidth || 300, 400);
+            window.google.accounts.id.renderButton(el, { theme: 'outline', size: 'large', width: buttonWidth });
           }
         } catch (e) {
           console.warn('[Google OAuth] renderButton failed', e);
@@ -266,7 +268,7 @@ export default function Login() {
                   </div>
                 </div>
 
-                <div id="google-button" className="w-full [&>div]:w-full [&>div>div]:w-full" />
+                <div id="google-button" className="w-full overflow-hidden [&>div]:!w-full [&>div>div]:!w-full [&_iframe]:!w-full" />
 
                 {featureFlags.facebookLogin && (
                   <Button onClick={handleFacebookLogin} className="w-full bg-blue-600 hover:bg-blue-700">

@@ -245,7 +245,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col">
+    <div className="min-h-screen bg-slate-900 flex flex-col overflow-x-hidden">
       <HeaderBar />
 
       <main className="flex-1 p-3 overflow-x-auto bg-slate-900">
