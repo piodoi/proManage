@@ -1,4 +1,5 @@
 """Environment variables management routes for admin."""
+import json
 import logging
 import os
 import subprocess
@@ -18,6 +19,19 @@ logger = logging.getLogger(__name__)
 BACKEND_DIR = Path(__file__).parent.parent.parent  # backend/
 ROOT_DIR = BACKEND_DIR.parent  # project root
 FRONTEND_DIR = ROOT_DIR / "frontend"
+USERDATA_ADMIN_DIR = ROOT_DIR / "userdata" / "admin"
+
+# Feature flags file path
+FEATURE_FLAGS_FILE = USERDATA_ADMIN_DIR / "feature_flags.json"
+
+# Default feature flags
+DEFAULT_FEATURE_FLAGS = {
+    "payOnline": False,
+    "barcodeExtraction": False,
+    "facebookLogin": False,
+    "demoLogin": False,
+    "usBuild": False,
+}
 
 
 class EnvVariable(BaseModel):
@@ -166,6 +180,42 @@ def write_env_file(file_path: Path, env_vars: Dict[str, str], preserve_comments:
         f.write('\n'.join(lines) + '\n')
 
 
+def load_feature_flags() -> Dict[str, bool]:
+    """Load feature flags from JSON file. Creates file with defaults if not exists."""
+    # Ensure directory exists
+    USERDATA_ADMIN_DIR.mkdir(parents=True, exist_ok=True)
+    
+    if not FEATURE_FLAGS_FILE.exists():
+        # Create with defaults
+        save_feature_flags(DEFAULT_FEATURE_FLAGS)
+        return DEFAULT_FEATURE_FLAGS.copy()
+    
+    try:
+        with open(FEATURE_FLAGS_FILE, 'r', encoding='utf-8') as f:
+            flags = json.load(f)
+        # Merge with defaults to ensure all flags exist
+        result = DEFAULT_FEATURE_FLAGS.copy()
+        result.update(flags)
+        return result
+    except Exception as e:
+        logger.error(f"Error loading feature flags: {e}")
+        return DEFAULT_FEATURE_FLAGS.copy()
+
+
+def save_feature_flags(flags: Dict[str, bool]) -> None:
+    """Save feature flags to JSON file."""
+    USERDATA_ADMIN_DIR.mkdir(parents=True, exist_ok=True)
+    with open(FEATURE_FLAGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(flags, f, indent=2)
+
+
+# Public endpoint for feature flags (no auth required for runtime checks)
+@router.get("/feature-flags/public")
+async def get_feature_flags_public() -> Dict[str, bool]:
+    """Get current feature flag values. Public endpoint for frontend runtime checks."""
+    return load_feature_flags()
+
+
 @router.get("/variables")
 async def get_env_variables(_: TokenData = Depends(require_admin)) -> Dict[str, List[EnvVariable]]:
     """
@@ -240,16 +290,8 @@ async def get_env_variables(_: TokenData = Depends(require_admin)) -> Dict[str, 
 
 @router.get("/feature-flags")
 async def get_feature_flags(_: TokenData = Depends(require_admin)) -> Dict[str, bool]:
-    """Get current feature flag values from frontend .env file."""
-    frontend_env = parse_env_file(get_env_file_path('frontend'))
-    
-    return {
-        'payOnline': frontend_env.get('VITE_FEATURE_PAY_ONLINE', 'false').lower() == 'true',
-        'barcodeExtraction': frontend_env.get('VITE_FEATURE_BARCODE_EXTRACTION', 'false').lower() == 'true',
-        'facebookLogin': frontend_env.get('VITE_FEATURE_FACEBOOK_LOGIN', 'false').lower() == 'true',
-        'demoLogin': frontend_env.get('VITE_FEATURE_DEMO_LOGIN', 'false').lower() == 'true',
-        'usBuild': frontend_env.get('VITE_FEATURE_US_BUILD', 'false').lower() == 'true',
-    }
+    """Get current feature flag values from JSON file."""
+    return load_feature_flags()
 
 
 @router.put("/feature-flags")
@@ -257,29 +299,24 @@ async def update_feature_flags(
     flags: Dict[str, bool],
     _: TokenData = Depends(require_admin)
 ) -> Dict[str, str]:
-    """Update feature flags in frontend .env file."""
-    frontend_env_file = get_env_file_path('frontend')
-    current_vars = parse_env_file(frontend_env_file)
-    
-    # Map flag names to env var names
-    flag_mapping = {
-        'payOnline': 'VITE_FEATURE_PAY_ONLINE',
-        'barcodeExtraction': 'VITE_FEATURE_BARCODE_EXTRACTION',
-        'facebookLogin': 'VITE_FEATURE_FACEBOOK_LOGIN',
-        'demoLogin': 'VITE_FEATURE_DEMO_LOGIN',
-        'usBuild': 'VITE_FEATURE_US_BUILD',
-    }
-    
-    for flag_name, value in flags.items():
-        if flag_name in flag_mapping:
-            current_vars[flag_mapping[flag_name]] = 'true' if value else 'false'
-    
-    write_env_file(frontend_env_file, current_vars)
-    
-    return {
-        "status": "success",
-        "message": "Feature flags updated. Restart frontend to apply changes."
-    }
+    """Update feature flags in JSON file. Changes take effect immediately."""
+    try:
+        current_flags = load_feature_flags()
+        
+        # Update with provided values
+        for flag_name, value in flags.items():
+            if flag_name in DEFAULT_FEATURE_FLAGS:
+                current_flags[flag_name] = value
+        
+        save_feature_flags(current_flags)
+        
+        return {
+            "status": "success",
+            "message": "Feature flags updated. Changes take effect immediately."
+        }
+    except Exception as e:
+        logger.error(f"Error updating feature flags: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update feature flags: {str(e)}")
 
 
 @router.put("/variables")

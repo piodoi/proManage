@@ -27,6 +27,44 @@ import {
   Settings2
 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { reloadFeatureFlags } from '../lib/featureFlags';
+
+// Get actual frontend runtime values from import.meta.env (excluding feature flags)
+const getFrontendRuntimeVars = (): EnvVariable[] => {
+  const vars: EnvVariable[] = [];
+  
+  // Non-feature VITE_ prefixed env vars available at runtime
+  const runtimeVars: Record<string, { value: string; category: string; description: string }> = {
+    'VITE_API_URL': { 
+      value: import.meta.env.VITE_API_URL || '', 
+      category: 'api', 
+      description: 'Backend API URL' 
+    },
+    'VITE_GOOGLE_CLIENT_ID': { 
+      value: import.meta.env.VITE_GOOGLE_CLIENT_ID || '', 
+      category: 'oauth', 
+      description: 'Google OAuth client ID' 
+    },
+    'VITE_FACEBOOK_APP_ID': { 
+      value: import.meta.env.VITE_FACEBOOK_APP_ID || '', 
+      category: 'oauth', 
+      description: 'Facebook OAuth app ID' 
+    },
+  };
+  
+  for (const [key, info] of Object.entries(runtimeVars)) {
+    vars.push({
+      key,
+      value: info.value,
+      source: 'frontend',
+      category: info.category,
+      description: info.description,
+      is_secret: false,
+    });
+  }
+  
+  return vars;
+};
 
 // Category icons mapping
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -64,13 +102,14 @@ export default function EnvVariablesView() {
   
   // Environment variables
   const [backendVars, setBackendVars] = useState<EnvVariable[]>([]);
-  const [frontendVars, setFrontendVars] = useState<EnvVariable[]>([]);
   const [editedBackend, setEditedBackend] = useState<Record<string, string>>({});
-  const [editedFrontend, setEditedFrontend] = useState<Record<string, string>>({});
   
-  // Feature flags (for easy editing)
+  // Feature flags (editable, stored in backend JSON)
   const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
   const [originalFeatureFlags, setOriginalFeatureFlags] = useState<Record<string, boolean>>({});
+  
+  // Frontend vars are read directly from runtime - no editing
+  const frontendVars = getFrontendRuntimeVars();
   
   // Show/hide secret values
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
@@ -90,13 +129,9 @@ export default function EnvVariablesView() {
       ]);
       
       setBackendVars(varsResponse.backend);
-      setFrontendVars(varsResponse.frontend);
       setFeatureFlags(flagsResponse);
       setOriginalFeatureFlags(flagsResponse);
-      
-      // Reset edited values
       setEditedBackend({});
-      setEditedFrontend({});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load environment variables');
     } finally {
@@ -119,12 +154,8 @@ export default function EnvVariablesView() {
     return groups;
   };
 
-  const handleVariableChange = (key: string, value: string, source: 'backend' | 'frontend') => {
-    if (source === 'backend') {
-      setEditedBackend(prev => ({ ...prev, [key]: value }));
-    } else {
-      setEditedFrontend(prev => ({ ...prev, [key]: value }));
-    }
+  const handleVariableChange = (key: string, value: string) => {
+    setEditedBackend(prev => ({ ...prev, [key]: value }));
   };
 
   const toggleRevealSecret = (key: string) => {
@@ -157,24 +188,6 @@ export default function EnvVariablesView() {
     }
   };
 
-  const handleSaveFrontend = async () => {
-    if (!token || Object.keys(editedFrontend).length === 0) return;
-    setSaving(true);
-    setError('');
-    setSuccess('');
-    
-    try {
-      const result = await api.admin.env.updateVariables(token, editedFrontend, 'frontend');
-      setSuccess(result.message);
-      setEditedFrontend({});
-      loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save frontend variables');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleSaveFeatureFlags = async () => {
     if (!token) return;
     
@@ -192,8 +205,9 @@ export default function EnvVariablesView() {
     try {
       const result = await api.admin.env.updateFeatureFlags(token, featureFlags);
       setSuccess(result.message);
-      setOriginalFeatureFlags(featureFlags);
-      loadData();
+      setOriginalFeatureFlags({ ...featureFlags });
+      // Reload feature flags in the app
+      await reloadFeatureFlags();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save feature flags');
     } finally {
@@ -201,7 +215,7 @@ export default function EnvVariablesView() {
     }
   };
 
-  const handleRestart = async (service: 'backend' | 'frontend') => {
+  const handleRestart = async (service: 'backend') => {
     if (!token) return;
     setError('');
     setSuccess('');
@@ -214,7 +228,8 @@ export default function EnvVariablesView() {
     }
   };
 
-  const renderVariableInput = (v: EnvVariable, edited: Record<string, string>, source: 'backend' | 'frontend') => {
+  // Render backend variable input (editable)
+  const renderVariableInput = (v: EnvVariable, edited: Record<string, string>) => {
     const currentValue = edited[v.key] !== undefined ? edited[v.key] : v.value;
     const isEdited = edited[v.key] !== undefined && edited[v.key] !== v.value;
     const isRevealed = revealedSecrets.has(v.key);
@@ -242,7 +257,7 @@ export default function EnvVariablesView() {
             <Input
               type={v.is_secret && !isRevealed ? 'password' : 'text'}
               value={currentValue}
-              onChange={(e) => handleVariableChange(v.key, e.target.value, source)}
+              onChange={(e) => handleVariableChange(v.key, e.target.value)}
               className="bg-slate-700 border-slate-600 text-slate-100 font-mono text-sm"
               placeholder={v.is_secret ? '••••••••' : 'Not set'}
             />
@@ -262,7 +277,41 @@ export default function EnvVariablesView() {
     );
   };
 
-  const renderCategoryGroup = (category: string, vars: EnvVariable[], edited: Record<string, string>, source: 'backend' | 'frontend') => {
+  // Render frontend runtime variable (read-only)
+  const renderRuntimeVariable = (v: EnvVariable) => {
+    const displayValue = v.value || t('admin.env.notSet') || 'Not set';
+    const isSet = Boolean(v.value);
+    
+    return (
+      <div key={v.key} className="flex items-start gap-2 py-2 border-b border-slate-700 last:border-b-0">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Label className="text-slate-300 font-mono text-sm">{v.key}</Label>
+            {v.category === 'feature' && (
+              <Badge 
+                variant="outline" 
+                className={`text-xs ${v.value === 'true' ? 'text-emerald-500 border-emerald-500/50' : 'text-slate-500 border-slate-500/50'}`}
+              >
+                {v.value === 'true' ? 'ON' : 'OFF'}
+              </Badge>
+            )}
+          </div>
+          {v.description && (
+            <p className="text-xs text-slate-500 mb-1">{v.description}</p>
+          )}
+          <div className={`px-3 py-2 rounded font-mono text-sm ${
+            isSet 
+              ? 'bg-slate-700/50 text-slate-200' 
+              : 'bg-slate-800/50 text-slate-500 italic'
+          }`}>
+            {displayValue}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCategoryGroup = (category: string, vars: EnvVariable[], edited: Record<string, string>) => {
     return (
       <AccordionItem key={category} value={category}>
         <AccordionTrigger className="text-slate-200 hover:text-slate-100">
@@ -274,14 +323,33 @@ export default function EnvVariablesView() {
         </AccordionTrigger>
         <AccordionContent>
           <div className="space-y-1 pl-6">
-            {vars.map(v => renderVariableInput(v, edited, source))}
+            {vars.map(v => renderVariableInput(v, edited))}
           </div>
         </AccordionContent>
       </AccordionItem>
     );
   };
 
-  // Feature flag display names
+  const renderRuntimeCategoryGroup = (category: string, vars: EnvVariable[]) => {
+    return (
+      <AccordionItem key={category} value={category}>
+        <AccordionTrigger className="text-slate-200 hover:text-slate-100">
+          <div className="flex items-center gap-2">
+            {CATEGORY_ICONS[category] || CATEGORY_ICONS.other}
+            <span>{CATEGORY_NAMES[category] || category}</span>
+            <Badge variant="secondary" className="ml-2">{vars.length}</Badge>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-1 pl-6">
+            {vars.map(v => renderRuntimeVariable(v))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    );
+  };
+
+  // Feature flag display names and info
   const FEATURE_FLAG_INFO: Record<string, { name: string; description: string }> = {
     payOnline: { 
       name: t('admin.env.featurePayOnline') || 'Online Payment', 
@@ -312,9 +380,8 @@ export default function EnvVariablesView() {
   }
 
   const backendGroups = groupByCategory(backendVars);
-  const frontendGroups = groupByCategory(frontendVars.filter(v => !v.key.includes('FEATURE')));
+  const frontendGroups = groupByCategory(frontendVars);
   const hasBackendChanges = Object.keys(editedBackend).length > 0;
-  const hasFrontendChanges = Object.keys(editedFrontend).length > 0;
   const hasFeatureFlagChanges = Object.keys(featureFlags).some(
     key => featureFlags[key] !== originalFeatureFlags[key]
   );
@@ -345,6 +412,7 @@ export default function EnvVariablesView() {
           >
             <Zap className="w-4 h-4 mr-2" />
             {t('admin.env.featureFlags') || 'Feature Flags'}
+            {hasFeatureFlagChanges && <Badge className="ml-2 bg-amber-600">*</Badge>}
           </TabsTrigger>
           <TabsTrigger 
             value="backend" 
@@ -360,7 +428,7 @@ export default function EnvVariablesView() {
           >
             <Monitor className="w-4 h-4 mr-2" />
             {t('admin.env.frontendEnv') || 'Frontend'}
-            {hasFrontendChanges && <Badge className="ml-2 bg-amber-600">*</Badge>}
+            <Badge className="ml-2 bg-slate-600 text-xs">{t('admin.env.readOnly') || 'Runtime'}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -394,7 +462,7 @@ export default function EnvVariablesView() {
               </CardHeader>
               <CardContent>
                 <p className="text-slate-400 text-sm mb-4">
-                  {t('admin.env.featureFlagsDesc') || 'Toggle features on or off. Changes require a frontend rebuild to take effect.'}
+                  {t('admin.env.featureFlagsDesc') || 'Toggle features on or off. Changes take effect immediately for new sessions.'}
                 </p>
                 <div className="space-y-4">
                   {Object.entries(featureFlags).map(([key, value]) => {
@@ -417,7 +485,6 @@ export default function EnvVariablesView() {
                             )}
                           </div>
                           <p className="text-sm text-slate-400 mt-1">{info.description}</p>
-                          <p className="text-xs text-slate-500 font-mono mt-1">VITE_FEATURE_{key.replace(/([A-Z])/g, '_$1').toUpperCase()}</p>
                         </div>
                         <Switch
                           checked={value}
@@ -429,17 +496,14 @@ export default function EnvVariablesView() {
                   })}
                 </div>
                 
-                <div className="mt-6 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                <div className="mt-6 p-4 bg-emerald-900/20 rounded-lg border border-emerald-600/30">
                   <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-slate-300 font-medium">{t('admin.env.rebuildRequired') || 'Rebuild Required'}</p>
+                      <p className="text-slate-300 font-medium">{t('admin.env.liveChanges') || 'Live Changes'}</p>
                       <p className="text-slate-400 text-sm mt-1">
-                        {t('admin.env.rebuildRequiredDesc') || 'Frontend feature flags are baked in at build time. After saving changes, you need to rebuild the frontend:'}
+                        {t('admin.env.liveChangesDesc') || 'Feature flags are stored on the server and take effect immediately for new user sessions. Users may need to refresh the page to see changes.'}
                       </p>
-                      <code className="block mt-2 p-2 bg-slate-800 rounded text-emerald-400 text-sm font-mono">
-                        cd frontend && npm run build
-                      </code>
                     </div>
                   </div>
                 </div>
@@ -481,7 +545,7 @@ export default function EnvVariablesView() {
                 <Accordion type="multiple" defaultValue={['database', 'security']} className="w-full">
                   {Object.entries(backendGroups)
                     .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([category, vars]) => renderCategoryGroup(category, vars, editedBackend, 'backend'))}
+                    .map(([category, vars]) => renderCategoryGroup(category, vars, editedBackend))}
                 </Accordion>
               </CardContent>
             </Card>
@@ -493,48 +557,27 @@ export default function EnvVariablesView() {
                 <CardTitle className="text-slate-100 flex items-center gap-2">
                   <Monitor className="w-5 h-5" />
                   {t('admin.env.frontendEnv') || 'Frontend Environment Variables'}
+                  <Badge className="ml-2 bg-slate-600 text-xs">{t('admin.env.readOnly') || 'Runtime'}</Badge>
                 </CardTitle>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRestart('frontend')}
-                    className="bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border-blue-600/50"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    {t('admin.env.rebuildFrontend') || 'Rebuild Frontend'}
-                  </Button>
-                  <Button
-                    onClick={handleSaveFrontend}
-                    disabled={!hasFrontendChanges || saving}
-                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {saving ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}
-                  </Button>
-                </div>
               </CardHeader>
               <CardContent>
                 <p className="text-slate-400 text-sm mb-4">
-                  {t('admin.env.frontendEnvDesc') || 'Configure frontend environment variables. Changes require a frontend rebuild to take effect.'}
+                  {t('admin.env.frontendRuntimeDesc') || 'Current runtime values for this frontend instance. These values are baked in at build time.'}
                 </p>
-                <Accordion type="multiple" defaultValue={['api', 'oauth']} className="w-full">
+                <Accordion type="multiple" defaultValue={['api', 'oauth', 'feature']} className="w-full">
                   {Object.entries(frontendGroups)
                     .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([category, vars]) => renderCategoryGroup(category, vars, editedFrontend, 'frontend'))}
+                    .map(([category, vars]) => renderRuntimeCategoryGroup(category, vars))}
                 </Accordion>
                 
-                <div className="mt-6 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                <div className="mt-6 p-4 bg-blue-900/20 rounded-lg border border-blue-600/30">
                   <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <Monitor className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-slate-300 font-medium">{t('admin.env.rebuildRequired') || 'Rebuild Required'}</p>
+                      <p className="text-slate-300 font-medium">{t('admin.env.runtimeValues') || 'Runtime Values'}</p>
                       <p className="text-slate-400 text-sm mt-1">
-                        {t('admin.env.frontendRebuildDesc') || 'Frontend variables are baked in at build time. After saving changes:'}
+                        {t('admin.env.runtimeValuesDesc') || 'These values reflect the actual configuration of this running frontend instance, not the source files. To change these values, update the environment variables and rebuild the frontend.'}
                       </p>
-                      <code className="block mt-2 p-2 bg-slate-800 rounded text-emerald-400 text-sm font-mono">
-                        cd frontend && npm run build
-                      </code>
                     </div>
                   </div>
                 </div>

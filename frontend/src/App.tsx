@@ -13,6 +13,7 @@ import TermsOfService from './pages/TermsOfService';
 import { I18nProvider, useI18n } from './lib/i18n';
 import { PreferencesProvider } from './hooks/usePreferences.tsx';
 import { SubscriptionProvider } from './hooks/useSubscription.tsx';
+import { loadFeatureFlags } from './lib/featureFlags';
 import './App.css';
 
 type AuthContextType = {
@@ -35,6 +36,12 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [flagsLoaded, setFlagsLoaded] = useState(false);
+
+  // Load feature flags on startup
+  useEffect(() => {
+    loadFeatureFlags().finally(() => setFlagsLoaded(true));
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -70,7 +77,7 @@ function App() {
     setUser(null);
   };
 
-  if (loading) {
+  if (loading || !flagsLoaded) {
     return (
       <I18nProvider>
         <LoadingScreen />

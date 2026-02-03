@@ -12,10 +12,12 @@ import { featureFlags } from '../lib/featureFlags';
 // Flag images - served from public folder
 // US_BUILD: US flag for English, French flag for French
 // Standard: UK flag for English, Romanian flag for Romanian
-const FLAG_IMAGES: Record<string, string> = featureFlags.usBuild ? {
+const FLAG_IMAGES_US: Record<string, string> = {
   en: '/flags/us-flag.gif',
   fr: '/flags/fr-flag.png',
-} : {
+};
+
+const FLAG_IMAGES_STANDARD: Record<string, string> = {
   ro: '/flags/ro-flag.gif',
   en: '/flags/uk-flag.gif',
   fr: '/flags/fr-flag.png',
@@ -27,10 +29,12 @@ const LANGUAGE_NAMES: Record<string, string> = {
   fr: 'Français',
 };
 
-const FLAG_ALTS: Record<string, string> = featureFlags.usBuild ? {
+const FLAG_ALTS_US: Record<string, string> = {
   en: 'US flag',
   fr: 'French flag',
-} : {
+};
+
+const FLAG_ALTS_STANDARD: Record<string, string> = {
   ro: 'Romanian flag',
   en: 'UK flag',
   fr: 'French flag',
@@ -41,6 +45,10 @@ export function LanguageSelector() {
   const { language, setLanguage } = useI18n();
   const { setLanguage: setPrefLanguage } = usePreferences();
   const availableLanguages = getAvailableLanguages();
+  
+  // Evaluate at render time so feature flags are loaded
+  const FLAG_IMAGES = featureFlags.usBuild ? FLAG_IMAGES_US : FLAG_IMAGES_STANDARD;
+  const FLAG_ALTS = featureFlags.usBuild ? FLAG_ALTS_US : FLAG_ALTS_STANDARD;
 
   return (
     <DropdownMenu>
