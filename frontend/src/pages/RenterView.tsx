@@ -36,6 +36,7 @@ export default function RenterView() {
   const { t, language, setLanguage } = useI18n();
   const [info, setInfo] = useState<RenterInfo | null>(null);
   const [bills, setBills] = useState<RenterBill[]>([]);
+  
   const [balance, setBalance] = useState<RenterBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -52,6 +53,9 @@ export default function RenterView() {
   // Utility payment dialog state
   const [showUtilityPayment, setShowUtilityPayment] = useState(false);
   const [utilityPaymentBill, setUtilityPaymentBill] = useState<RenterBill | null>(null);
+
+  // Track if language has been initialized from renter data
+  const [languageInitialized, setLanguageInitialized] = useState(false);
 
   // Account and settings dialog state
   const [showAccountDialog, setShowAccountDialog] = useState(false);
@@ -191,28 +195,32 @@ export default function RenterView() {
       if (renterLang === 'en' || renterLang === 'ro') {
         setLanguage(renterLang);
       }
-    } else {
+      setLanguageInitialized(true);
+    } else if (info) {
       // Default to Romanian for renters if no language set
       const savedLang = localStorage.getItem('language');
       if (!savedLang) {
         setLanguage('ro');
       }
+      setLanguageInitialized(true);
     }
-  }, [setLanguage, info?.renter.language]);
+  }, [setLanguage, info?.renter.language, info]);
 
-  // Save language preference to backend when changed (only if logged in)
+  // Save language preference to backend when changed
   const handleLanguageChange = async (newLanguage: 'en' | 'ro') => {
+    // Update local info state first to prevent flicker
+    if (info) {
+      setInfo({
+        ...info,
+        renter: { ...info.renter, language: newLanguage }
+      });
+    }
+    // Then update i18n context
     setLanguage(newLanguage);
-    if (token && isLoggedIn) {
+    // Save to backend if we have a token
+    if (token) {
       try {
         await api.renter.updatePreferences(token, { language: newLanguage });
-        // Update local info
-        if (info) {
-          setInfo({
-            ...info,
-            renter: { ...info.renter, language: newLanguage }
-          });
-        }
       } catch (err) {
         console.error('Failed to save language preference:', err);
       }
@@ -325,9 +333,28 @@ export default function RenterView() {
       
       await api.renter.notifyPayment(token, data);
       
-      // Reload bills to show updated notification status
-      const billsData = await api.renter.bills(token);
-      setBills(billsData);
+      // Optimistically update by adding the pending notification
+      // Don't modify 'remaining' directly - getEffectiveRemaining() will calculate it
+      setBills(prevBills => prevBills.map(bill => {
+        if (bill.bill.id === payingBill.bill.id) {
+          return {
+            ...bill,
+            has_pending_notification: true,
+            notifications: [
+              ...(bill.notifications || []),
+              {
+                id: 'pending-' + Date.now(),
+                status: 'pending' as const,
+                amount: amount,
+                currency: paymentCurrency,
+                created_at: new Date().toISOString(),
+                renter_note: paymentNote || undefined,
+              }
+            ]
+          };
+        }
+        return bill;
+      }));
       
       setPayingBill(null);
       setPaymentNote('');
@@ -335,6 +362,9 @@ export default function RenterView() {
       setPaymentCurrency('RON');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'));
+      // Reload bills to restore correct state on error
+      const billsData = await api.renter.bills(token);
+      setBills(billsData);
     } finally {
       setNotifyingPayment(false);
     }
@@ -524,6 +554,20 @@ export default function RenterView() {
     return amount * toRate / fromRate;
   };
 
+  // Helper to calculate effective remaining: subtract pending notification amounts
+  // Converts notification amounts to bill currency before subtracting
+  const getEffectiveRemaining = (bill: RenterBill): number => {
+    const billCurrency = bill.bill.currency || 'RON';
+    const pendingAmountInBillCurrency = (bill.notifications || [])
+      .filter(n => n.status === 'pending')
+      .reduce((sum, n) => {
+        const notificationCurrency = n.currency || billCurrency;
+        const amountInBillCurrency = convertAmount(n.amount, notificationCurrency, billCurrency);
+        return sum + amountInBillCurrency;
+      }, 0);
+    return Math.max(0, bill.remaining - pendingAmountInBillCurrency);
+  };
+
   // Calculate RON amount from foreign currency
   const getAmountInRon = (amount: number, currency: string | undefined) => {
     if (!currency || currency === 'RON' || !balance?.exchange_rates) {
@@ -609,49 +653,51 @@ export default function RenterView() {
               </>
             )}
             
-            {/* Language Selector */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
-                >
-                  <img 
-                    src={language === 'en' ? '/flags/uk-flag.gif' : '/flags/ro-flag.gif'} 
-                    alt={`${language} flag`}
-                    className="h-4 w-auto mr-2"
-                  />
-                  <span className="text-xs uppercase">{language}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
-                <DropdownMenuItem
-                  onClick={() => handleLanguageChange('en')}
-                  className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
-                >
-                  <img 
-                    src="/flags/uk-flag.gif" 
-                    alt="UK flag"
-                    className="h-5 w-8 object-cover mr-3 flex-shrink-0"
-                  />
-                  <span className="flex-1 text-left">English</span>
-                  {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleLanguageChange('ro')}
-                  className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
-                >
-                  <img 
-                    src="/flags/ro-flag.gif" 
-                    alt="Romanian flag"
-                    className="h-5 w-8 object-cover mr-3 flex-shrink-0"
-                  />
-                  <span className="flex-1 text-left">Română</span>
-                  {language === 'ro' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Language Selector - only show after language is initialized to prevent flicker */}
+            {languageInitialized && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
+                  >
+                    <img 
+                      src={language === 'en' ? '/flags/uk-flag.gif' : '/flags/ro-flag.gif'} 
+                      alt={`${language} flag`}
+                      className="h-4 w-auto mr-2"
+                    />
+                    <span className="text-xs uppercase">{language}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
+                  <DropdownMenuItem
+                    onClick={() => handleLanguageChange('en')}
+                    className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
+                  >
+                    <img 
+                      src="/flags/uk-flag.gif" 
+                      alt="UK flag"
+                      className="h-5 w-8 object-cover mr-3 flex-shrink-0"
+                    />
+                    <span className="flex-1 text-left">English</span>
+                    {language === 'en' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleLanguageChange('ro')}
+                    className="text-slate-100 hover:bg-slate-700 cursor-pointer flex items-center justify-start"
+                  >
+                    <img 
+                      src="/flags/ro-flag.gif" 
+                      alt="Romanian flag"
+                      className="h-5 w-8 object-cover mr-3 flex-shrink-0"
+                    />
+                    <span className="flex-1 text-left">Română</span>
+                    {language === 'ro' && <span className="ml-2 text-emerald-400 flex-shrink-0">✓</span>}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </header>
@@ -907,23 +953,26 @@ export default function RenterView() {
               <CardContent className="pt-3 sm:pt-4 px-2 sm:px-4 pb-3 sm:pb-4">
                 <p className="text-slate-400 text-xs sm:text-sm mb-1 sm:mb-2">{t('renter.balance')}</p>
                 
-                {/* Bills breakdown inside balance card - bills with non-zero remaining within warning days */}
-                {balanceBills.filter(b => b.remaining !== 0).length > 0 && (
+                {/* Bills breakdown inside balance card - bills with non-zero effective remaining within warning days */}
+                {balanceBills.filter(b => getEffectiveRemaining(b) !== 0).length > 0 && (
                   <div className="mb-2 space-y-0 text-xs">
-                    {balanceBills.filter(b => b.remaining !== 0).map((item) => (
-                      <div key={item.bill.id} className={`flex justify-between items-center ${item.remaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
-                        <span className="truncate mr-1">{item.bill.description}</span>
-                        <span className="tabular-nums text-right flex-shrink-0 whitespace-nowrap">
-                           {item.bill.currency && item.bill.currency !== 'RON' && (
-                          <> {item.remaining.toFixed(2)} {item.bill.currency} / </>
-                          )}
-                          {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON'
-                            ? (item.remaining * (balance.exchange_rates.RON) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
-                            : item.remaining.toFixed(2)
-                          } RON
-                        </span>
-                      </div>
-                    ))}
+                    {balanceBills.filter(b => getEffectiveRemaining(b) !== 0).map((item) => {
+                      const effectiveRemaining = getEffectiveRemaining(item);
+                      return (
+                        <div key={item.bill.id} className={`flex justify-between items-center ${effectiveRemaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
+                          <span className="truncate mr-1">{item.bill.description}</span>
+                          <span className="tabular-nums text-right flex-shrink-0 whitespace-nowrap">
+                            {item.bill.currency && item.bill.currency !== 'RON' && (
+                              <> {effectiveRemaining.toFixed(2)} {item.bill.currency} / </>
+                            )}
+                            {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON'
+                              ? (effectiveRemaining * (balance.exchange_rates.RON) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
+                              : effectiveRemaining.toFixed(2)
+                            } RON
+                          </span>
+                        </div>
+                      );
+                    })}
                     <div className="border-t border-slate-700 mt-1 pt-1"></div>
                   </div>
                 )}
@@ -931,23 +980,25 @@ export default function RenterView() {
                 <div className="flex justify-end items-baseline gap-1">
                   <p className={`text-xl sm:text-2xl font-bold tabular-nums ${
                     balanceBills.reduce((sum, b) => {
+                      const effectiveRemaining = getEffectiveRemaining(b);
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                        ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                        : b.remaining;
+                        ? (effectiveRemaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                        : effectiveRemaining;
                       return sum + ronValue;
                     }, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     {balanceBills
                       .reduce((sum, b) => {
+                        const effectiveRemaining = getEffectiveRemaining(b);
                         const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                          ? (b.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                          : b.remaining;
+                          ? (effectiveRemaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                          : effectiveRemaining;
                         return sum + ronValue;
                       }, 0)
                       .toFixed(2)}
                   </p>
                   <p className={`text-base sm:text-lg font-medium ${
-                    balanceBills.reduce((sum, b) => sum + b.remaining, 0) > 0 ? 'text-amber-400' : 'text-green-400'
+                    balanceBills.reduce((sum, b) => sum + getEffectiveRemaining(b), 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     RON
                   </p>
