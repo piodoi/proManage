@@ -12,6 +12,7 @@ import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useExchangeRates } from '../hooks/useExchangeRates';
+import { featureFlags } from '../lib/featureFlags';
 
 type LandlordViewProps = {
   token: string | null;
@@ -370,20 +371,23 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
             </div>
             <h2 className="text-sm sm:text-lg font-medium text-slate-100 truncate">{t('property.properties')}</h2>
             <div className="flex gap-2">
-              <EblocImportDialog
-                token={token}
-                open={showEblocDiscover}
-                onOpenChange={(open) => {
-                  if (open) {
-                    saveScroll();
-                  }
-                  setShowEblocDiscover(open);
-                }}
-                onSuccess={() => loadData(true)}
-                onError={setError}
-                subscription={subscription}
-                onUpgradeClick={navigateToSubscription}
-              />
+              {/* E-bloc import only available in standard (non-US) build */}
+              {!featureFlags.usBuild && (
+                <EblocImportDialog
+                  token={token}
+                  open={showEblocDiscover}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      saveScroll();
+                    }
+                    setShowEblocDiscover(open);
+                  }}
+                  onSuccess={() => loadData(true)}
+                  onError={setError}
+                  subscription={subscription}
+                  onUpgradeClick={navigateToSubscription}
+                />
+              )}
               <PropertyDialog
                 token={token}
                 open={showPropertyForm}

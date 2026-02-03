@@ -16,6 +16,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { featureFlags } from '../lib/featureFlags';
 
 export default function HelpManualView() {
   const { t } = useI18n();
@@ -224,53 +225,55 @@ export default function HelpManualView() {
               </AccordionContent>
             </AccordionItem>
 
-            {/* E-Bloc Import Section */}
-            <AccordionItem value="ebloc" className="border-slate-700">
-              <AccordionTrigger className="text-slate-100 hover:text-emerald-400">
-                <div className="flex items-center gap-2">
-                  <Download className="w-5 h-5 text-indigo-500" />
-                  {t('help.ebloc.title')}
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="text-slate-300 space-y-4">
-                <p>{t('help.ebloc.intro')}</p>
-                
-                <div className="bg-slate-900 rounded-lg p-4 space-y-3">
-                  <h4 className="text-indigo-400 font-semibold">{t('help.ebloc.howToImport')}</h4>
-                  <ol className="list-decimal list-inside text-sm space-y-2">
-                    <li>{t('help.ebloc.step1')}</li>
-                    <li>{t('help.ebloc.step2')}</li>
-                    <li>{t('help.ebloc.step3')}</li>
-                    <li>{t('help.ebloc.step4')}</li>
-                    <li>{t('help.ebloc.step5')}</li>
-                  </ol>
-                </div>
+            {/* E-Bloc Import Section - only in standard (non-US) build */}
+            {!featureFlags.usBuild && (
+              <AccordionItem value="ebloc" className="border-slate-700">
+                <AccordionTrigger className="text-slate-100 hover:text-emerald-400">
+                  <div className="flex items-center gap-2">
+                    <Download className="w-5 h-5 text-indigo-500" />
+                    {t('help.ebloc.title')}
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-300 space-y-4">
+                  <p>{t('help.ebloc.intro')}</p>
+                  
+                  <div className="bg-slate-900 rounded-lg p-4 space-y-3">
+                    <h4 className="text-indigo-400 font-semibold">{t('help.ebloc.howToImport')}</h4>
+                    <ol className="list-decimal list-inside text-sm space-y-2">
+                      <li>{t('help.ebloc.step1')}</li>
+                      <li>{t('help.ebloc.step2')}</li>
+                      <li>{t('help.ebloc.step3')}</li>
+                      <li>{t('help.ebloc.step4')}</li>
+                      <li>{t('help.ebloc.step5')}</li>
+                    </ol>
+                  </div>
 
-                <div className="bg-emerald-900/30 border border-emerald-700 rounded p-3">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h5 className="text-emerald-400 font-semibold text-sm">{t('help.ebloc.whatGetsImported')}</h5>
-                      <ul className="text-emerald-200 text-sm mt-1 list-disc list-inside">
-                        <li>{t('help.ebloc.imported1')}</li>
-                        <li>{t('help.ebloc.imported2')}</li>
-                        <li>{t('help.ebloc.imported3')}</li>
-                      </ul>
+                  <div className="bg-emerald-900/30 border border-emerald-700 rounded p-3">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-emerald-400 font-semibold text-sm">{t('help.ebloc.whatGetsImported')}</h5>
+                        <ul className="text-emerald-200 text-sm mt-1 list-disc list-inside">
+                          <li>{t('help.ebloc.imported1')}</li>
+                          <li>{t('help.ebloc.imported2')}</li>
+                          <li>{t('help.ebloc.imported3')}</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="bg-blue-900/30 border border-blue-700 rounded p-3">
-                  <div className="flex items-start gap-2">
-                    <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h5 className="text-blue-400 font-semibold text-sm">{t('help.ebloc.privacyNote')}</h5>
-                      <p className="text-blue-200 text-sm mt-1">{t('help.ebloc.privacyNoteDesc')}</p>
+                  <div className="bg-blue-900/30 border border-blue-700 rounded p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-blue-400 font-semibold text-sm">{t('help.ebloc.privacyNote')}</h5>
+                        <p className="text-blue-200 text-sm mt-1">{t('help.ebloc.privacyNoteDesc')}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+                </AccordionContent>
+              </AccordionItem>
+            )}
 
             {/* Notifications Section */}
             <AccordionItem value="notifications" className="border-slate-700">
