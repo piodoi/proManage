@@ -1,0 +1,20 @@
+{
+  "name": "ProManage - Property & Rental Management",
+  "short_name": "ProManage",
+  "description": "Simplify rental property management. Track utility bills, manage tenants, and monitor expenses for vacation homes and rental properties.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "en",
+  "dir": "ltr"
+}

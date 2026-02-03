@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useI18n } from '../lib/i18n';
 import { featureFlags } from '../lib/featureFlags';
+import { useSEO } from '@/hooks/useSEO';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -54,6 +55,11 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [confirmationToken, setConfirmationToken] = useState('');
     const [emailSent, setEmailSent] = useState(false);
+
+  useSEO({
+    title: 'Sign In',
+    description: 'Sign in to ProManage to manage your rental properties, track utility bills, and communicate with tenants.',
+  });
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     try {

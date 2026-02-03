@@ -839,5 +839,117 @@
     "noSuppliersFound": "Niciun furnizor găsit",
     "barcodeNoMatch": "Codul de bare nu a corespuns niciunui furnizor. Te rugăm să selectezi din lista de mai jos.",
     "barcodeMatched": "{{count}} furnizor(i) găsit(i) din codul de bare"
+  },
+  "landing": {
+    "signIn": "Autentificare",
+    "hero": {
+      "title": "Simplifică Administrarea Proprietăților",
+      "subtitle": "Urmărește facturile de utilități, gestionează chiriașii și ține proprietățile organizate—totul într-un singur loc.",
+      "getStarted": "Începe Gratuit",
+      "tryDemo": "Încearcă Demo"
+    },
+    "whoIsItFor": {
+      "title": "Pentru Cine Este ProManage?",
+      "subtitle": "Fie că ai o casă de vacanță sau administrezi mai multe proprietăți, ProManage te ajută.",
+      "vacationHome": {
+        "title": "Proprietari de Case de Vacanță",
+        "description": "Urmărește facturile și cheltuielile pentru proprietatea ta de vacanță chiar și când nu ești acolo. Nu rata niciodată o scadență."
+      },
+      "landlord": {
+        "title": "Proprietari Individuali",
+        "description": "Gestionează una sau mai multe proprietăți cu ușurință. Urmărește facturile, comunică cu chiriașii și automatizează notificările de chirie."
+      },
+      "propertyManager": {
+        "title": "Administratori de Proprietăți",
+        "description": "Gestionează mai multe proprietăți eficient. Centralizează administrarea facturilor și comunicarea cu chiriașii într-un singur tablou de bord."
+      }
+    },
+    "features": {
+      "title": "Tot Ce Ai Nevoie",
+      "subtitle": "Instrumente puternice create special pentru proprietari și administratori.",
+      "billTracking": {
+        "title": "Urmărirea Facturilor",
+        "description": "Importă și urmărește automat facturile de utilități de la mai mulți furnizori. Primește notificări înainte de scadență."
+      },
+      "tenantManagement": {
+        "title": "Gestionarea Chiriașilor",
+        "description": "Stochează informații despre chiriași, partajează facturi și urmărește istoricul plăților."
+      },
+      "notifications": {
+        "title": "Notificări Inteligente",
+        "description": "Primește alerte pentru facturi iminente, plăți întârziate și termene importante."
+      },
+      "secure": {
+        "title": "Sigur și Privat",
+        "description": "Datele tale sunt criptate și stocate în siguranță. Nu partajăm informațiile tale cu terți."
+      },
+      "automation": {
+        "title": "Automatizare Email",
+        "description": "Importă automat facturile din căsuța ta de email. Economisește timp la introducerea manuală a datelor."
+      },
+      "multiProperty": {
+        "title": "Suport Multi-Proprietăți",
+        "description": "Gestionează proprietăți nelimitate dintr-un singur tablou de bord. Perfect pentru portofolii în creștere."
+      }
+    },
+    "benefits": {
+      "title": "De Ce Proprietarii Aleg ProManage",
+      "item1": "Economisește ore în fiecare lună cu gestionarea facturilor",
+      "item2": "Nu rata niciodată o scadență de plată a utilităților",
+      "item3": "Partajează facturile cu chiriașii prin link-uri securizate",
+      "item4": "Urmărește cheltuielile pentru raportări fiscale și contabilitate",
+      "item5": "Accesează proprietățile de oriunde, pe orice dispozitiv",
+      "item6": "Gratuit la început, fără card de credit necesar"
+    },
+    "cta": {
+      "title": "Gata să Începi?",
+      "description": "Alătură-te proprietarilor care și-au simplificat administrarea proprietăților cu ProManage.",
+      "button": "Creează Cont Gratuit"
+    },
+    "faq": {
+      "title": "Întrebări Frecvente",
+      "q1": {
+        "question": "Este ProManage gratuit?",
+        "answer": "Da! ProManage oferă un nivel gratuit perfect pentru proprietarii cu câteva proprietăți. Funcții premium sunt disponibile pentru portofolii mai mari."
+      },
+      "q2": {
+        "question": "Pot partaja facturile cu chiriașii mei?",
+        "answer": "Absolut. ProManage îți permite să generezi link-uri securizate care permit chiriașilor să vadă facturile și istoricul plăților fără a crea un cont."
+      },
+      "q3": {
+        "question": "Cum funcționează importul automat al facturilor?",
+        "answer": "Conectează-ți contul de email și ProManage va scana automat facturile de utilități de la furnizorii acceptați și le va importa în tabloul tău de bord."
+      }
+    }
+  },
+  "slideshow": {
+    "featureTour": "Tur al Funcțiilor",
+    "backToHome": "Înapoi Acasă",
+    "getStarted": "Începe",
+    "cta": "Gata să-ți simplifici administrarea proprietăților?",
+    "autoPlaying": "Redare automată",
+    "privacyNote": "Capturile de ecran arată date exemplu. Informațiile personale au fost anonimizate pentru confidențialitate.",
+    "slides": {
+      "summary": {
+        "title": "Prezentare Generală",
+        "description": "Obține o imagine completă a tuturor proprietăților, facturilor în așteptare și chiriilor datorate dintr-o privire. Urmărește plățile și respectă termenele."
+      },
+      "properties": {
+        "title": "Gestionarea Proprietăților",
+        "description": "Gestionează mai multe proprietăți cu ușurință. Adaugă chiriași, configurează furnizori și urmărește facturile pentru fiecare proprietate separat."
+      },
+      "suppliers": {
+        "title": "Gestionarea Furnizorilor",
+        "description": "Adaugă și configurează furnizori de utilități pentru fiecare proprietate. Setează credentiale pentru sincronizare automată sau folosește extracție bazată pe șabloane."
+      },
+      "patterns": {
+        "title": "Extracție Inteligentă de Facturi",
+        "description": "Creează șabloane personalizate de extracție pentru a procesa automat facturile PDF. Sistemul învață să extragă sume, date și detalii de plată."
+      },
+      "subscriptions": {
+        "title": "Planuri Flexibile",
+        "description": "Alege între nivelurile gratuit și pro în funcție de nevoile tale. Scalează pe măsură ce portofoliul tău de proprietăți crește cu prețuri transparente."
+      }
+    }
   }
 }

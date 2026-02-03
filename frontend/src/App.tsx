@@ -4,6 +4,8 @@ import { api, User } from './api';
 import Dashboard from './pages/Dashboard';
 import RenterView from './pages/RenterView';
 import Login from './pages/Login';
+import LandingPage from './pages/LandingPage';
+import FeatureSlideshow from './pages/FeatureSlideshow';
 import ConfirmEmail from './pages/ConfirmEmail';
 import HelpManualView from './components/HelpManualView';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -83,6 +85,8 @@ function App() {
           <SubscriptionProvider token={token}>
             <BrowserRouter>
               <Routes>
+                <Route path="/" element={user ? <Dashboard /> : <LandingPage />} />
+                <Route path="/features" element={<FeatureSlideshow />} />
                 <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
                 <Route path="/confirm-email" element={<ConfirmEmail />} />
                 <Route path="/help" element={<HelpManualView />} />
@@ -95,7 +99,7 @@ function App() {
                     user ? (
                       <Dashboard />
                     ) : (
-                      <Navigate to="/login" />
+                      <Navigate to="/" />
                     )
                   }
                 />

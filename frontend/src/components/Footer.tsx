@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail } from 'lucide-react';
+import { Mail, Building2 } from 'lucide-react';
 import { useAuth } from '@/App';
 import { useI18n } from '@/lib/i18n';
 import ContactDialog from '@/components/ContactDialog';
@@ -22,8 +22,9 @@ export default function Footer() {
   return (
     <footer className="bg-slate-800 border-t border-slate-700 py-4 px-6 mt-auto">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-slate-500 text-sm">
-          © {new Date().getFullYear()} ProManage. {t('footer.allRightsReserved')}
+        <div className="flex items-center gap-2 text-slate-500 text-sm">
+          <Building2 className="w-4 h-4 text-emerald-500" />
+          <span>© {new Date().getFullYear()} ProManage. {t('footer.allRightsReserved')}</span>
         </div>
         
         <div className="flex items-center gap-6">

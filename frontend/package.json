@@ -1,7 +1,8 @@
 {
-  "name": "promanage-frontend",
+  "name": "promanage",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Property & Rental Bill Management for Landlords - Track utility bills, manage tenants, and monitor expenses for vacation homes and rental properties",
   "type": "module",
   "scripts": {
     "dev": "vite",

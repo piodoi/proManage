@@ -832,5 +832,117 @@
     "noSuppliersFound": "No suppliers found",
     "barcodeNoMatch": "Barcode did not match any supplier. Please select from the list below.",
     "barcodeMatched": "{{count}} supplier(s) matched from barcode"
+  },
+  "landing": {
+    "signIn": "Sign In",
+    "hero": {
+      "title": "Simplify Your Property Management",
+      "subtitle": "Track utility bills, manage tenants, and keep your rental properties organized—all in one place.",
+      "getStarted": "Get Started Free",
+      "tryDemo": "Try Demo"
+    },
+    "whoIsItFor": {
+      "title": "Who Is ProManage For?",
+      "subtitle": "Whether you own one vacation home or manage multiple rental properties, ProManage has you covered.",
+      "vacationHome": {
+        "title": "Vacation Home Owners",
+        "description": "Keep track of utility bills and expenses for your holiday property even when you're not there. Never miss a payment deadline."
+      },
+      "landlord": {
+        "title": "Individual Landlords",
+        "description": "Manage one or more rental properties with ease. Track bills, communicate with tenants, and automate rent reminders."
+      },
+      "propertyManager": {
+        "title": "Property Managers",
+        "description": "Handle multiple properties efficiently. Centralize bill management and tenant communications in one dashboard."
+      }
+    },
+    "features": {
+      "title": "Everything You Need",
+      "subtitle": "Powerful tools designed specifically for property owners and landlords.",
+      "billTracking": {
+        "title": "Bill Tracking",
+        "description": "Automatically import and track utility bills from multiple suppliers. Get reminders before due dates."
+      },
+      "tenantManagement": {
+        "title": "Tenant Management",
+        "description": "Store tenant information, share bills with renters, and track payment history."
+      },
+      "notifications": {
+        "title": "Smart Notifications",
+        "description": "Receive alerts for upcoming bills, missed payments, and important deadlines."
+      },
+      "secure": {
+        "title": "Secure & Private",
+        "description": "Your data is encrypted and stored securely. We never share your information with third parties."
+      },
+      "automation": {
+        "title": "Email Automation",
+        "description": "Automatically import bills from your email inbox. Save time on manual data entry."
+      },
+      "multiProperty": {
+        "title": "Multi-Property Support",
+        "description": "Manage unlimited properties from a single dashboard. Perfect for growing portfolios."
+      }
+    },
+    "benefits": {
+      "title": "Why Landlords Choose ProManage",
+      "item1": "Save hours every month on bill management and tracking",
+      "item2": "Never miss a utility bill payment deadline",
+      "item3": "Share bills with tenants through secure links",
+      "item4": "Track expenses for tax reporting and accounting",
+      "item5": "Access your properties from anywhere, on any device",
+      "item6": "Free to start with no credit card required"
+    },
+    "cta": {
+      "title": "Ready to Get Started?",
+      "description": "Join landlords who have simplified their property management with ProManage.",
+      "button": "Create Free Account"
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "q1": {
+        "question": "Is ProManage free to use?",
+        "answer": "Yes! ProManage offers a free tier that's perfect for landlords with a few properties. Premium features are available for larger portfolios."
+      },
+      "q2": {
+        "question": "Can I share bills with my tenants?",
+        "answer": "Absolutely. ProManage allows you to generate secure links that let tenants view their bills and payment history without creating an account."
+      },
+      "q3": {
+        "question": "How does automatic bill import work?",
+        "answer": "Connect your email account and ProManage will automatically scan for utility bills from supported suppliers and import them into your dashboard."
+      }
+    }
+  },
+  "slideshow": {
+    "featureTour": "Feature Tour",
+    "backToHome": "Back to Home",
+    "getStarted": "Get Started",
+    "cta": "Ready to simplify your property management?",
+    "autoPlaying": "Auto-playing",
+    "privacyNote": "Screenshots show sample data. Personal information has been anonymized for privacy.",
+    "slides": {
+      "summary": {
+        "title": "Dashboard Overview",
+        "description": "Get a complete overview of all your properties, pending bills, and rent due at a glance. Track payments and stay on top of deadlines."
+      },
+      "properties": {
+        "title": "Property Management",
+        "description": "Manage multiple properties with ease. Add renters, configure suppliers, and track bills for each property separately."
+      },
+      "suppliers": {
+        "title": "Supplier Management",
+        "description": "Add and configure utility suppliers for each property. Set up credentials for automatic bill sync or use pattern-based extraction."
+      },
+      "patterns": {
+        "title": "Smart Bill Extraction",
+        "description": "Create custom extraction patterns to automatically parse PDF bills. The system learns to extract amounts, dates, and payment details."
+      },
+      "subscriptions": {
+        "title": "Flexible Plans",
+        "description": "Choose between free and pro tiers based on your needs. Scale up as your property portfolio grows with transparent pricing."
+      }
+    }
   }
 }

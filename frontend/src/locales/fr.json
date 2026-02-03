@@ -832,5 +832,117 @@
     "noSuppliersFound": "Aucun fournisseur trouvé",
     "barcodeNoMatch": "Le code-barres ne correspond à aucun fournisseur. Veuillez sélectionner dans la liste ci-dessous.",
     "barcodeMatched": "{{count}} fournisseur(s) correspondant(s) depuis le code-barres"
+  },
+  "landing": {
+    "signIn": "Se Connecter",
+    "hero": {
+      "title": "Simplifiez la Gestion de Vos Propriétés",
+      "subtitle": "Suivez les factures de services, gérez les locataires et gardez vos biens locatifs organisés—tout en un seul endroit.",
+      "getStarted": "Commencer Gratuitement",
+      "tryDemo": "Essayer la Démo"
+    },
+    "whoIsItFor": {
+      "title": "Pour Qui Est ProManage?",
+      "subtitle": "Que vous possédiez une maison de vacances ou gériez plusieurs propriétés locatives, ProManage vous accompagne.",
+      "vacationHome": {
+        "title": "Propriétaires de Maisons de Vacances",
+        "description": "Suivez les factures et dépenses de votre propriété de vacances même en votre absence. Ne manquez jamais une échéance de paiement."
+      },
+      "landlord": {
+        "title": "Propriétaires Individuels",
+        "description": "Gérez une ou plusieurs propriétés locatives facilement. Suivez les factures, communiquez avec les locataires et automatisez les rappels de loyer."
+      },
+      "propertyManager": {
+        "title": "Gestionnaires Immobiliers",
+        "description": "Gérez plusieurs propriétés efficacement. Centralisez la gestion des factures et les communications avec les locataires dans un seul tableau de bord."
+      }
+    },
+    "features": {
+      "title": "Tout Ce Dont Vous Avez Besoin",
+      "subtitle": "Des outils puissants conçus spécialement pour les propriétaires et bailleurs.",
+      "billTracking": {
+        "title": "Suivi des Factures",
+        "description": "Importez et suivez automatiquement les factures de services de plusieurs fournisseurs. Recevez des rappels avant les échéances."
+      },
+      "tenantManagement": {
+        "title": "Gestion des Locataires",
+        "description": "Stockez les informations des locataires, partagez les factures et suivez l'historique des paiements."
+      },
+      "notifications": {
+        "title": "Notifications Intelligentes",
+        "description": "Recevez des alertes pour les factures à venir, les paiements manqués et les échéances importantes."
+      },
+      "secure": {
+        "title": "Sécurisé et Privé",
+        "description": "Vos données sont cryptées et stockées en toute sécurité. Nous ne partageons jamais vos informations avec des tiers."
+      },
+      "automation": {
+        "title": "Automatisation Email",
+        "description": "Importez automatiquement les factures depuis votre boîte mail. Gagnez du temps sur la saisie manuelle des données."
+      },
+      "multiProperty": {
+        "title": "Support Multi-Propriétés",
+        "description": "Gérez un nombre illimité de propriétés depuis un seul tableau de bord. Parfait pour les portefeuilles en croissance."
+      }
+    },
+    "benefits": {
+      "title": "Pourquoi les Propriétaires Choisissent ProManage",
+      "item1": "Économisez des heures chaque mois sur la gestion des factures",
+      "item2": "Ne manquez jamais une échéance de paiement de services",
+      "item3": "Partagez les factures avec les locataires via des liens sécurisés",
+      "item4": "Suivez les dépenses pour les déclarations fiscales et la comptabilité",
+      "item5": "Accédez à vos propriétés de n'importe où, sur n'importe quel appareil",
+      "item6": "Gratuit pour commencer, sans carte de crédit requise"
+    },
+    "cta": {
+      "title": "Prêt à Commencer?",
+      "description": "Rejoignez les propriétaires qui ont simplifié leur gestion immobilière avec ProManage.",
+      "button": "Créer un Compte Gratuit"
+    },
+    "faq": {
+      "title": "Questions Fréquemment Posées",
+      "q1": {
+        "question": "ProManage est-il gratuit?",
+        "answer": "Oui! ProManage offre un niveau gratuit parfait pour les propriétaires avec quelques propriétés. Des fonctionnalités premium sont disponibles pour les portefeuilles plus importants."
+      },
+      "q2": {
+        "question": "Puis-je partager les factures avec mes locataires?",
+        "answer": "Absolument. ProManage vous permet de générer des liens sécurisés permettant aux locataires de consulter leurs factures et l'historique des paiements sans créer de compte."
+      },
+      "q3": {
+        "question": "Comment fonctionne l'importation automatique des factures?",
+        "answer": "Connectez votre compte email et ProManage analysera automatiquement les factures de services des fournisseurs pris en charge et les importera dans votre tableau de bord."
+      }
+    }
+  },
+  "slideshow": {
+    "featureTour": "Visite des Fonctionnalités",
+    "backToHome": "Retour à l'Accueil",
+    "getStarted": "Commencer",
+    "cta": "Prêt à simplifier la gestion de vos propriétés?",
+    "autoPlaying": "Lecture automatique",
+    "privacyNote": "Les captures d'écran montrent des données d'exemple. Les informations personnelles ont été anonymisées pour la confidentialité.",
+    "slides": {
+      "summary": {
+        "title": "Aperçu du Tableau de Bord",
+        "description": "Obtenez un aperçu complet de toutes vos propriétés, factures en attente et loyers dus en un coup d'œil. Suivez les paiements et respectez les délais."
+      },
+      "properties": {
+        "title": "Gestion des Propriétés",
+        "description": "Gérez plusieurs propriétés facilement. Ajoutez des locataires, configurez des fournisseurs et suivez les factures pour chaque propriété séparément."
+      },
+      "suppliers": {
+        "title": "Gestion des Fournisseurs",
+        "description": "Ajoutez et configurez des fournisseurs de services pour chaque propriété. Configurez les identifiants pour la synchronisation automatique ou utilisez l'extraction basée sur des modèles."
+      },
+      "patterns": {
+        "title": "Extraction Intelligente de Factures",
+        "description": "Créez des modèles d'extraction personnalisés pour analyser automatiquement les factures PDF. Le système apprend à extraire les montants, dates et détails de paiement."
+      },
+      "subscriptions": {
+        "title": "Plans Flexibles",
+        "description": "Choisissez entre les niveaux gratuit et pro selon vos besoins. Évoluez à mesure que votre portefeuille immobilier grandit avec des tarifs transparents."
+      }
+    }
   }
 }

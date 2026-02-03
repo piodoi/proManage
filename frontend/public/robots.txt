@@ -1,0 +1,16 @@
+# ProManage - Property Management for Landlords
+# https://promanage.urun.me
+
+User-agent: *
+Allow: /
+Allow: /features
+Allow: /login
+Allow: /privacy
+Allow: /terms
+
+# Dynamic routes that require authentication
+Disallow: /renter/
+Disallow: /confirm-email
+
+# Static assets
+Sitemap: https://promanage.urun.me/sitemap.xml
