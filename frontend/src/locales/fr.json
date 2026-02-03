@@ -449,7 +449,32 @@
       "copyToAdmin": "Copier vers Admin",
       "createSupplier": "Créer un fournisseur",
       "copySuccess": "Fournisseur créé avec succès !"
-    }
+    },
+    "env": {
+      "title": "Variables d'environnement",
+      "featureFlags": "Fonctionnalités",
+      "backendEnv": "Backend",
+      "frontendEnv": "Frontend",
+      "featureFlagsDesc": "Activez ou désactivez les fonctionnalités. Les modifications nécessitent une reconstruction du frontend.",
+      "backendEnvDesc": "Configurez les variables d'environnement du backend. Les modifications nécessitent un redémarrage du backend.",
+      "frontendEnvDesc": "Configurez les variables d'environnement du frontend. Les modifications nécessitent une reconstruction du frontend.",
+      "rebuildRequired": "Reconstruction requise",
+      "rebuildRequiredDesc": "Les fonctionnalités frontend sont intégrées lors de la construction. Après avoir enregistré les modifications, vous devez reconstruire le frontend :",
+      "frontendRebuildDesc": "Les variables frontend sont intégrées lors de la construction. Après avoir enregistré les modifications :",
+      "restartBackend": "Redémarrer le Backend",
+      "rebuildFrontend": "Reconstruire le Frontend",
+      "featurePayOnline": "Paiement en ligne",
+      "featurePayOnlineDesc": "Permettre aux utilisateurs de payer les factures de services publics en ligne via des fournisseurs de paiement intégrés",
+      "featureBarcodeExtraction": "Extraction de code-barres",
+      "featureBarcodeExtractionDesc": "Extraire les codes-barres des PDF de factures téléchargés pour faciliter le paiement",
+      "featureFacebookLogin": "Connexion Facebook",
+      "featureFacebookLoginDesc": "Activer l'authentification OAuth avec Facebook",
+      "featureDemoLogin": "Connexion démo",
+      "featureDemoLoginDesc": "Afficher le bouton de connexion démo sur la page de connexion",
+      "featureUsBuild": "Version US",
+      "featureUsBuildDesc": "Utiliser la devise USD et les paramètres régionaux américains"
+    },
+    "envVariables": "Variables ENV"
   },
   "settings": {
     "settings": "Paramètres",

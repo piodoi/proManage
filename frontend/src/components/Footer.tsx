@@ -24,7 +24,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-slate-500 text-sm">
           <Building2 className="w-4 h-4 text-emerald-500" />
-          <span>© {new Date().getFullYear()} ProManage. {t('footer.allRightsReserved')}</span>
+          <span>© {new Date().getFullYear()} ProManage. {import.meta.env.VITE_API_VERSION} {t('footer.allRightsReserved')}</span>
         </div>
         
         <div className="flex items-center gap-6">

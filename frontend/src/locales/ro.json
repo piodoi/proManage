@@ -456,7 +456,32 @@
       "copyToAdmin": "Copiază în Admin",
       "createSupplier": "Creează Furnizor",
       "copySuccess": "Furnizorul a fost creat cu succes!"
-    }
+    },
+    "env": {
+      "title": "Variabile de Mediu",
+      "featureFlags": "Funcționalități",
+      "backendEnv": "Backend",
+      "frontendEnv": "Frontend",
+      "featureFlagsDesc": "Activează sau dezactivează funcționalități. Modificările necesită reconstruirea frontend-ului.",
+      "backendEnvDesc": "Configurează variabilele de mediu pentru backend. Modificările necesită repornirea backend-ului.",
+      "frontendEnvDesc": "Configurează variabilele de mediu pentru frontend. Modificările necesită reconstruirea frontend-ului.",
+      "rebuildRequired": "Reconstruire Necesară",
+      "rebuildRequiredDesc": "Funcționalitățile frontend sunt incluse la construire. După salvarea modificărilor, trebuie să reconstruiești frontend-ul:",
+      "frontendRebuildDesc": "Variabilele frontend sunt incluse la construire. După salvarea modificărilor:",
+      "restartBackend": "Repornește Backend",
+      "rebuildFrontend": "Reconstruiește Frontend",
+      "featurePayOnline": "Plată Online",
+      "featurePayOnlineDesc": "Permite utilizatorilor să plătească facturile de utilități online prin furnizori de plăți integrați",
+      "featureBarcodeExtraction": "Extragere Cod de Bare",
+      "featureBarcodeExtractionDesc": "Extrage coduri de bare din PDF-urile de facturi încărcate pentru plată mai ușoară",
+      "featureFacebookLogin": "Autentificare Facebook",
+      "featureFacebookLoginDesc": "Activează autentificarea OAuth cu Facebook",
+      "featureDemoLogin": "Autentificare Demo",
+      "featureDemoLoginDesc": "Afișează butonul de autentificare demo pe pagina de login",
+      "featureUsBuild": "Versiune SUA",
+      "featureUsBuildDesc": "Folosește moneda USD și setările locale pentru SUA"
+    },
+    "envVariables": "Variabile ENV"
   },
   "settings": {
     "settings": "Setări",

@@ -231,6 +231,20 @@ export const api = {
       copyToAdmin: (token: string, data: { user_id: string; filename: string; new_pattern_id: string; new_name?: string }) =>
         request<{ status: string; pattern_id: string; message: string }>('/admin/copy-user-pattern', { method: 'POST', body: data, token }),
     },
+    env: {
+      getVariables: (token: string) => 
+        request<{ backend: EnvVariable[]; frontend: EnvVariable[] }>('/admin/env/variables', { token }),
+      updateVariables: (token: string, variables: Record<string, string>, source: 'backend' | 'frontend') =>
+        request<{ status: string; message: string }>('/admin/env/variables', { method: 'PUT', body: { variables, source }, token }),
+      getFeatureFlags: (token: string) =>
+        request<Record<string, boolean>>('/admin/env/feature-flags', { token }),
+      updateFeatureFlags: (token: string, flags: Record<string, boolean>) =>
+        request<{ status: string; message: string }>('/admin/env/feature-flags', { method: 'PUT', body: flags, token }),
+      restart: (token: string, service: 'backend' | 'frontend') =>
+        request<{ status: string; message: string }>('/admin/env/restart', { method: 'POST', body: { service }, token }),
+      getStatus: (token: string) =>
+        request<{ backend: { running: boolean; env_file_exists: boolean; python_version: string }; frontend: { env_file_exists: boolean } }>('/admin/env/status', { token }),
+    },
   },
 
   properties: {
@@ -425,6 +439,15 @@ export const api = {
 // Centralized Bill Type definition - single source of truth
 export type BillType = 'rent' | 'utilities' | 'telecom' | 'ebloc' | 'other';
 export const BILL_TYPES: readonly BillType[] = ['rent', 'utilities', 'telecom', 'ebloc', 'other'] as const;
+
+export type EnvVariable = {
+  key: string;
+  value: string;
+  source: 'backend' | 'frontend';
+  category: string;
+  description?: string;
+  is_secret: boolean;
+};
 
 export type User = {
   id: string;

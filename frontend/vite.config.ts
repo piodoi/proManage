@@ -14,8 +14,8 @@ export default defineConfig({
       'localhost',
       '127.0.0.1',
       // Add your allowed hosts here, e.g.:
-      '.ultramic.ro',
-      '.lhr.life',  // wildcard subdomain
+      '.urun.me',
+      '.run.app',  // wildcard subdomain
     ],
   },
   build: {

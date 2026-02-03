@@ -25,6 +25,7 @@ from app.routes import (
 from app.routes.subscription_routes import router as subscription_router
 from app.routes.text_pattern_routes import router as text_pattern_router
 from app.routes.stripe_routes import router as stripe_router
+from app.routes.env_routes import router as env_router
 from app.utils.suppliers import initialize_suppliers
 from app.utils.currency import initialize_exchange_rates, shutdown_exchange_rates
 from app.contract_expiry_checker import check_and_notify_expiring_contracts
@@ -117,6 +118,7 @@ app.include_router(text_pattern_router)
 app.include_router(stripe_router)
 app.include_router(payment_notifications_router)
 app.include_router(incarca_routes.router)
+app.include_router(env_router)
 
 
 

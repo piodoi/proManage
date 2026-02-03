@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import HeaderBar from '@/components/HeaderBar';
 import Footer from '@/components/Footer';
-import { Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, FolderSearch, Crown, Bell } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, FileText, Building2, Settings, ChevronLeft, ChevronRight, Package, FolderSearch, Crown, Bell, Settings2 } from 'lucide-react';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import LandlordView from '../components/LandlordView';
 import SettingsView from '../components/SettingsView';
@@ -19,6 +19,7 @@ import SummaryView from '../components/SummaryView';
 import TextPatternView from '../components/TextPatternView';
 import NotificationsView from '../components/NotificationsView';
 import HelpManualView from '../components/HelpManualView';
+import EnvVariablesView from '../components/EnvVariablesView';
 import UserPatternDialog from '../components/dialogs/UserPatternDialog';
 import { useI18n } from '../lib/i18n';
 
@@ -443,6 +444,10 @@ function AdminTabsContent({
           <TabsTrigger value="users" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
             <Users className="w-4 h-4 mr-2" />
             {t('admin.userManagement')}
+          </TabsTrigger>
+          <TabsTrigger value="env" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent">
+            <Settings2 className="w-4 h-4 mr-2" />
+            {t('admin.envVariables') || 'ENV Variables'}
           </TabsTrigger>
         </TabsList>
 
@@ -976,6 +981,10 @@ function AdminTabsContent({
                 </div>
               </DialogContent>
             </Dialog>
+          </TabsContent>
+
+          <TabsContent value="env" className="m-0 p-6 space-y-4">
+            <EnvVariablesView />
           </TabsContent>
         </div>
       </Tabs>

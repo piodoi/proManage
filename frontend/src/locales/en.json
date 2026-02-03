@@ -449,7 +449,32 @@
       "copyToAdmin": "Copy to Admin",
       "createSupplier": "Create Supplier",
       "copySuccess": "Supplier created successfully!"
-    }
+    },
+    "env": {
+      "title": "Environment Variables",
+      "featureFlags": "Feature Flags",
+      "backendEnv": "Backend",
+      "frontendEnv": "Frontend",
+      "featureFlagsDesc": "Toggle features on or off. Changes require a frontend rebuild to take effect.",
+      "backendEnvDesc": "Configure backend environment variables. Changes require a backend restart to take effect.",
+      "frontendEnvDesc": "Configure frontend environment variables. Changes require a frontend rebuild to take effect.",
+      "rebuildRequired": "Rebuild Required",
+      "rebuildRequiredDesc": "Frontend feature flags are baked in at build time. After saving changes, you need to rebuild the frontend:",
+      "frontendRebuildDesc": "Frontend variables are baked in at build time. After saving changes:",
+      "restartBackend": "Restart Backend",
+      "rebuildFrontend": "Rebuild Frontend",
+      "featurePayOnline": "Online Payment",
+      "featurePayOnlineDesc": "Allow users to pay utility bills online through integrated payment providers",
+      "featureBarcodeExtraction": "Barcode Extraction",
+      "featureBarcodeExtractionDesc": "Extract barcodes from uploaded bill PDFs for easier payment",
+      "featureFacebookLogin": "Facebook Login",
+      "featureFacebookLoginDesc": "Enable Facebook OAuth authentication",
+      "featureDemoLogin": "Demo Login",
+      "featureDemoLoginDesc": "Show demo login button on login page",
+      "featureUsBuild": "US Build",
+      "featureUsBuildDesc": "Use USD currency and US locale settings"
+    },
+    "envVariables": "ENV Variables"
   },
   "settings": {
     "settings": "Settings",
