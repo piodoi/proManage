@@ -11,6 +11,15 @@ from app.models import (
 from app.database import db
 from app.paths import get_bill_pdf_path, bill_pdf_exists
 
+# test codes
+# Incercati cu aceste coduri de bare:
+# Electrica:
+# 289090285002903376999999999999000000002452
+# Aquatim:
+# 3010001095301048412814/01/2026000000102.70
+# Apavital:
+# 1000284901011000001973921000000238530116
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/utility", tags=["Utility Payments"])
