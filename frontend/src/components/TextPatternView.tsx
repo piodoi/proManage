@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useI18n } from '../lib/i18n';
 import { Save, Upload, Check } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getDefaultCurrency } from '../lib/currencyConfig';
 
 type FieldPattern = {
   field_name: string;
@@ -248,7 +249,8 @@ export default function TextPatternView() {
         const currency = currencyMatch[0].toUpperCase();
         return currency === 'LEI' ? 'RON' : currency;
       }
-      return 'RON';
+      // Default to USD for US build, RON for standard build
+      return getDefaultCurrency();
     } else if (fieldName === 'iban' && targetLine) {
       // Remove spaces and extract IBAN (international format)
       // IBAN format: [Country Code (2 letters)][Check Digits (2 digits)][BBAN (varies by country)]

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { api, Preferences } from '../api';
 import { useAuth } from '../App';
+import { getDefaultCurrency } from '../lib/currencyConfig';
 
 const DEBOUNCE_DELAY = 500; // 500ms debounce delay
 
@@ -9,7 +10,7 @@ const defaultPreferences: Preferences = {
   view_mode: 'list',
   rent_warning_days: 5,
   rent_currency: 'EUR',
-  bill_currency: 'RON',
+  bill_currency: getDefaultCurrency(),
   date_format: 'DD/MM/YYYY',
   phone_number: null,
   landlord_name: null,
