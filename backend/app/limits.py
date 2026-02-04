@@ -64,11 +64,11 @@ def check_can_add_property(subscription_tier: int, current_property_count: int) 
     """Check if user can add another property."""
     if subscription_tier == 0:
         if current_property_count >= FREE_MAX_PROPERTIES:
-            return False, f"Free tier allows only {FREE_MAX_PROPERTIES} property. Upgrade to add more."
+            return False, ""
         return True, ""
     else:
         if current_property_count >= subscription_tier:
-            return False, f"You have {subscription_tier} property subscriptions. Add more subscriptions to add more properties."
+            return False, ""
         return True, ""
 
 
@@ -76,11 +76,11 @@ def check_can_add_supplier(subscription_tier: int, current_supplier_count: int, 
     """Check if user can add another supplier to a property. Limit is per property for both tiers."""
     if subscription_tier == 0:
         if current_supplier_count >= FREE_MAX_SUPPLIERS:
-            return False, f"Free tier allows only {FREE_MAX_SUPPLIERS} suppliers per property. Upgrade to add more."
+            return False, ""
         return True, ""
     else:
         if current_supplier_count >= PAID_MAX_SUPPLIERS_PER_PROPERTY:
-            return False, f"Maximum {PAID_MAX_SUPPLIERS_PER_PROPERTY} suppliers per property reached."
+            return False, ""
         return True, ""
 
 
@@ -88,17 +88,17 @@ def check_can_add_renter(subscription_tier: int, current_renter_count: int, prop
     """Check if user can add another renter."""
     if subscription_tier == 0:
         if current_renter_count >= FREE_MAX_RENTERS:
-            return False, f"Free tier allows only {FREE_MAX_RENTERS} renters. Upgrade to add more."
+            return False, ""
         return True, ""
     else:
         if current_renter_count >= PAID_MAX_RENTERS_PER_PROPERTY:
-            return False, f"Maximum {PAID_MAX_RENTERS_PER_PROPERTY} renters per property reached."
+            return False, ""
         return True, ""
 
 
 def check_email_sync_allowed(subscription_tier: int) -> tuple[bool, str]:
     """Check if user can use email sync feature."""
     if subscription_tier == 0:
-        return False, "Email sync is only available with a paid subscription. Upgrade to enable this feature."
+        return False, ""
     return True, ""
 

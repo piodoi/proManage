@@ -258,14 +258,14 @@ async def create_property_supplier(
     if user and current_user.role != UserRole.ADMIN:
         # Pattern-based suppliers are a premium feature
         if is_pattern_supplier and user.subscription_tier == 0:
-            raise HTTPException(status_code=403, detail="Adding suppliers from patterns is a premium feature. Upgrade to add pattern-based suppliers.")
+            raise HTTPException(status_code=403, detail="upgrade_required")
         
         # Both free and paid tiers check suppliers per property (max 5 for free, 10 for paid)
         current_property_suppliers = len(db.list_property_suppliers(property_id))
-        can_add, message = check_can_add_supplier(user.subscription_tier, current_property_suppliers)
+        can_add, _ = check_can_add_supplier(user.subscription_tier, current_property_suppliers)
         
         if not can_add:
-            raise HTTPException(status_code=403, detail=message)
+            raise HTTPException(status_code=403, detail="upgrade_required")
     
     if is_pattern_supplier:
         # For pattern-based suppliers, validate extraction_pattern_supplier is provided

@@ -51,8 +51,9 @@ export default function PropertySupplierSettingsDialog({
   const [pendingDirectDebit, setPendingDirectDebit] = useState<Record<string, boolean>>({});
   const directDebitTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
   
-  // Check if user can add more suppliers
-  const canAddSupplier = subscription?.can_add_supplier ?? true;
+  // Check if user can add more suppliers to THIS property
+  const maxSuppliersPerProperty = subscription?.limits?.max_suppliers_per_property ?? 5;
+  const canAddSupplier = propertySuppliers.length < maxSuppliersPerProperty;
   const canAddPatternSupplier = subscription?.can_add_pattern_supplier ?? false;
   const supplierNeedsUpgrade = !canAddSupplier && onUpgradeClick;
   const patternNeedsUpgrade = !canAddPatternSupplier && onUpgradeClick;
