@@ -15,6 +15,9 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Use US-specific index.html with US Google Analytics ID
+RUN cp US_index.html index.html
+
 # Build arguments for environment variables
 ARG VITE_API_URL=https://api.imanage.urun.me
 ARG VITE_GOOGLE_CLIENT_ID="329418258863-d5t19hcni8hse364bnj5q5dm7kkk5hbg.apps.googleusercontent.com"
