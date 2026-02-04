@@ -426,9 +426,7 @@ export default function EnvVariablesView() {
             value="frontend" 
             className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-4 py-2 border-b-2 border-transparent"
           >
-            <Monitor className="w-4 h-4 mr-2" />
-            {t('admin.env.frontendEnv') || 'Frontend'}
-            <Badge className="ml-2 bg-slate-600 text-xs">{t('admin.env.readOnly') || 'Runtime'}</Badge>
+            <Monitor className="w-4 h-4 mr-2" /> {'Frontend'}
           </TabsTrigger>
         </TabsList>
 
@@ -574,9 +572,9 @@ export default function EnvVariablesView() {
                   <div className="flex items-start gap-2">
                     <Monitor className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-slate-300 font-medium">{t('admin.env.runtimeValues') || 'Runtime Values'}</p>
+                      <p className="text-slate-300 font-medium">{'Runtime Values'}</p>
                       <p className="text-slate-400 text-sm mt-1">
-                        {t('admin.env.runtimeValuesDesc') || 'These values reflect the actual configuration of this running frontend instance, not the source files. To change these values, update the environment variables and rebuild the frontend.'}
+                        {'These values reflect the actual configuration of this running frontend instance, not the source files. To change these values, update the environment variables and rebuild the frontend.'}
                       </p>
                     </div>
                   </div>
