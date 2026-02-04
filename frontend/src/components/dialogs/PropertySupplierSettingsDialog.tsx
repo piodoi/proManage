@@ -53,7 +53,9 @@ export default function PropertySupplierSettingsDialog({
   
   // Check if user can add more suppliers
   const canAddSupplier = subscription?.can_add_supplier ?? true;
+  const canAddPatternSupplier = subscription?.can_add_pattern_supplier ?? false;
   const supplierNeedsUpgrade = !canAddSupplier && onUpgradeClick;
+  const patternNeedsUpgrade = !canAddPatternSupplier && onUpgradeClick;
 
   // Load suppliers and property suppliers when dialog opens
   useEffect(() => {
@@ -412,7 +414,7 @@ export default function PropertySupplierSettingsDialog({
                     </div>
                   </div>
                   <div className="w-full sm:w-1/4">
-                    {supplierNeedsUpgrade ? (
+                    {patternNeedsUpgrade ? (
                       <Button
                         type="button"
                         className={`w-full transition-colors duration-200 ${

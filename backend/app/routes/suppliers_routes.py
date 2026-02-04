@@ -250,24 +250,22 @@ async def create_property_supplier(
     if prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
+    # Handle pattern-based suppliers (supplier_id = "0")
+    is_pattern_supplier = data.supplier_id == "0"
+    
     # Check subscription limit for suppliers
     user = db.get_user(current_user.user_id)
     if user and current_user.role != UserRole.ADMIN:
-        if user.subscription_tier == 0:
-            # Free tier: check total suppliers across all properties
-            user_properties = db.list_properties(landlord_id=current_user.user_id)
-            total_suppliers = sum(len(db.list_property_suppliers(p.id)) for p in user_properties)
-            can_add, message = check_can_add_supplier(user.subscription_tier, total_suppliers)
-        else:
-            # Paid tier: check suppliers on this specific property
-            current_property_suppliers = len(db.list_property_suppliers(property_id))
-            can_add, message = check_can_add_supplier(user.subscription_tier, current_property_suppliers)
+        # Pattern-based suppliers are a premium feature
+        if is_pattern_supplier and user.subscription_tier == 0:
+            raise HTTPException(status_code=403, detail="Adding suppliers from patterns is a premium feature. Upgrade to add pattern-based suppliers.")
+        
+        # Both free and paid tiers check suppliers per property (max 5 for free, 10 for paid)
+        current_property_suppliers = len(db.list_property_suppliers(property_id))
+        can_add, message = check_can_add_supplier(user.subscription_tier, current_property_suppliers)
         
         if not can_add:
             raise HTTPException(status_code=403, detail=message)
-    
-    # Handle pattern-based suppliers (supplier_id = "0")
-    is_pattern_supplier = data.supplier_id == "0"
     
     if is_pattern_supplier:
         # For pattern-based suppliers, validate extraction_pattern_supplier is provided

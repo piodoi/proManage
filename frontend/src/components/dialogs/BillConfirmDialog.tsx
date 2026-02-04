@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, FileText } from 'lucide-react';
 import { ExtractionResult } from '@/api';
 import { useI18n } from '../../lib/i18n';
+import { getDefaultCurrency } from '../../lib/currencyConfig';
 
 type BillConfirmDialogProps = {
   open: boolean;
@@ -180,7 +181,7 @@ export default function BillConfirmDialog({
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">{t('common.amount')}</span>
                   <span className={`font-medium ${hasAmount ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {hasAmount ? `${pdfResult.amount!.toFixed(2)} RON` : t('billConfirm.notFound')}
+                    {hasAmount ? `${pdfResult.amount!.toFixed(2)} ${pdfResult.currency || getDefaultCurrency()}` : t('billConfirm.notFound')}
                   </span>
                 </div>
                 

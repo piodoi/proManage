@@ -18,9 +18,16 @@ from app.utils.suppliers import initialize_suppliers
 from app.routes.sync_routes import resolve_property_supplier_id
 from app.paths import delete_bill_pdf, bill_pdf_exists, get_bill_pdf_path, save_bill_pdf
 from app.email_sender import send_bill_notification_email, is_email_configured
+from app.routes.env_routes import load_feature_flags
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
+
+
+def get_default_currency() -> str:
+    """Get default currency based on usBuild feature flag."""
+    flags = load_feature_flags()
+    return "USD" if flags.get("usBuild", False) else "RON"
 
 
 def auto_assign_renter_if_single(property_id: str, renter_id: str = None) -> str:
@@ -187,7 +194,7 @@ async def create_bill(data: BillCreate, background_tasks: BackgroundTasks, curre
         bill_type=data.bill_type,
         description=data.description,
         amount=data.amount,
-        currency=data.currency or "RON",
+        currency=data.currency or get_default_currency(),
         due_date=data.due_date,
         iban=data.iban,
         bill_number=data.bill_number,
@@ -693,7 +700,7 @@ async def create_bill_from_pdf(
         bill_type=resolved_bill_type,
         description=bill_description,
         amount=new_amount,
-        currency=data.get("currency", "RON"),
+        currency=data.get("currency") or get_default_currency(),
         due_date=due_date,
         bill_date=bill_date,  # Date when bill was issued (from pattern), None if not extracted
         legal_name=legal_name,  # Legal name of supplier from pattern

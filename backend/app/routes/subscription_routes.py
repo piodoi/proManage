@@ -53,17 +53,23 @@ async def subscription_status(current_user: TokenData = Depends(require_auth)):
     # Determine if tier is free or paid
     is_free_tier = user.subscription_tier == 0
     
-    # For FREE tier: check total suppliers/renters across all properties
-    # For PAID tier: check max suppliers/renters on any single property
+    # Supplier limit is now per property for both tiers
+    # Check max suppliers on any single property
     if is_free_tier:
-        can_add_supplier = total_suppliers < FREE_MAX_SUPPLIERS
-        can_add_renter = total_renters < FREE_MAX_RENTERS
+        can_add_supplier = max_suppliers_on_property < FREE_MAX_SUPPLIERS
         supplier_limit = FREE_MAX_SUPPLIERS
-        renter_limit = FREE_MAX_RENTERS
+        can_add_pattern_supplier = False  # Pattern suppliers are premium only
     else:
         can_add_supplier = max_suppliers_on_property < PAID_MAX_SUPPLIERS_PER_PROPERTY
-        can_add_renter = max_renters_on_property < PAID_MAX_RENTERS_PER_PROPERTY
         supplier_limit = PAID_MAX_SUPPLIERS_PER_PROPERTY
+        can_add_pattern_supplier = True  # Pattern suppliers available for paid users
+    
+    # Renter limit: FREE checks total, PAID checks per property
+    if is_free_tier:
+        can_add_renter = total_renters < FREE_MAX_RENTERS
+        renter_limit = FREE_MAX_RENTERS
+    else:
+        can_add_renter = max_renters_on_property < PAID_MAX_RENTERS_PER_PROPERTY
         renter_limit = PAID_MAX_RENTERS_PER_PROPERTY
     
     # Property limit: can add if current count < subscription_tier (or FREE_MAX_PROPERTIES)
@@ -97,5 +103,6 @@ async def subscription_status(current_user: TokenData = Depends(require_auth)):
         "can_add_supplier": can_add_supplier,
         "can_add_renter": can_add_renter,
         "can_use_email_sync": not is_free_tier,
+        "can_add_pattern_supplier": can_add_pattern_supplier,  # Pattern-based suppliers require premium
     }
 

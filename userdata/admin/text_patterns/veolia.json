@@ -1,0 +1,50 @@
+{
+  "id": "veolia",
+  "name": "Veolia",
+  "bill_type": "utilities",
+  "supplier": "Veolia",
+  "field_patterns": [
+    {
+      "field_name": "amount",
+      "label_text": "Total Amount Due",
+      "line_offset": 1
+    },
+    {
+      "field_name": "due_date",
+      "label_text": "DUE DATE",
+      "line_offset": 1
+    },
+    {
+      "field_name": "bill_date",
+      "label_text": "Billing Date",
+      "line_offset": 4
+    },
+    {
+      "field_name": "bill_number",
+      "label_text": "Premise Number:",
+      "line_offset": 3
+    },
+    {
+      "field_name": "contract_id",
+      "label_text": "Account Number:",
+      "line_offset": 3
+    },
+    {
+      "field_name": "payment_details",
+      "label_text": "ACCOUNT NUMBER",
+      "line_offset": 1
+    },
+    {
+      "field_name": "address",
+      "label_text": "Customer Account Information",
+      "line_offset": 4
+    },
+    {
+      "field_name": "legal_name",
+      "label_text": "Veolia",
+      "line_offset": -1
+    }
+  ],
+  "created_at": "2026-02-04T15:15:56.681754",
+  "updated_at": "2026-02-04T15:41:41.161169"
+}

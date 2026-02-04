@@ -10,7 +10,7 @@ These constants define what users can do at each subscription tier.
 
 # ==================== FREE TIER LIMITS ====================
 FREE_MAX_PROPERTIES = 1
-FREE_MAX_SUPPLIERS = 5  # Total suppliers that can be added to properties
+FREE_MAX_SUPPLIERS = 5  # Max suppliers per property (not total)
 FREE_MAX_RENTERS = 5    # Total renters across all properties
 FREE_EMAIL_SYNC = False  # Email sync not available in free tier
 
@@ -40,10 +40,11 @@ def get_user_limits(subscription_tier: int, property_count: int = 0) -> dict:
         return {
             "tier": "free",
             "max_properties": FREE_MAX_PROPERTIES,
-            "max_suppliers": FREE_MAX_SUPPLIERS,
+            "max_suppliers_per_property": FREE_MAX_SUPPLIERS,  # Limit is per property
             "max_renters": FREE_MAX_RENTERS,
             "email_sync_enabled": FREE_EMAIL_SYNC,
             "can_add_property": property_count < FREE_MAX_PROPERTIES,
+            "pattern_suppliers_enabled": False,  # Pattern-based suppliers require premium
         }
     else:
         # Paid tier - subscription_tier = number of properties paid for
@@ -55,6 +56,7 @@ def get_user_limits(subscription_tier: int, property_count: int = 0) -> dict:
             "email_sync_enabled": PAID_EMAIL_SYNC,
             "can_add_property": property_count < subscription_tier,
             "properties_paid": subscription_tier,
+            "pattern_suppliers_enabled": True,  # Pattern-based suppliers available
         }
 
 
@@ -71,10 +73,10 @@ def check_can_add_property(subscription_tier: int, current_property_count: int) 
 
 
 def check_can_add_supplier(subscription_tier: int, current_supplier_count: int, property_count: int = 1) -> tuple[bool, str]:
-    """Check if user can add another supplier to a property."""
+    """Check if user can add another supplier to a property. Limit is per property for both tiers."""
     if subscription_tier == 0:
         if current_supplier_count >= FREE_MAX_SUPPLIERS:
-            return False, f"Free tier allows only {FREE_MAX_SUPPLIERS} suppliers. Upgrade to add more."
+            return False, f"Free tier allows only {FREE_MAX_SUPPLIERS} suppliers per property. Upgrade to add more."
         return True, ""
     else:
         if current_supplier_count >= PAID_MAX_SUPPLIERS_PER_PROPERTY:

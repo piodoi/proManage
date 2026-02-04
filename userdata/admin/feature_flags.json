@@ -3,5 +3,5 @@
   "barcodeExtraction": false,
   "facebookLogin": true,
   "demoLogin": false,
-  "usBuild": false
+  "usBuild": true
 }

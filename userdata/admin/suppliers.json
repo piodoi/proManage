@@ -42,6 +42,12 @@
     "extraction_pattern_supplier": "telekom"
   },
   {
+    "name": "Veolia",
+    "bill_type": "utilities",
+    "has_api": false,
+    "extraction_pattern_supplier": "veolia"
+  },
+  {
     "name": "Vodafone",
     "bill_type": "telecom",
     "has_api": false,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api, Bill, Renter, ExtractionResult, BillType, BILL_TYPES, PropertySupplier, extractBarcodeFromBillAPI } from '../api';
 import { featureFlags } from '../lib/featureFlags';
-import { getAvailableCurrencies } from '../lib/currencyConfig';
+import { getAvailableCurrencies, getDefaultCurrency } from '../lib/currencyConfig';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -47,7 +47,7 @@ export default function PropertyBillsView({
     property_supplier_id: '',  // Selected PropertySupplier.id for non-rent bills
     description: '',
     amount: '',
-    currency: preferences.bill_currency || 'RON',
+    currency: preferences.bill_currency || getDefaultCurrency(),
     due_date: new Date().toISOString().split('T')[0], // Default to today
     status: 'pending' as 'pending' | 'paid' | 'overdue',
     bill_number: '',
@@ -74,7 +74,7 @@ export default function PropertyBillsView({
   // Update currency when preferences change
   useEffect(() => {
     if (!editingBill && preferences.bill_currency) {
-      setBillForm(prev => ({ ...prev, currency: preferences.bill_currency || 'RON' }));
+      setBillForm(prev => ({ ...prev, currency: preferences.bill_currency || getDefaultCurrency() }));
     }
   }, [preferences.bill_currency, editingBill]);
 
@@ -286,7 +286,7 @@ export default function PropertyBillsView({
         property_id: propertyId,
         renter_id: 'all', // Default to all/property
         amount: result.amount || 0,
-        currency: preferences.bill_currency || 'RON',
+        currency: result.currency || preferences.bill_currency || getDefaultCurrency(),
         due_date: dueDate,
         bill_date: result.bill_date,  // Date when bill was issued (from pattern)
         legal_name: result.legal_name,  // Legal name from pattern
@@ -377,7 +377,7 @@ export default function PropertyBillsView({
         bill_type: billForm.bill_type,
         description,
         amount: parseFloat(billForm.amount),
-        currency: billForm.currency || preferences.bill_currency || 'RON',
+        currency: billForm.currency || preferences.bill_currency || getDefaultCurrency(),
         due_date: billForm.due_date ? new Date(billForm.due_date).toISOString() : new Date().toISOString(),
         status: billForm.status,
         bill_number: billForm.bill_number || undefined,
@@ -400,7 +400,7 @@ export default function PropertyBillsView({
       setShowBillForm(false);
       setEditingBill(null);
       const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
-      setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
+      setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || getDefaultCurrency(), due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
       if (onBillsChange) {
         onBillsChange();
       }
@@ -429,7 +429,7 @@ export default function PropertyBillsView({
       property_supplier_id: bill.property_supplier_id || '',
       description: bill.description || '',
       amount: bill.amount.toString(),
-      currency: bill.currency || preferences.bill_currency || 'RON',
+      currency: bill.currency || preferences.bill_currency || getDefaultCurrency(),
       due_date: formattedDueDate || new Date().toISOString().split('T')[0],
       status: bill.status || 'pending',
       bill_number: bill.bill_number || '',
@@ -661,7 +661,7 @@ export default function PropertyBillsView({
               if (!open) {
                 setEditingBill(null);
                 const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
-                setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || 'RON', due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
+                setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || getDefaultCurrency(), due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
               }
             }}>
               <DialogTrigger asChild>
@@ -874,7 +874,7 @@ export default function PropertyBillsView({
                       <TableCell className="text-slate-200">{bill.description}</TableCell>
                       <TableCell className="text-slate-300">{t(`bill.${bill.bill_type}`)}</TableCell>
                       <TableCell className="text-slate-300">{bill.bill_number || '-'}</TableCell>
-                      <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || 'RON'}</TableCell>
+                      <TableCell className="text-slate-200">{bill.amount.toFixed(2)} {bill.currency || getDefaultCurrency()}</TableCell>
                       <TableCell className="text-slate-300">{formatDateWithPreferences(bill.due_date, preferences.date_format, language)}</TableCell>
                       <TableCell>
                         <button
@@ -982,11 +982,11 @@ export default function PropertyBillsView({
             <div className="bg-slate-750 border border-slate-700 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">{t('bill.existingAmount')}:</span>
-                <span className="text-slate-200 font-medium">{duplicateConflict?.existingAmount?.toFixed(2)} {preferences.bill_currency || 'RON'}</span>
+                <span className="text-slate-200 font-medium">{duplicateConflict?.existingAmount?.toFixed(2)} {preferences.bill_currency || getDefaultCurrency()}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">{t('bill.newAmount')}:</span>
-                <span className="text-emerald-400 font-medium">{duplicateConflict?.newAmount?.toFixed(2)} {preferences.bill_currency || 'RON'}</span>
+                <span className="text-emerald-400 font-medium">{duplicateConflict?.newAmount?.toFixed(2)} {preferences.bill_currency || getDefaultCurrency()}</span>
               </div>
             </div>
             <p className="text-sm text-slate-400">

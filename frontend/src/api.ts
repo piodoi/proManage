@@ -828,6 +828,7 @@ export type SubscriptionStatus = {
   can_add_supplier: boolean;
   can_add_renter: boolean;
   can_use_email_sync: boolean;
+  can_add_pattern_supplier: boolean;  // Pattern-based suppliers require premium
   
   // Deprecated
   needs_subscription?: boolean;
@@ -866,6 +867,7 @@ export type ExtractionResult = {
   contract_id?: string;
   bill_number?: string;
   amount?: number;
+  currency?: string;  // Extracted currency (e.g., RON, USD, EUR)
   due_date?: string;
   bill_date?: string;  // Date when bill was issued (from pattern)
   legal_name?: string;  // Legal name of supplier (from pattern)
