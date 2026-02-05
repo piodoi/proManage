@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Renter, Bill } from '../../api';
+import { Renter, Bill, getRenterBillPdfUrl } from '../../api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,7 +69,7 @@ export default function RenterAccessLinkDialog({
   };
 
   // WhatsApp message template
-  const getWhatsAppMessage = (link: string, selectedBills: Bill[]): string => {
+  const getWhatsAppMessage = (link: string, selectedBills: Bill[], token: string): string => {
     if (selectedBills.length === 0) {
       return t('renter.whatsAppMessage').replace('{link}', link);
     }
@@ -77,12 +77,21 @@ export default function RenterAccessLinkDialog({
     const billsInfo = selectedBills.map(bill => {
       const supplierName = bill.description || t('bill.other');
       const amount = formatAmount(bill.amount, bill.currency || 'RON');
-      return `• ${supplierName}: ${amount}`;
+      const pdfUrl = bill.has_pdf ? ` - ${getRenterBillPdfUrl(token, bill.id)}` : '';
+      return `• ${supplierName}: ${amount}${pdfUrl}`;
     }).join('\n');
     
     return t('renter.whatsAppMessageWithBills')
       .replace('{bills}', billsInfo)
       .replace('{link}', link);
+  };
+
+  // Get text message for copying (without encoding)
+  const getTextMessage = (): string => {
+    if (!renterLink) return '';
+    const link = `${window.location.origin}/renter/${renterLink.token}`;
+    const selectedBills = pendingBills.filter(bill => selectedBillIds.has(bill.id));
+    return getWhatsAppMessage(link, selectedBills, renterLink.token);
   };
 
   const getWhatsAppUrl = (): string | null => {
@@ -96,7 +105,7 @@ export default function RenterAccessLinkDialog({
     const cleanPhone = renterPhone.replace(/\D/g, '');
     const link = `${window.location.origin}/renter/${renterLink.token}`;
     const selectedBills = pendingBills.filter(bill => selectedBillIds.has(bill.id));
-    const message = getWhatsAppMessage(link, selectedBills);
+    const message = getWhatsAppMessage(link, selectedBills, renterLink.token);
     
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
@@ -108,10 +117,10 @@ export default function RenterAccessLinkDialog({
     }
   };
 
-  const handleCopyWhatsAppLink = async () => {
-    const whatsappUrl = getWhatsAppUrl();
-    if (whatsappUrl) {
-      await navigator.clipboard.writeText(whatsappUrl);
+  const handleCopyMessage = async () => {
+    const message = getTextMessage();
+    if (message) {
+      await navigator.clipboard.writeText(message);
     }
   };
 
@@ -206,6 +215,9 @@ export default function RenterAccessLinkDialog({
                           <span className="text-slate-200 text-sm truncate">
                             {bill.description || t('bill.other')}
                           </span>
+                          {bill.has_pdf && (
+                            <span title={t('bill.pdfAvailable')} className="text-red-500 text-xs font-bold bg-slate-100 flex-shrink-0">.PDF.</span>
+                          )}
                           <span className={`text-xs px-1.5 py-0.5 rounded ${bill.status === 'overdue' ? 'text-red-400 bg-red-900/30' : 'text-amber-400 bg-amber-900/30'}`}>
                             {t(`bill.status.${bill.status}`)}
                           </span>
@@ -247,11 +259,10 @@ export default function RenterAccessLinkDialog({
                   }
                 </Button>
                 <Button
-                  onClick={handleCopyWhatsAppLink}
-                  disabled={!preferences.phone_number || !renterLink.renter?.phone}
+                  onClick={handleCopyMessage}
                   variant="outline"
-                  className="border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={(!preferences.phone_number || !renterLink.renter?.phone) ? t('renter.whatsAppUnavailable') : t('common.copy')}
+                  className="border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400"
+                  title={t('common.copy')}
                 >
                   <Copy className="w-4 h-4" />
                 </Button>

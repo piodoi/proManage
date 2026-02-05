@@ -252,7 +252,8 @@
     "confirmProperty": "Confirmer ou changer de propriété",
     "directDebit": "Prélèvement automatique",
     "noDescription": "Pas de description",
-    "downloadPdf": "Télécharger le PDF"
+    "downloadPdf": "Télécharger le PDF",
+    "pdfAvailable": "PDF disponible"
   },
   "summary": {
     "summary": "Résumé",

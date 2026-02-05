@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, FileText, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell, LogIn } from 'lucide-react';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell, LogIn } from 'lucide-react';
 import { featureFlags } from '../lib/featureFlags';
 import { getAvailableCurrencies, getDefaultCurrency } from '../lib/currencyConfig';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
@@ -866,10 +866,10 @@ export default function RenterView() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => window.open(getRenterBillPdfUrl(token, item.bill.id), '_blank')}
-                                className="border-slate-600 text-blue-400 hover:bg-slate-700 hover:text-blue-300 h-8 w-8 p-0"
+                                className="border-slate-600 hover:bg-slate-700 h-8 px-2"
                                 title={t('renter.downloadPdf') || 'Download PDF'}
                               >
-                                <FileText className="w-4 h-4" />
+                                <span className="text-red-500 text-xs font-bold">PDF</span>
                               </Button>
                             )}
                           </div>
@@ -1351,9 +1351,9 @@ export default function RenterView() {
                       <Button
                         variant="outline"
                         onClick={() => window.open(getRenterBillPdfUrl(token, payingBill.bill.id), '_blank')}
-                        className="border-slate-600 text-blue-400 hover:bg-slate-700 hover:text-blue-300"
+                        className="border-slate-600 hover:bg-slate-700"
                       >
-                        <FileText className="w-4 h-4 mr-2" />
+                        <span className="text-red-500 font-bold mr-2">PDF</span>
                         {t('renter.downloadPdf') || 'Download PDF'}
                       </Button>
                     </div>

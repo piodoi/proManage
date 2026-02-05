@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight, FileText, CreditCard, Loader2 } from 'lucide-react';
+import { Plus, Receipt, Pencil, Trash2, ChevronDown, ChevronRight, CreditCard, Loader2 } from 'lucide-react';
 import BillConfirmDialog from './dialogs/BillConfirmDialog';
 import { UtilityPaymentDialog } from './dialogs/UtilityPaymentDialog';
 import { useI18n } from '../lib/i18n';
@@ -895,10 +895,10 @@ export default function PropertyBillsView({
                             <Button
                               size="sm"
                               onClick={() => api.bills.downloadPdf(token, bill.id).catch(handleError)}
-                              className="bg-slate-700 text-blue-400 hover:bg-slate-600 hover:text-blue-300 border border-slate-600 h-6 px-2 w-6"
+                              className="bg-slate-100 hover:bg-slate-600 border border-slate-600 h-6 px-1.5"
                               title={t('bill.downloadPdf') || 'Download PDF'}
                             >
-                              <FileText className="w-3 h-3" />
+                              <span className="text-red-500 text-xs font-bold">PDF</span>
                             </Button>
                           )}
                           {featureFlags.payOnline && bill.bill_type !== 'rent' && (bill.bill_number || bill.has_pdf) && getEffectiveStatus(bill) !== 'paid' && (

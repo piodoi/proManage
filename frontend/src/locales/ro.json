@@ -260,7 +260,8 @@
     "confirmProperty": "Confirmă sau schimbă proprietatea",
     "directDebit": "Debit Direct",
     "noDescription": "Fără descriere",
-    "downloadPdf": "Descarcă PDF"
+    "downloadPdf": "Descarcă PDF",
+    "pdfAvailable": "PDF disponibil"
   },
   "summary": {
     "summary": "Rezumat",

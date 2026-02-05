@@ -252,7 +252,8 @@
     "confirmProperty": "Confirm or change property",
     "directDebit": "Direct Debit",
     "noDescription": "No description",
-    "downloadPdf": "Download PDF"
+    "downloadPdf": "Download PDF",
+    "pdfAvailable": "PDF available"
   },
   "summary": {
     "summary": "Summary",
