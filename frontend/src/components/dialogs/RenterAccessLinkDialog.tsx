@@ -76,9 +76,10 @@ export default function RenterAccessLinkDialog({
     
     const billsInfo = selectedBills.map(bill => {
       const supplierName = bill.description || t('bill.other');
+      const billNo = bill.bill_number || "";
       const amount = formatAmount(bill.amount, bill.currency || 'RON');
       const pdfUrl = bill.has_pdf ? ` - ${getRenterBillPdfUrl(token, bill.id)}` : '';
-      return `• ${supplierName}: ${amount}${pdfUrl}`;
+      return `* ${supplierName}  : ${amount} - ${billNo}${pdfUrl}`;
     }).join('\n');
     
     return t('renter.whatsAppMessageWithBills')
