@@ -243,7 +243,7 @@ export default function RenterAccessLinkDialog({
             </div>
           )}
           
-          {renterLink && renterLink.renter && (
+          {renterLink && (
             <div className="pt-2 space-y-2">
               <div className="flex gap-2">
                 <Button
@@ -263,7 +263,7 @@ export default function RenterAccessLinkDialog({
                   onClick={handleCopyMessage}
                   variant="outline"
                   className="border-slate-600 bg-green-600/20 hover:bg-green-600/30 text-green-400"
-                  title={t('common.copy')}
+                  title={t('renter.copyMessage') || t('common.copy')}
                 >
                   <Copy className="w-4 h-4" />
                 </Button>
