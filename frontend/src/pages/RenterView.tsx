@@ -903,17 +903,44 @@ export default function RenterView() {
             return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
           });
           
-          // Filter bills for balance calculation based on warning days
-          // Only include bills with due dates within the warning threshold (today + warning_days)
+          // Filter bills for balance calculation:
+          // 1. All UNPAID bills with due date this month
+          // 2. PLUS unpaid bills from future months that are within warning days period
           const warningDays = info?.rent_warning_days ?? 5;
           const cutoffDate = new Date();
           cutoffDate.setDate(cutoffDate.getDate() + warningDays);
           cutoffDate.setHours(23, 59, 59, 999); // End of the cutoff day
           
+          // Start of current month for comparison
+          const startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
+          startOfCurrentMonth.setHours(0, 0, 0, 0);
+          
+          // End of current month
+          const endOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0);
+          endOfCurrentMonth.setHours(23, 59, 59, 999);
+          
           const balanceBills = bills.filter(b => {
+            // Only include unpaid bills in balance
+            if (b.bill.status === 'paid') return false;
+            
             const dueDate = new Date(b.bill.due_date);
-            // Include bills that are due on or before the cutoff date
-            return dueDate <= cutoffDate;
+            
+            // Include all unpaid bills from this month
+            if (dueDate >= startOfCurrentMonth && dueDate <= endOfCurrentMonth) {
+              return true;
+            }
+            
+            // Include unpaid bills from future months if within warning days
+            if (dueDate > endOfCurrentMonth && dueDate <= cutoffDate) {
+              return true;
+            }
+            
+            // Include overdue bills from past months
+            if (dueDate < startOfCurrentMonth) {
+              return true;
+            }
+            
+            return false;
           });
 
           return (
