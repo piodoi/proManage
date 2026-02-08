@@ -1,13 +1,37 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <!-- Google tag (gtag.js) - Standard Build -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XBSRFXGRNR"></script>
+    <!-- Google tag (gtag.js) - Loaded only after cookie consent -->
     <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-XBSRFXGRNR');
+      // Cookie consent management for ePrivacy Directive compliance
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      
+      function loadGoogleAnalytics() {
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=G-XBSRFXGRNR';
+        document.head.appendChild(script);
+        gtag('js', new Date());
+        gtag('config', 'G-XBSRFXGRNR');
+      }
+      
+      // Check if user already consented
+      if (localStorage.getItem('cookieConsent') === 'accepted') {
+        loadGoogleAnalytics();
+      }
+      
+      function acceptCookies() {
+        localStorage.setItem('cookieConsent', 'accepted');
+        loadGoogleAnalytics();
+        document.getElementById('cookieBanner').style.display = 'none';
+      }
+      
+      function dismissCookies() {
+        // User dismisses without accepting - don't load analytics, hide banner for session
+        sessionStorage.setItem('cookieBannerDismissed', 'true');
+        document.getElementById('cookieBanner').style.display = 'none';
+      }
     </script>
 
     <meta charset="UTF-8" />
@@ -40,6 +64,22 @@
     <meta name="theme-color" content="#1e293b" />
     <link rel="canonical" href="https://promanage.urun.me" />    <link rel="manifest" href="/manifest.json" />  </head>
   <body>
+    <!-- Cookie Consent Banner - ePrivacy Directive Compliance -->
+    <div id="cookieBanner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1e293b; color:#94a3b8; padding:12px 16px; font-size:13px; z-index:9999; border-top:1px solid #334155; font-family:system-ui,-apple-system,sans-serif;">
+      <div style="max-width:1200px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <span>We use cookies for analytics (Google Analytics). By continuing, you agree to our use of cookies.</span>
+        <div style="display:flex; gap:8px;">
+          <button onclick="acceptCookies()" style="background:#3b82f6; color:white; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-size:13px;">Accept</button>
+          <button onclick="dismissCookies()" style="background:transparent; color:#64748b; border:1px solid #475569; padding:6px 14px; border-radius:4px; cursor:pointer; font-size:13px;">Dismiss</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Show banner if no consent given and not dismissed this session
+      if (!localStorage.getItem('cookieConsent') && !sessionStorage.getItem('cookieBannerDismissed')) {
+        document.getElementById('cookieBanner').style.display = 'block';
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
