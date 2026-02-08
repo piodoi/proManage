@@ -1,0 +1,12 @@
+{
+  "name": "promanage-backend",
+  "scripts": {
+    "start": "python passenger_wsgi.py"
+  },
+  "env": {
+    "PYTHONPATH": "."
+  },
+  "dependencies": {
+    "python": "3.11"
+  }
+}

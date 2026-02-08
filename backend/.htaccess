@@ -1,0 +1,43 @@
+# Phusion Passenger Configuration
+# Place this file in your public_html or web root directory
+
+# Enable Passenger
+PassengerEnabled on
+
+# Set the Python interpreter path (adjust to your virtualenv if needed)
+# PassengerPython /home/ultrafinu/virtualenv/promanage/3.11/bin/python
+
+# Application root - path to the directory containing passenger_wsgi.py
+PassengerAppRoot /home/ultrafinu/promanage/backend
+
+# Startup file (Passenger will look for 'application' in this file)
+PassengerStartupFile passenger_wsgi.py
+
+# Application type - use 'wsgi' for Python apps
+PassengerAppType wsgi
+
+# Environment
+SetEnv PASSENGER_APP_ENV production
+
+# Log level (0=errors only, 1=warnings, 2=notices, 3=info)
+PassengerLogLevel 1
+
+# Spawn method - recommended 'smart' for production
+PassengerSpawnMethod smart
+
+# Max pool size - number of application instances
+PassengerMaxPoolSize 2
+
+# Min instances - keep at least this many instances running
+PassengerMinInstances 1
+
+# Friendly error pages (set to 'off' in production for security)
+PassengerFriendlyErrorPages off
+
+# Rewrite rules for API routing
+RewriteEngine On
+
+# Redirect all requests to the Passenger app (except static files if any)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ / [L,QSA]
