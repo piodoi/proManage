@@ -88,7 +88,7 @@ if extra_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.lhr\.life",  # Allow all lhr.life subdomains
+    allow_origin_regex=r"https://.*\.run\.app",  # Allow all run.app subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
