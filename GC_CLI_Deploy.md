@@ -335,9 +335,7 @@ Cloud SQL has a **minimum of 10GB** unfortunately - you can't go lower. But stor
 **Option B: Use a FREE managed database instead:**
 
 1. **PlanetScale** - Free tier: 5GB, MySQL compatible ✨
-2. **Supabase** - Free tier: 500MB PostgreSQL
-3. **Neon** - Free tier: PostgreSQL
-4. **TiDB Cloud** - Free tier: MySQL compatible
+2. **TiDB Cloud** - Free tier: MySQL compatible
 
 ---
 

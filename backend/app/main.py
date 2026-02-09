@@ -38,8 +38,7 @@ load_dotenv()
 import os
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./promanage.db")
 DB_TYPE = "SQLite" if DATABASE_URL.startswith("sqlite") else \
-          "MySQL" if DATABASE_URL.startswith("mysql") else \
-          "PostgreSQL" if DATABASE_URL.startswith("postgresql") else "Unknown"
+          "MySQL" if DATABASE_URL.startswith("mysql") else "Unknown"
 print(f"[Database] Using {DB_TYPE} database")
 
 # Configure logging

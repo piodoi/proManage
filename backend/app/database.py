@@ -24,7 +24,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./promanage.db"
 # Auto-detect database type
 IS_SQLITE = DATABASE_URL.startswith("sqlite")
 IS_MYSQL = DATABASE_URL.startswith("mysql")
-IS_POSTGRESQL = DATABASE_URL.startswith("postgresql")
 
 # Enhanced logging
 print("=" * 70)
@@ -39,7 +38,7 @@ if "@" in safe_url and "://" in safe_url:
             user, _ = creds.split(":", 1)
             safe_url = f"{parts[0]}://{user}:***@{rest}"
 print(f"  URL: {safe_url}")
-print(f"  Type: {'SQLite' if IS_SQLITE else 'MySQL' if IS_MYSQL else 'PostgreSQL' if IS_POSTGRESQL else 'Unknown'}")
+print(f"  Type: {'SQLite' if IS_SQLITE else 'MySQL' if IS_MYSQL else 'Unknown'}")
 print("=" * 70)
 
 # Add +pymysql driver for MySQL if not already specified
@@ -55,12 +54,6 @@ if IS_MYSQL:
     print("[Database] Features: Foreign keys, indexes, ENUM types, connection pooling")
     _db_impl = MySQLDatabase(DATABASE_URL)
     print("[Database] MySQL connection established!")
-elif IS_POSTGRESQL:
-    from app.database_postgresql import PostgreSQLDatabase
-    print("[Database] Using PostgreSQL/Neon with TYPED COLUMNS (relational model)")
-    print("[Database] Features: Foreign keys, indexes, connection pooling, serverless-ready")
-    _db_impl = PostgreSQLDatabase(DATABASE_URL)
-    print("[Database] PostgreSQL connection established!")
 elif IS_SQLITE:
     from app.database_sqlite import SQLiteDatabase
     print("[Database] Using SQLite with TYPED COLUMNS (relational model)")
@@ -97,22 +90,6 @@ class Database:
                         print(f"[Database] MySQL schema is ready!")
             except Exception as e:
                 print(f"[Database] ERROR: {e}")
-        elif IS_POSTGRESQL:
-            try:
-                from sqlalchemy import text
-                with self._impl.engine.connect() as conn:
-                    result = conn.execute(text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"))
-                    table_count = result.fetchone()[0]
-                    print(f"[Database] PostgreSQL: {table_count} tables found in public schema")
-                    if table_count == 0:
-                        print("[Database] WARNING: No tables found!")
-                        print("[Database] Run the schema using Neon MCP or: psql $DATABASE_URL < scripts/postgresql_schema.sql")
-                    elif table_count < 8:
-                        print(f"[Database] WARNING: Only {table_count}/8 tables (incomplete schema?)")
-                    else:
-                        print(f"[Database] PostgreSQL schema is ready!")
-            except Exception as e:
-                print(f"[Database] Schema check: {e}")
         elif IS_SQLITE:
             try:
                 from sqlalchemy import text
