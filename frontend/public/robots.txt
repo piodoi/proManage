@@ -11,6 +11,31 @@ Allow: /terms
 # Dynamic routes that require authentication
 Disallow: /renter/
 Disallow: /confirm-email
+Disallow: /api/
 
-# Static assets
+# Crawl delay for politeness (optional)
+Crawl-delay: 1
+
+# Sitemaps
 Sitemap: https://promanage.urun.me/sitemap.xml
+
+# AI/LLM crawlers - allow for AEO
+User-agent: GPTBot
+Allow: /
+Allow: /features
+
+User-agent: ChatGPT-User
+Allow: /
+Allow: /features
+
+User-agent: Google-Extended
+Allow: /
+Allow: /features
+
+User-agent: Anthropic-AI
+Allow: /
+Allow: /features
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /features

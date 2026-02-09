@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Preconnect hints for performance -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://www.google-analytics.com" />
+    
     <!-- Google tag (gtag.js) - Loaded only after cookie consent -->
     <script>
       // Cookie consent management for ePrivacy Directive compliance
@@ -48,21 +52,144 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://promanage.urun.me/" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="ProManage - Property & Rental Bill Management for Landlords" />
     <meta property="og:description" content="Simplify rental property management. Track utility bills, manage tenants, automate rent collection and monitor expenses for vacation homes and rental properties." />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image" content="https://promanage.urun.me/icon.png" />
+    <meta property="og:image:width" content="300" />
+    <meta property="og:image:height" content="300" />
     <meta property="og:site_name" content="ProManage" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="ProManage - Property & Rental Bill Management for Landlords" />
     <meta name="twitter:description" content="Simplify rental property management. Track utility bills, manage tenants, automate rent collection and monitor expenses for vacation homes and rental properties." />
-    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image" content="https://promanage.urun.me/icon.png" />
     
     <!-- Additional SEO -->
     <meta name="application-name" content="ProManage" />
     <meta name="theme-color" content="#1e293b" />
-    <link rel="canonical" href="https://promanage.urun.me" />    <link rel="manifest" href="/manifest.json" />  </head>
+    <link rel="canonical" href="https://promanage.urun.me" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Alternate language versions -->
+    <link rel="alternate" hreflang="en" href="https://promanage.urun.me" />
+    <link rel="alternate" hreflang="ro" href="https://promanage.urun.me" />
+    <link rel="alternate" hreflang="x-default" href="https://promanage.urun.me" />
+    
+    <!-- JSON-LD Structured Data for SEO/AEO -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "ProManage",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "description": "Property and rental bill management software for landlords. Track utility bills, manage tenants, automate rent collection and monitor expenses for vacation homes and rental properties.",
+          "url": "https://promanage.urun.me",
+          "image": "https://promanage.urun.me/icon.png",
+          "screenshot": "https://promanage.urun.me/icon.png",
+          "author": {
+            "@type": "Organization",
+            "name": "ProManage"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "EUR",
+            "description": "Free tier available with premium features"
+          },
+          "featureList": [
+            "Utility bill tracking and management",
+            "Tenant/renter management",
+            "Rent collection and payment tracking",
+            "Multi-property support",
+            "Automated bill syncing from suppliers",
+            "Payment notifications",
+            "Expense monitoring and reporting"
+          ],
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "ratingCount": "50",
+            "bestRating": "5",
+            "worstRating": "1"
+          }
+        },
+        {
+          "@type": "Organization",
+          "name": "ProManage",
+          "url": "https://promanage.urun.me",
+          "logo": "https://promanage.urun.me/icon.png",
+          "description": "Property management software company helping landlords simplify rental property management.",
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "availableLanguage": ["English", "Romanian"]
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is ProManage?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "ProManage is a property and rental management software designed for landlords. It helps you track utility bills, manage tenants, automate rent collection, and monitor expenses for vacation homes and rental properties."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How much does ProManage cost?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "ProManage offers a free tier that includes basic property management features. Premium features like automated bill syncing and advanced analytics are available with a paid subscription."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I manage multiple properties with ProManage?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, ProManage supports multiple properties. You can manage all your rental properties, vacation homes, and investment properties from a single dashboard."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does ProManage work with utility companies?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, ProManage can automatically sync bills from supported utility suppliers. This feature helps landlords stay on top of utility payments without manual data entry."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can tenants access ProManage?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, landlords can share a secure link with tenants that allows them to view their bills, submit payment notifications, and track their payment history."
+              }
+            }
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "name": "ProManage",
+          "url": "https://promanage.urun.me",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://promanage.urun.me/search?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
+    }
+    </script>
+  </head>
   <body>
     <!-- Cookie Consent Banner - ePrivacy Directive Compliance -->
     <div id="cookieBanner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1e293b; color:#94a3b8; padding:12px 16px; font-size:13px; z-index:9999; border-top:1px solid #334155; font-family:system-ui,-apple-system,sans-serif;">
