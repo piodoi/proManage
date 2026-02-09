@@ -307,6 +307,13 @@ async def handle_checkout_completed(session):
     db.save_user(user)
     
     logger.info(f"[Stripe] Activated subscription for user {user_id}, tier: {quantity}")
+    
+    # Check and apply referral reward if user was referred
+    try:
+        from app.routes.referral_routes import check_and_apply_referral_reward
+        check_and_apply_referral_reward(user_id)
+    except Exception as e:
+        logger.error(f"[Stripe] Error applying referral reward: {e}")
 
 
 async def handle_subscription_updated(subscription):

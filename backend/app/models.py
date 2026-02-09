@@ -158,6 +158,24 @@ class User(BaseModel):
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE  # Deprecated, use subscription_tier
     subscription_tier: int = 0  # 0 = off, 1 = on (reserved for future tiers)
     subscription_expires: Optional[datetime] = None
+    referral_code: Optional[str] = None  # Unique code for sharing
+    referred_by: Optional[str] = None  # User ID of referrer
+    referral_reward_applied: bool = False  # Whether referrer got their reward
+    referral_signup_date: Optional[datetime] = None  # When this user signed up via referral
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReferralReward(BaseModel):
+    """Track referral rewards and their status"""
+    id: str = Field(default_factory=gen_id)
+    referrer_id: str  # User who shared the referral link
+    referred_user_id: str  # User who signed up via link
+    referred_user_email: str
+    signup_date: datetime
+    subscription_date: Optional[datetime] = None  # When referred user subscribed
+    reward_applied: bool = False  # Whether the reward was given
+    reward_applied_date: Optional[datetime] = None
+    reward_type: str = "skip_month"  # Type of reward
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

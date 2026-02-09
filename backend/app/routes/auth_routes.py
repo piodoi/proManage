@@ -4,6 +4,7 @@ import secrets
 import time
 from collections import defaultdict
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 import bcrypt
 import httpx
 
@@ -25,6 +26,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str
+    referral_code: Optional[str] = None  # Optional referral code
 
 
 class LoginRequest(BaseModel):
@@ -104,12 +106,26 @@ async def auth_register(data: RegisterRequest, request: Request):
     hashed = hash_password(data.password)
     role = UserRole.ADMIN if not has_any_admin() else UserRole.LANDLORD
     
+    # Validate referral code if provided
+    referrer_id = None
+    if data.referral_code:
+        referrer = db.execute(
+            "SELECT id FROM users WHERE referral_code = ?",
+            (data.referral_code,)
+        ).fetchone()
+        if referrer:
+            referrer_id = referrer['id']
+            logger.info(f"[Auth] Valid referral code used: {data.referral_code}")
+        else:
+            logger.warning(f"[Auth] Invalid referral code: {data.referral_code}")
+    
     confirmation_token = generate_confirmation_token()
     email_confirmation_tokens[confirmation_token] = {
         "email": data.email,
         "name": data.name,
         "password_hash": hashed,
         "role": role,
+        "referrer_id": referrer_id,  # Store referrer ID for later
         "created_at": time.time(),
     }
     
@@ -153,14 +169,39 @@ async def confirm_email(data: ConfirmEmailRequest, request: Request):
         raise HTTPException(status_code=400, detail="Email already registered")
     
     role = UserRole.ADMIN if not has_any_admin() else token_data["role"]
+    referrer_id = token_data.get("referrer_id")
     
     user = User(
         email=token_data["email"],
         name=token_data["name"],
         role=role,
         password_hash=token_data["password_hash"],
+        referred_by=referrer_id,
+        referral_signup_date=datetime.utcnow() if referrer_id else None,
     )
     db.save_user(user)
+    
+    # Create referral reward record if user was referred
+    if referrer_id:
+        from app.models import ReferralReward, gen_id
+        from datetime import datetime
+        
+        reward = ReferralReward(
+            id=gen_id(),
+            referrer_id=referrer_id,
+            referred_user_id=user.id,
+            referred_user_email=user.email,
+            signup_date=datetime.utcnow(),
+        )
+        
+        db.execute("""
+            INSERT INTO referral_rewards 
+            (id, referrer_id, referred_user_id, referred_user_email, signup_date, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (reward.id, reward.referrer_id, reward.referred_user_id, 
+              reward.referred_user_email, reward.signup_date, reward.created_at))
+        db.commit()
+        logger.info(f"[Auth] Referral reward created for referrer: {referrer_id}")
     
     del email_confirmation_tokens[data.token]
     

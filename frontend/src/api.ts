@@ -434,6 +434,31 @@ export const api = {
   textPatterns: {
     list: (token: string) => request<{ patterns: TextPattern[] }>('/text-patterns/list-patterns', { token }),
   },
+
+  referrals: {
+    getLink: (token: string, frontendUrl?: string) => 
+      request<{ referral_code: string; referral_link: string; total_referrals: number; pending_rewards: number; applied_rewards: number }>(
+        `/referrals/link${frontendUrl ? `?frontend_url=${encodeURIComponent(frontendUrl)}` : ''}`, 
+        { token }
+      ),
+    getStats: (token: string) => 
+      request<{ 
+        total_referrals: number; 
+        pending_subscriptions: number; 
+        pending_rewards: number; 
+        applied_rewards: number; 
+        referrals: Array<{
+          id: string;
+          user_name: string;
+          user_email: string;
+          signup_date: string;
+          subscription_date: string | null;
+          has_subscription: boolean;
+          reward_applied: boolean;
+          reward_applied_date: string | null;
+        }> 
+      }>('/referrals/stats', { token }),
+  },
 };
 
 // Centralized Bill Type definition - single source of truth
