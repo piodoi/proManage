@@ -3,7 +3,10 @@
     "allRightsReserved": "Toate drepturile rezervate.",
     "privacyPolicy": "Politica de Confidențialitate",
     "termsOfService": "Termeni și Condiții",
-    "contactSupport": "Contactează Suportul"
+    "contactSupport": "Contactează Suportul",
+    "switchPrefix": "Pentru o experiență mai rapidă folosiți",
+    "usSiteName": "versiunea găzduită în SUA (iManage)",
+    "euSiteName": "versiunea găzduită în UE (ProManage)"
   },
   "privacy": {
     "title": "Politica de Confidențialitate",

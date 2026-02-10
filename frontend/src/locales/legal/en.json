@@ -3,7 +3,10 @@
     "allRightsReserved": "All rights reserved.",
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
-    "contactSupport": "Contact Support"
+    "contactSupport": "Contact Support",
+    "switchPrefix": "For a faster app use the",
+    "usSiteName": "US hosted version (iManage)",
+    "euSiteName": "EU hosted version (ProManage)"
   },
   "privacy": {
     "title": "Privacy Policy",

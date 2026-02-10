@@ -3,7 +3,10 @@
     "allRightsReserved": "Tous droits réservés.",
     "privacyPolicy": "Politique de confidentialité",
     "termsOfService": "Conditions d'utilisation",
-    "contactSupport": "Contacter le support"
+    "contactSupport": "Contacter le support",
+    "switchPrefix": "Pour une application plus rapide, utilisez",
+    "usSiteName": "la version hébergée aux États-Unis (iManage)",
+    "euSiteName": "la version hébergée en UE (ProManage)"
   },
   "privacy": {
     "title": "Politique de confidentialité",
