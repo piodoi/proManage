@@ -235,7 +235,8 @@
     "status": {
       "pending": "Pending",
       "paid": "Paid",
-      "overdue": "Overdue"
+      "overdue": "Overdue",
+      "pending_payment": "To Confirm"
     },
     "allProperty": "All / Property",
     "amountRequired": "Please fill in amount",

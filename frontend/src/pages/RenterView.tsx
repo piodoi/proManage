@@ -95,9 +95,20 @@ export default function RenterView() {
   };
 
   // Helper function to sort bills: unpaid (ascending by due date), then paid (descending by due date)
+  // Note: this function will be called before getEffectiveStatus is defined, so we'll move the logic inline
   const sortBillsForDisplay = (billItems: RenterBill[]): RenterBill[] => {
-    const unpaidBills = billItems.filter(item => item.bill.status !== 'paid');
-    const paidBills = billItems.filter(item => item.bill.status === 'paid');
+    const unpaidBills = billItems.filter(item => {
+      // Check if there are pending notifications (will eventually be paid)
+      const hasPendingNotification = item.has_pending_notification || 
+        (item.notifications || []).some(n => n.status === 'pending');
+      // Treat pending_payment as unpaid (they're waiting for confirmation)
+      return item.bill.status !== 'paid' || hasPendingNotification;
+    });
+    const paidBills = billItems.filter(item => {
+      const hasPendingNotification = item.has_pending_notification || 
+        (item.notifications || []).some(n => n.status === 'pending');
+      return item.bill.status === 'paid' && !hasPendingNotification;
+    });
     
     // Sort unpaid bills by due_date ascending (soonest first)
     unpaidBills.sort((a, b) =>
@@ -152,8 +163,14 @@ export default function RenterView() {
 
     // Sort groups: groups with unpaid bills first (by earliest due date), then groups with only paid bills (by most recent due date)
     groups.sort((a, b) => {
-      const aHasUnpaid = a.latestBill.bill.status !== 'paid' || a.olderBills.some(item => item.bill.status !== 'paid');
-      const bHasUnpaid = b.latestBill.bill.status !== 'paid' || b.olderBills.some(item => item.bill.status !== 'paid');
+      const getHasUnpaid = (bill: RenterBill) => {
+        const hasPendingNotification = bill.has_pending_notification || 
+          (bill.notifications || []).some(n => n.status === 'pending');
+        return bill.bill.status !== 'paid' || hasPendingNotification;
+      };
+      
+      const aHasUnpaid = getHasUnpaid(a.latestBill) || a.olderBills.some(item => getHasUnpaid(item));
+      const bHasUnpaid = getHasUnpaid(b.latestBill) || b.olderBills.some(item => getHasUnpaid(item));
       
       if (aHasUnpaid && !bHasUnpaid) return -1;
       if (!aHasUnpaid && bHasUnpaid) return 1;
@@ -333,28 +350,15 @@ export default function RenterView() {
       
       await api.renter.notifyPayment(token, data);
       
-      // Optimistically update by adding the pending notification
-      // Don't modify 'remaining' directly - getEffectiveRemaining() will calculate it
-      setBills(prevBills => prevBills.map(bill => {
-        if (bill.bill.id === payingBill.bill.id) {
-          return {
-            ...bill,
-            has_pending_notification: true,
-            notifications: [
-              ...(bill.notifications || []),
-              {
-                id: 'pending-' + Date.now(),
-                status: 'pending' as const,
-                amount: amount,
-                currency: paymentCurrency,
-                created_at: new Date().toISOString(),
-                renter_note: paymentNote || undefined,
-              }
-            ]
-          };
-        }
-        return bill;
-      }));
+      // Refresh bills, balance, and info to show updated status
+      const [infoData, billsData, balanceData] = await Promise.all([
+        api.renter.info(token),
+        api.renter.bills(token),
+        api.renter.balance(token),
+      ]);
+      setInfo(infoData);
+      setBills(billsData);
+      setBalance(balanceData);
       
       setPayingBill(null);
       setPaymentNote('');
@@ -568,6 +572,28 @@ export default function RenterView() {
     return Math.max(0, bill.remaining - pendingAmountInBillCurrency);
   };
 
+  // Calculate effective bill status considering pending notifications
+  // If there are pending notifications that would fully pay the bill, show as "paid"
+  // Otherwise show the actual bill status
+  const getEffectiveStatus = (bill: RenterBill): string => {
+    // If bill is already confirmed as paid, show as paid
+    if (bill.bill.status === 'paid') {
+      return 'paid';
+    }
+    
+    // Check if there are pending notifications from this renter
+    const hasPendingNotification = bill.has_pending_notification || 
+      (bill.notifications || []).some(n => n.status === 'pending');
+    
+    // If there's a pending notification, show as "pending_payment" (awaiting confirmation)
+    if (hasPendingNotification) {
+      return 'pending_payment';
+    }
+    
+    // Otherwise return the actual bill status
+    return bill.bill.status;
+  };
+
   // Calculate RON amount from foreign currency
   const getAmountInRon = (amount: number, currency: string | undefined) => {
     if (!currency || currency === 'RON' || !balance?.exchange_rates) {
@@ -757,8 +783,12 @@ export default function RenterView() {
                   {groupedBills.map((group) => {
                     const isExpanded = expandedGroups?.has(group.groupKey) ?? false;
                     const hasOlderBills = group.olderBills.length > 0;
-                    // Check if all older bills are paid
-                    const allOlderBillsPaid = group.olderBills.every(item => item.bill.status === 'paid');
+                    // Check if all older bills are paid (and no pending notifications)
+                    const allOlderBillsPaid = group.olderBills.every(item => {
+                      const hasPendingNotification = item.has_pending_notification || 
+                        (item.notifications || []).some(n => n.status === 'pending');
+                      return item.bill.status === 'paid' && !hasPendingNotification;
+                    });
 
                     // Render function for a single bill row
                     const renderBillRow = (item: RenterBill, isGroupHeader: boolean = false) => (
@@ -801,20 +831,20 @@ export default function RenterView() {
                             <span>{item.bill.amount.toFixed(2)} RON</span>
                           )}
                         </TableCell>
-                        <TableCell className={item.bill.status === 'paid' ? 'text-green-400' : item.remaining > 0 ? 'text-amber-400' : 'text-green-400'}>
-                          {item.bill.status === 'paid' ? (
+                        <TableCell className={getEffectiveStatus(item) === 'paid' || getEffectiveRemaining(item) === 0 ? 'text-green-400' : getEffectiveRemaining(item) > 0 ? 'text-amber-400' : 'text-green-400'}>
+                          {getEffectiveStatus(item) === 'paid' || getEffectiveRemaining(item) === 0 ? (
                             '0.00'
                           ) : item.bill.currency && item.bill.currency !== 'RON' ? (
                             <div>
-                              <div>{item.remaining.toFixed(2)} {item.bill.currency}</div>
+                              <div>{getEffectiveRemaining(item).toFixed(2)} {item.bill.currency}</div>
                               {balance?.exchange_rates && (
                                 <div className="text-xs text-slate-400">
-                                  {(item.remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
+                                  {(getEffectiveRemaining(item) * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)} RON
                                 </div>
                               )}
                             </div>
                           ) : (
-                            <span>{item.remaining.toFixed(2)} RON</span>
+                            <span>{getEffectiveRemaining(item).toFixed(2)} RON</span>
                           )}
                         </TableCell>
                         <TableCell className="text-slate-300">
@@ -822,16 +852,19 @@ export default function RenterView() {
                         </TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded text-xs ${
-                            item.bill.status === 'paid' ? 'bg-green-900 text-green-200' :
-                            item.bill.status === 'overdue' ? 'bg-red-900 text-red-200' :
+                            getEffectiveStatus(item) === 'paid' ? 'bg-green-900 text-green-200' :
+                            getEffectiveStatus(item) === 'pending_payment' ? 'bg-blue-900 text-blue-200' :
+                            getEffectiveStatus(item) === 'overdue' ? 'bg-red-900 text-red-200' :
                             'bg-amber-900 text-amber-200'
                           }`}>
-                            {t(`bill.status.${item.bill.status}`)}
+                            {getEffectiveStatus(item) === 'pending_payment' 
+                              ? t('bill.status.pending_payment') || 'Awaiting Confirmation'
+                              : t(`bill.status.${getEffectiveStatus(item)}`)}
                           </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {item.bill.status !== 'paid' && (
+                            {getEffectiveStatus(item) !== 'paid' && getEffectiveStatus(item) !== 'pending_payment' && (
                               <>
                                 <Button
                                   size="sm"

@@ -243,7 +243,8 @@
     "status": {
       "pending": "Urmează",
       "paid": "Plătită",
-      "overdue": "Restanță"
+      "overdue": "Restanță",
+      "pending_payment": "De Confirmat"
     },
     "allProperty": "Toți / Proprietate",
     "amountRequired": "Te rog completează suma",

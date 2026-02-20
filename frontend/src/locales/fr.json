@@ -235,7 +235,8 @@
     "status": {
       "pending": "En attente",
       "paid": "Payé",
-      "overdue": "En retard"
+      "overdue": "En retard",
+      "pending_payment": "À confirmer"
     },
     "allProperty": "Tout / Propriété",
     "amountRequired": "Veuillez remplir le montant",
