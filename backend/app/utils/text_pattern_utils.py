@@ -338,6 +338,31 @@ def extract_with_pattern(pdf_bytes: bytes, pattern: Dict[str, Any]) -> Dict[str,
     if 'legal_name' not in extracted_data and pattern_supplier:
         extracted_data['legal_name'] = pattern_supplier
     
+    # Build payment_details from extracted fields
+    # Use client_code or payment_details string value directly, not wrapped in dict
+    payment_details_value = None
+    
+    if 'client_code' in extracted_data and extracted_data['client_code']:
+        payment_details_value = extracted_data.pop('client_code')
+    
+    if 'payment_details' in extracted_data and extracted_data['payment_details']:
+        pd_value = extracted_data.pop('payment_details')
+        if isinstance(pd_value, str) and pd_value.strip():
+            # If we already have a value from client_code, concatenate
+            if payment_details_value:
+                payment_details_value = f"{payment_details_value} | {pd_value}"
+            else:
+                payment_details_value = pd_value
+        elif isinstance(pd_value, dict):
+            # If dict provided, use it as-is
+            payment_details_value = pd_value
+    
+    # Only set payment_details if we have a non-empty value
+    if payment_details_value:
+        extracted_data['payment_details'] = payment_details_value
+    
+    return extracted_data
+    
     return extracted_data
 
 

@@ -515,33 +515,62 @@ export default function RenterView() {
   // Get payment info for the current bill
   const getPaymentInfo = (bill: RenterBill | null) => {
     if (!bill) return null;
+
+    const getPaymentDetailsReference = (paymentDetails: any): string | null => {
+      if (!paymentDetails) return null;
+
+      // Handle string payment_details directly
+      if (typeof paymentDetails === 'string') {
+        return paymentDetails.trim() || null;
+      }
+
+      // Handle object payment_details
+      if (typeof paymentDetails === 'object') {
+        const priorityKeys = ['client_code', 'reference', 'payment_reference'];
+        for (const key of priorityKeys) {
+          const value = paymentDetails[key];
+          if (typeof value === 'string' && value.trim()) return value.trim();
+          if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        }
+
+        for (const value of Object.values(paymentDetails)) {
+          if (typeof value === 'string' && value.trim()) return value.trim();
+          if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        }
+      }
+
+      return null;
+    };
     
     // For rent bills or direct debit bills, use landlord's IBAN and name from preferences
     // (landlord pays direct debit bills, so renter pays landlord)
     if (bill.bill.bill_type === 'rent' || bill.is_direct_debit) {
       const selectedIban = getSelectedIban();
       if (selectedIban && info?.landlord_name) {
+        const paymentDetailsReference = getPaymentDetailsReference(bill.bill.payment_details);
+        const contractReference = bill.bill.contract_id || bill.bill.description;
         return {
           iban: selectedIban.iban,
           ibanCurrency: selectedIban.currency,
           beneficiary: info.landlord_name,
-          reference: bill.bill.contract_id || bill.bill.description,
-          reference2: null, // No second reference for rent/direct debit
+          reference: paymentDetailsReference || contractReference,
+          reference2: paymentDetailsReference && bill.bill.contract_id ? bill.bill.contract_id : null,
         };
       }
       return null;
     }
     
     // For other bills, use bill's IBAN and legal_name
-    // Reference 1 = contract_id, Reference 2 = payment_details.client_code (if available)
+    // Reference 1 = payment_details (if available), Reference 2 = contract_id (if both exist)
     if (bill.bill.iban && bill.bill.legal_name) {
-      const paymentDetails = bill.bill.payment_details as { client_code?: string } | null;
+      const paymentDetailsReference = getPaymentDetailsReference(bill.bill.payment_details);
+      const contractReference = bill.bill.contract_id || null;
       return {
         iban: bill.bill.iban,
         ibanCurrency: null,
         beneficiary: bill.bill.legal_name,
-        reference: bill.bill.contract_id || bill.bill.bill_number || bill.bill.id,
-        reference2: paymentDetails?.client_code || null,
+        reference: paymentDetailsReference || contractReference || bill.bill.bill_number || bill.bill.id,
+        reference2: paymentDetailsReference && contractReference ? contractReference : null,
       };
     }
     
@@ -772,6 +801,7 @@ export default function RenterView() {
                   <TableRow className="border-slate-700">
                     <TableHead className="text-slate-400 text-xs sm:text-sm">{t('common.description')}</TableHead>
                     <TableHead className="text-slate-400 text-xs sm:text-sm">{t('bill.billType')}</TableHead>
+                    <TableHead className="text-slate-400 text-xs sm:text-sm">{t('bill.billNumber')}</TableHead>
                     <TableHead className="text-slate-400 text-xs sm:text-sm">{t('common.amount')}</TableHead>
                     <TableHead className="text-slate-400 text-xs sm:text-sm">{t('renter.remaining')}</TableHead>
                     <TableHead className="text-slate-400 text-xs sm:text-sm">{t('bill.dueDate')}</TableHead>
@@ -817,6 +847,7 @@ export default function RenterView() {
                           </div>
                         </TableCell>
                         <TableCell className="text-slate-300">{t(`bill.${item.bill.bill_type}`)}</TableCell>
+                        <TableCell className="text-slate-300">{item.bill.bill_number || '-'}</TableCell>
                         <TableCell className="text-slate-200">
                           {item.bill.currency && item.bill.currency !== 'RON' ? (
                             <div>
@@ -1440,18 +1471,41 @@ export default function RenterView() {
                     </div>
                   )}
                   
-                  {/* Contract ID - only show for non-direct-debit bills */}
-                  {!payingBill?.is_direct_debit && payingBill?.bill.contract_id && (
+                  {/* Reference - payment_details first, then contract_id */}
+                  {(() => {
+                    if (payingBill?.is_direct_debit || !payingBill?.bill) return null;
+
+                    const paymentDetails = payingBill.bill.payment_details as Record<string, unknown> | undefined;
+                    const paymentDetailsReference = (() => {
+                      if (!paymentDetails || typeof paymentDetails !== 'object') return null;
+                      const priorityKeys = ['client_code', 'reference', 'payment_reference'];
+                      for (const key of priorityKeys) {
+                        const value = paymentDetails[key];
+                        if (typeof value === 'string' && value.trim()) return value.trim();
+                        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+                      }
+                      for (const value of Object.values(paymentDetails)) {
+                        if (typeof value === 'string' && value.trim()) return value.trim();
+                        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+                      }
+                      return null;
+                    })();
+                    const contractReference = payingBill.bill.contract_id || null;
+                    const primaryReference = paymentDetailsReference || contractReference;
+
+                    if (!primaryReference) return null;
+
+                    return (
                     <div className="space-y-1">
                       <p className="text-slate-500 text-xs uppercase">{t('renter.reference') || 'Reference'}</p>
                       <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
-                        <span className="text-slate-200 font-mono text-sm">{payingBill.bill.contract_id}</span>
+                        <span className="text-slate-200 font-mono text-sm">{primaryReference}</span>
                         <button
-                          onClick={() => copyToClipboard(payingBill.bill.contract_id || '', 'contractId')}
+                          onClick={() => copyToClipboard(primaryReference, 'referenceFallback')}
                           className="text-slate-400 hover:text-slate-200 transition-colors p-1"
                           title={t('common.copy') || 'Copy'}
                         >
-                          {copiedField === 'contractId' ? (
+                          {copiedField === 'referenceFallback' ? (
                             <Check className="w-4 h-4 text-emerald-400" />
                           ) : (
                             <Copy className="w-4 h-4" />
@@ -1459,23 +1513,41 @@ export default function RenterView() {
                         </button>
                       </div>
                     </div>
-                  )}
-                  
-                  {/* Payment Details - client_code */}
+                    );
+                  })()}
+
+                  {/* Reference 2 - contract_id when payment_details is used as primary */}
                   {(() => {
-                    const paymentDetails = payingBill?.bill.payment_details as { client_code?: string } | null;
-                    if (paymentDetails?.client_code) {
+                    if (payingBill?.is_direct_debit || !payingBill?.bill) return null;
+
+                    const paymentDetails = payingBill.bill.payment_details as Record<string, unknown> | undefined;
+                    const paymentDetailsReference = (() => {
+                      if (!paymentDetails || typeof paymentDetails !== 'object') return null;
+                      const priorityKeys = ['client_code', 'reference', 'payment_reference'];
+                      for (const key of priorityKeys) {
+                        const value = paymentDetails[key];
+                        if (typeof value === 'string' && value.trim()) return value.trim();
+                        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+                      }
+                      for (const value of Object.values(paymentDetails)) {
+                        if (typeof value === 'string' && value.trim()) return value.trim();
+                        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+                      }
+                      return null;
+                    })();
+
+                    if (paymentDetailsReference && payingBill.bill.contract_id) {
                       return (
                         <div className="space-y-1">
                           <p className="text-slate-500 text-xs uppercase">{t('renter.reference2') || 'Reference 2'}</p>
                           <div className="flex items-center justify-between bg-slate-800 rounded px-3 py-2">
-                            <span className="text-slate-200 font-mono text-sm">{paymentDetails.client_code}</span>
+                            <span className="text-slate-200 font-mono text-sm">{payingBill.bill.contract_id}</span>
                             <button
-                              onClick={() => copyToClipboard(paymentDetails.client_code || '', 'clientCode')}
+                              onClick={() => copyToClipboard(payingBill.bill.contract_id || '', 'contractId2')}
                               className="text-slate-400 hover:text-slate-200 transition-colors p-1"
                               title={t('common.copy') || 'Copy'}
                             >
-                              {copiedField === 'clientCode' ? (
+                              {copiedField === 'contractId2' ? (
                                 <Check className="w-4 h-4 text-emerald-400" />
                               ) : (
                                 <Copy className="w-4 h-4" />

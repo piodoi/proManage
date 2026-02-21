@@ -353,8 +353,6 @@ async def parse_bill_pdf(
     if not extracted_data:
         raise HTTPException(status_code=400, detail="Could not extract bill data from PDF. Please ensure the PDF matches a known supplier format.")
     
-    logger.info(f"[PDF Parse] Result: pattern={pattern_name}, bill_type={pattern_bill_type}, amount={extracted_data.get('amount')}, due_date={extracted_data.get('due_date')}, bill_number={extracted_data.get('bill_number')}")
-    
     # Convert extracted_data to match old format for compatibility
     # Use pattern name as description (will be used as bill description)
     result = {
@@ -366,6 +364,7 @@ async def parse_bill_pdf(
         "legal_name": extracted_data.get("legal_name"),  # Legal name of supplier
         "contract_id": extracted_data.get("contract_id"),
         "client_code": extracted_data.get("client_code"),  # Client code for payment details
+        "payment_details": extracted_data.get("payment_details"),  # Payment details from extraction
         "address": extracted_data.get("address"),
         "business_name": extracted_data.get("legal_name") or extracted_data.get("description"),
         "matched_pattern_id": pattern_id,
@@ -632,13 +631,12 @@ async def create_bill_from_pdf(
     pattern_bill_type = data.get("matched_pattern_bill_type") or data.get("bill_type", "utilities")
     resolved_bill_type = resolve_bill_type(pattern_bill_type)
     
-    # Handle renter_id - convert 'all' to None, then auto-assign if single renter
+    # Handle renter_id for PDF imports.
+    # Keep PDF-created utility bills property-wide by default so they group consistently
+    # with existing supplier/property bills. Only use renter_id when explicitly provided.
     renter_id = data.get("renter_id")
     if renter_id == "all" or not renter_id:
         renter_id = None
-    
-    # Auto-assign renter if property has only one renter
-    renter_id = auto_assign_renter_if_single(property_id, renter_id)
     
     # Get the new amount
     new_amount = float(data.get("amount", 0))
@@ -687,11 +685,21 @@ async def create_bill_from_pdf(
                             "message": f"Bill with number '{bill_number}' already exists with different amount: existing={existing_bill.amount}, new={new_amount}. Use 'force_update' to update."
                         }
     
-    # Build payment_details from client_code if available
+    # Build payment_details from payload (can be string or dict)
     payment_details = None
+    payload_payment_details = data.get("payment_details")
+    
+    # Accept payment_details as string or dict
+    if payload_payment_details:
+        if isinstance(payload_payment_details, str):
+            payment_details = payload_payment_details.strip()
+        elif isinstance(payload_payment_details, dict):
+            payment_details = payload_payment_details
+    
+    # If no payment_details but we have client_code, use it
     client_code = data.get("client_code")
-    if client_code:
-        payment_details = {"client_code": client_code}
+    if not payment_details and client_code:
+        payment_details = client_code.strip()
     
     # Create bill with all available fields
     bill = Bill(

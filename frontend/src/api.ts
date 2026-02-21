@@ -865,6 +865,8 @@ export type StripeSubscription = {
 export type ExtractionResult = {
   iban?: string;
   contract_id?: string;
+  client_code?: string;
+  payment_details?: Record<string, unknown>;
   bill_number?: string;
   amount?: number;
   currency?: string;  // Extracted currency (e.g., RON, USD, EUR)

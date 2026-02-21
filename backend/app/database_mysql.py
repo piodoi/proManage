@@ -13,6 +13,7 @@ Key differences from database.py:
 
 import os
 import json
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy import create_engine, text
@@ -23,6 +24,8 @@ from app.models import (
     Supplier, PropertySupplier,
     UserPreferences, PaymentNotificationStatus
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MySQLDatabase:
@@ -459,6 +462,9 @@ class MySQLDatabase:
             # Convert renter_id='all' to None
             renter_id = bill.renter_id if bill.renter_id and bill.renter_id != 'all' else None
             
+            # Serialize payment_details for DB
+            payment_details_json = json.dumps(bill.payment_details) if bill.payment_details else None
+            
             conn.execute(
                 text("""
                     INSERT INTO bills (
@@ -487,7 +493,7 @@ class MySQLDatabase:
                     "bill_number": bill.bill_number,
                     "extraction_pattern_id": bill.extraction_pattern_id,
                     "contract_id": bill.contract_id,
-                    "payment_details": json.dumps(bill.payment_details) if bill.payment_details else None,
+                    "payment_details": payment_details_json,
                     "status": bill.status or "pending",
                     "created_at": bill.created_at or datetime.now().isoformat()
                 }

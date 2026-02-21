@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, date
 from enum import Enum
 import uuid
@@ -209,7 +209,7 @@ class Bill(BaseModel):
     extraction_pattern_id: Optional[str] = None  # ID of the extraction pattern used to parse this bill
     property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id (links to property-supplier relationship)
     contract_id: Optional[str] = None  # Contract/client ID extracted from PDF for payment
-    payment_details: Optional[dict] = None  # Additional payment details (e.g., client_code) stored as JSON
+    payment_details: Optional[Union[str, dict]] = None  # Additional payment details (string or JSON dict)
     status: BillStatus = BillStatus.PENDING
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -404,7 +404,7 @@ class BillUpdate(BaseModel):
     bill_number: Optional[str] = None
     extraction_pattern_id: Optional[str] = None
     contract_id: Optional[str] = None
-    payment_details: Optional[dict] = None
+    payment_details: Optional[Union[str, dict]] = None
     status: Optional[BillStatus] = None
     property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id
 

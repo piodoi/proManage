@@ -298,6 +298,8 @@ export default function PropertyBillsView({
         matched_pattern_name: result.matched_pattern_name,
         matched_pattern_supplier: supplier || result.matched_pattern_supplier,
         matched_pattern_bill_type: (result as any).matched_pattern_bill_type,
+        client_code: (result as any).client_code,
+        payment_details: (result as any).payment_details,
         // Include PDF data for saving
         pdf_data_base64: pdfDataBase64,
       };
