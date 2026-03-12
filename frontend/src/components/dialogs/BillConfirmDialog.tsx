@@ -21,6 +21,9 @@ export default function BillConfirmDialog({
   onConfirm,
 }: BillConfirmDialogProps) {
   const { t } = useI18n();
+
+  const hasNumericAmount = (amount: ExtractionResult['amount']): boolean =>
+    typeof amount === 'number' && Number.isFinite(amount);
   
   const hasAddressWarning = pdfResult && !pdfResult.address_matches && pdfResult.address_warning;
   
@@ -41,8 +44,24 @@ export default function BillConfirmDialog({
   
   // Calculate match percentage based on key fields with address token weighting
   const calculateMatchPercentage = (result: ExtractionResult): { percentage: number; found: number; total: number } => {
+    if (
+      typeof result.matched_fields === 'number' &&
+      typeof result.total_fields === 'number' &&
+      result.total_fields > 0
+    ) {
+      const percentage = typeof result.match_percentage === 'number'
+        ? Math.round(result.match_percentage)
+        : Math.round((result.matched_fields / result.total_fields) * 100);
+
+      return {
+        percentage,
+        found: result.matched_fields,
+        total: result.total_fields,
+      };
+    }
+
     const fields = [
-      { name: 'amount', hasValue: result.amount !== undefined && result.amount !== null && result.amount > 0 },
+      { name: 'amount', hasValue: hasNumericAmount(result.amount) },
       { name: 'address', hasValue: !!result.address },
       { name: 'bill_number', hasValue: !!result.bill_number },
       { name: 'due_date', hasValue: !!result.due_date },
@@ -87,7 +106,7 @@ export default function BillConfirmDialog({
   };
   
   // Check if a value is missing/empty
-  const hasAmount = pdfResult?.amount !== undefined && pdfResult?.amount !== null && pdfResult.amount > 0;
+  const hasAmount = hasNumericAmount(pdfResult?.amount);
   const hasAddress = !!pdfResult?.address;
   
   return (
@@ -181,7 +200,7 @@ export default function BillConfirmDialog({
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">{t('common.amount')}</span>
                   <span className={`font-medium ${hasAmount ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {hasAmount ? `${pdfResult.amount!.toFixed(2)} ${pdfResult.currency || getDefaultCurrency()}` : t('billConfirm.notFound')}
+                    {hasAmount ? `${pdfResult!.amount!.toFixed(2)} ${pdfResult!.currency || getDefaultCurrency()}` : t('billConfirm.notFound')}
                   </span>
                 </div>
                 

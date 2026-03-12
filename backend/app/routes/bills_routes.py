@@ -372,6 +372,9 @@ async def parse_bill_pdf(
         "matched_pattern_name": pattern_name,
         "matched_pattern_supplier": extracted_data.get("legal_name") or pattern_name,  # Supplier from pattern
         "matched_pattern_bill_type": pattern_bill_type,  # Bill type from pattern
+        "matched_fields": extracted_data.get("matched_fields"),
+        "total_fields": extracted_data.get("total_fields"),
+        "match_percentage": extracted_data.get("match_percentage"),
     }
     
     # Check if extracted address matches property address

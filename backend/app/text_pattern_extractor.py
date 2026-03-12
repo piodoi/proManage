@@ -199,5 +199,8 @@ def extract_bill_from_pdf_auto(pdf_bytes: bytes, user_id: Optional[str] = None) 
     logger.info(f"[Text Pattern] Best match: {pattern_name} ({best_match['match_percentage']:.1f}% match, bill_type={pattern_bill_type}, source={source})")
     
     # Return the already-extracted data from matching phase
-    extracted_data = best_match.get('extracted_data', {})
+    extracted_data = dict(best_match.get('extracted_data', {}))
+    extracted_data['matched_fields'] = best_match.get('matched_fields', 0)
+    extracted_data['total_fields'] = best_match.get('total_fields', 0)
+    extracted_data['match_percentage'] = best_match.get('match_percentage', 0)
     return extracted_data, pattern_id, pattern_name, pattern_bill_type

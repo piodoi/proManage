@@ -285,7 +285,7 @@ export default function PropertyBillsView({
       const billData: any = {
         property_id: propertyId,
         renter_id: 'all', // Default to all/property
-        amount: result.amount || 0,
+        amount: result.amount ?? 0,
         currency: result.currency || preferences.bill_currency || getDefaultCurrency(),
         due_date: dueDate,
         bill_date: result.bill_date,  // Date when bill was issued (from pattern)

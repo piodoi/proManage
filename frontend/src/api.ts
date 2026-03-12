@@ -889,6 +889,9 @@ export type ExtractionResult = {
   property_address?: string;
   supplier_added?: boolean;
   supplier_message?: string;
+  matched_fields?: number;
+  total_fields?: number;
+  match_percentage?: number;
 };
 
 export type TextPattern = {
