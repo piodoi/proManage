@@ -598,7 +598,7 @@ class EmailMonitor:
                                             return bt
                                     return BillType.OTHER
                                 
-                                resolved_bill_type = resolve_bill_type(pattern_bill_type)
+                                resolved_bill_type = resolve_bill_type(pattern_bill_type or "")
                                 
                                 # Check for duplicate bill (same bill_number for same property)
                                 bill_number = discovered_bill['bill_number']
@@ -644,7 +644,7 @@ class EmailMonitor:
                                     property_supplier_id=property_supplier_id,
                                     contract_id=extracted_data.get('contract_id'),
                                     payment_details=payment_details,
-                                    status=BillStatus.PENDING,
+                                    status=BillStatus.PAID if amount < 0 else BillStatus.PENDING,
                                 )
                                 
                                 db.save_bill(bill)

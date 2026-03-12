@@ -8,6 +8,7 @@ from app.models import TokenData
 from app.auth import require_landlord
 from app.database import db
 from app.paths import save_bill_pdf
+from app.utils.parsers import coerce_amount
 
 
 def get_default_bill_currency(user_id: str) -> str:
@@ -347,6 +348,18 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
             
             # Get description from pattern_name (supplier name)
             description = bill_data.get("description") or bill_data.get("pattern_name") or bill_data.get("supplier") or "Imported Bill"
+
+            amount = coerce_amount(bill_data.get("amount", 0))
+
+            # Respect provided status when valid, otherwise derive default from amount
+            provided_status = bill_data.get("status")
+            if isinstance(provided_status, str):
+                try:
+                    bill_status = BillStatus(provided_status)
+                except ValueError:
+                    bill_status = BillStatus.PAID if amount < 0 else BillStatus.PENDING
+            else:
+                bill_status = BillStatus.PAID if amount < 0 else BillStatus.PENDING
             
             # Create bill
             bill = Bill(
@@ -354,7 +367,7 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
                 renter_id=None,  # Applies to all renters
                 bill_type=bill_type,
                 description=description,
-                amount=float(bill_data.get("amount", 0)),
+                amount=amount,
                 currency=bill_data.get("currency", "RON"),
                 due_date=due_date,
                 bill_date=bill_date,  # Date when bill was issued (from pattern), None if not extracted
@@ -364,7 +377,7 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
                 extraction_pattern_id=None,
                 property_supplier_id=property_supplier_id,
                 contract_id=bill_data.get("contract_id"),
-                status=BillStatus.PENDING,
+                status=bill_status,
             )
             
             db.save_bill(bill)

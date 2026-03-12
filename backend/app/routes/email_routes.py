@@ -4,7 +4,7 @@ from typing import List
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
-from app.models import Bill, BillType, TokenData, UserRole
+from app.models import Bill, BillType, BillStatus, TokenData, UserRole
 from app.auth import require_landlord
 from app.database import db
 from app.email_scraper import extract_bill_info, match_address_to_property
@@ -41,6 +41,7 @@ async def process_email(
         due_date=datetime.utcnow(),
         iban=info.iban,
         bill_number=info.bill_number,
+        status=BillStatus.PAID if (info.amount or 0) < 0 else BillStatus.PENDING,
     )
     db.save_bill(bill)
     return {"status": "created", "bill": bill, "extracted": info}

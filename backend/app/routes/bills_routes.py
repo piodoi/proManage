@@ -19,6 +19,7 @@ from app.routes.sync_routes import resolve_property_supplier_id
 from app.paths import delete_bill_pdf, bill_pdf_exists, get_bill_pdf_path, save_bill_pdf
 from app.email_sender import send_bill_notification_email, is_email_configured
 from app.routes.env_routes import load_feature_flags
+from app.utils.parsers import coerce_amount
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 logger = logging.getLogger(__name__)
@@ -638,8 +639,10 @@ async def create_bill_from_pdf(
     if renter_id == "all" or not renter_id:
         renter_id = None
     
-    # Get the new amount
-    new_amount = float(data.get("amount", 0))
+    try:
+        new_amount = coerce_amount(data.get("amount", 0))
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid amount: {data.get('amount')}")
     bill_number = data.get("bill_number")
     
     # Check for duplicate bill (same bill_number for same property)
@@ -718,7 +721,7 @@ async def create_bill_from_pdf(
         property_supplier_id=property_supplier_id,
         contract_id=data.get("contract_id"),
         payment_details=payment_details,  # Additional payment details (e.g., client_code)
-        status=BillStatus.PENDING,
+        status=BillStatus.PAID if new_amount < 0 else BillStatus.PENDING,
     )
     db.save_bill(bill)
     
