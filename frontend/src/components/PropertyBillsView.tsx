@@ -146,11 +146,13 @@ export default function PropertyBillsView({
   const [showUtilityPayment, setShowUtilityPayment] = useState(false);
   const [utilityPaymentBill, setUtilityPaymentBill] = useState<Bill | null>(null);
   const [extractedBarcode, setExtractedBarcode] = useState<string>('');
+  const [extractedBarcodeCandidates, setExtractedBarcodeCandidates] = useState<string[]>([]);
   const [extractingBarcode, setExtractingBarcode] = useState<string | null>(null); // bill.id being extracted
 
   // Function to open utility payment dialog with barcode extraction (guarded by feature flags)
   const openUtilityPaymentDialog = async (bill: Bill) => {
     setUtilityPaymentBill(bill);
+    setExtractedBarcodeCandidates([]);
     // If payOnline feature disabled, just open dialog
     if (!featureFlags.payOnline) {
       setShowUtilityPayment(true);
@@ -162,6 +164,7 @@ export default function PropertyBillsView({
       setExtractingBarcode(bill.id);
       try {
         const result = await extractBarcodeFromBillAPI(bill.id);
+        setExtractedBarcodeCandidates(Array.from(new Set(result.all_barcodes.map((item) => item.data).filter(Boolean))));
         if (result.primary_barcode) {
           setExtractedBarcode(result.primary_barcode);
         } else {
@@ -1099,8 +1102,11 @@ export default function PropertyBillsView({
           setShowUtilityPayment(false);
           setUtilityPaymentBill(null);
           setExtractedBarcode('');
+          setExtractedBarcodeCandidates([]);
         }}
+        billId={utilityPaymentBill?.id}
         billBarcode={extractedBarcode || utilityPaymentBill?.bill_number || ''}
+        detectedBarcodes={extractedBarcodeCandidates}
         billInfo={utilityPaymentBill ? {
           description: utilityPaymentBill.description,
           amount: utilityPaymentBill.amount,
@@ -1110,18 +1116,13 @@ export default function PropertyBillsView({
         } : undefined}
         mode="landlord"
         onSuccess={(_transaction: TransactionResponse) => {
-          // Mark bill as paid after successful payment
-          if (utilityPaymentBill && token) {
-            api.bills.update(token, utilityPaymentBill.id, { status: 'paid' })
-              .then(() => {
-                if (onBillsChange) {
-                  onBillsChange();
-                }
-              })
-              .catch(handleError);
+          if (onBillsChange) {
+            onBillsChange();
           }
           setShowUtilityPayment(false);
           setUtilityPaymentBill(null);
+          setExtractedBarcode('');
+          setExtractedBarcodeCandidates([]);
         }}
       />
     </>

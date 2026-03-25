@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl, PaymentNotificationCreate, RenterAccountCreate, RenterPreferencesUpdate } from '../api';
+import { api, RenterInfo, RenterBill, RenterBalance, getRenterBillPdfUrl, PaymentNotificationCreate, RenterAccountCreate, RenterPreferencesUpdate, extractBarcodeFromBillAPI } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell, LogIn } from 'lucide-react';
+import { Building2, Receipt, Banknote, ChevronDown, ChevronRight, Copy, Check, Clock, Send, CreditCard, User, Settings, Eye, EyeOff, Mail, Bell, LogIn, Loader2 } from 'lucide-react';
 import { featureFlags } from '../lib/featureFlags';
 import { getAvailableCurrencies, getDefaultCurrency } from '../lib/currencyConfig';
 import { UtilityPaymentDialog } from '../components/dialogs/UtilityPaymentDialog';
@@ -53,6 +53,9 @@ export default function RenterView() {
   // Utility payment dialog state
   const [showUtilityPayment, setShowUtilityPayment] = useState(false);
   const [utilityPaymentBill, setUtilityPaymentBill] = useState<RenterBill | null>(null);
+  const [extractedBarcode, setExtractedBarcode] = useState('');
+  const [extractedBarcodeCandidates, setExtractedBarcodeCandidates] = useState<string[]>([]);
+  const [extractingBarcode, setExtractingBarcode] = useState<string | null>(null);
 
   // Track if language has been initialized from renter data
   const [languageInitialized, setLanguageInitialized] = useState(false);
@@ -314,6 +317,30 @@ export default function RenterView() {
     setPreviousPaymentCurrency(billCurrency);
     // Set default IBAN currency when opening dialog
     setSelectedIbanCurrency(getDefaultIbanCurrency());
+  };
+
+  const openUtilityPaymentDialog = async (bill: RenterBill) => {
+    setUtilityPaymentBill(bill);
+    setExtractedBarcodeCandidates([]);
+
+    const fallbackBarcode = bill.bill.bill_number || '';
+
+    if (featureFlags.barcodeExtraction && bill.has_pdf && token) {
+      setExtractingBarcode(bill.bill.id);
+      try {
+        const result = await extractBarcodeFromBillAPI(bill.bill.id, token);
+        setExtractedBarcodeCandidates(Array.from(new Set(result.all_barcodes.map((item) => item.data).filter(Boolean))));
+        setExtractedBarcode(result.primary_barcode || fallbackBarcode);
+      } catch {
+        setExtractedBarcode(fallbackBarcode);
+      } finally {
+        setExtractingBarcode(null);
+      }
+    } else {
+      setExtractedBarcode(fallbackBarcode);
+    }
+
+    setShowUtilityPayment(true);
   };
 
   // Handle payment currency change - auto-convert amount
@@ -904,18 +931,20 @@ export default function RenterView() {
                                 >
                                   {t('renter.pay')}
                                 </Button>
-                                {featureFlags.payOnline && item.bill.bill_type !== 'rent' && item.bill.bill_number && (
+                                {featureFlags.payOnline && item.bill.bill_type !== 'rent' && (item.bill.bill_number || item.has_pdf) && (
                                   <Button
                                     size="sm"
-                                    onClick={() => {
-                                      setUtilityPaymentBill(item);
-                                      setShowUtilityPayment(true);
-                                    }}
+                                    onClick={() => void openUtilityPaymentDialog(item)}
+                                    disabled={featureFlags.barcodeExtraction ? extractingBarcode !== null : false}
                                     className="bg-blue-600 hover:bg-blue-700"
                                     title={t('utility.payOnlineBtn')}
                                   >
-                                    <CreditCard className="w-4 h-4 mr-1" />
-                                    {t('utility.payOnlineBtn')}
+                                    {featureFlags.barcodeExtraction && extractingBarcode === item.bill.id ? (
+                                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                    ) : (
+                                      <CreditCard className="w-4 h-4 mr-1" />
+                                    )}
+                                    {featureFlags.barcodeExtraction && extractingBarcode === item.bill.id ? t('common.loading') : t('utility.payOnlineBtn')}
                                   </Button>
                                 )}
                                 {item.is_direct_debit && (
@@ -1678,18 +1707,35 @@ export default function RenterView() {
           onClose={() => {
             setShowUtilityPayment(false);
             setUtilityPaymentBill(null);
+            setExtractedBarcode('');
+            setExtractedBarcodeCandidates([]);
           }}
-          billBarcode={utilityPaymentBill?.bill.bill_number || ''}
+          billId={utilityPaymentBill?.bill.id}
+          billBarcode={extractedBarcode || utilityPaymentBill?.bill.bill_number || ''}
+          detectedBarcodes={extractedBarcodeCandidates}
+          renterToken={token}
+          billInfo={utilityPaymentBill ? {
+            description: utilityPaymentBill.bill.description,
+            amount: utilityPaymentBill.bill.amount,
+            currency: utilityPaymentBill.bill.currency,
+            due_date: utilityPaymentBill.bill.due_date,
+            bill_type: utilityPaymentBill.bill.bill_type,
+          } : undefined}
           mode="renter"
           onSuccess={(_transaction: TransactionResponse) => {
             // Reload bills to show updated status
             if (token) {
-              api.renter.bills(token)
-                .then(setBills)
+              Promise.all([api.renter.bills(token), api.renter.balance(token)])
+                .then(([billsData, balanceData]) => {
+                  setBills(billsData);
+                  setBalance(balanceData);
+                })
                 .catch((err) => setError(err instanceof Error ? err.message : t('errors.generic')));
             }
             setShowUtilityPayment(false);
             setUtilityPaymentBill(null);
+            setExtractedBarcode('');
+            setExtractedBarcodeCandidates([]);
           }}
         />
 

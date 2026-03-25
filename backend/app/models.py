@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, date
 from enum import Enum
@@ -15,7 +15,7 @@ class PaymentLimitInfo(BaseModel):
 
 class PaymentField(BaseModel):
     name: str
-    type: str
+    type: str = "text"
     required: bool
     label: Optional[str] = None
     validation: Optional[Dict[str, Any]] = None
@@ -24,8 +24,58 @@ class SupplierMatch(BaseModel):
     uid: str
     name: str
     module: str
+    productUid: Optional[str] = None
     paymentLimit: PaymentLimitInfo
     paymentFields: List[PaymentField]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_payment_fields(cls, data: Any) -> Any:
+        """Normalize INCARCA grouped paymentFields into the flat internal shape."""
+        if not isinstance(data, dict):
+            return data
+
+        raw_payment_fields = data.get("paymentFields")
+        if not isinstance(raw_payment_fields, list):
+            return data
+
+        normalized_fields: List[Dict[str, Any]] = []
+        for entry in raw_payment_fields:
+            if not isinstance(entry, dict):
+                continue
+
+            nested_fields = entry.get("paymentFields")
+            if isinstance(nested_fields, list):
+                for nested in nested_fields:
+                    if not isinstance(nested, dict):
+                        continue
+                    normalized_fields.append({
+                        "name": nested.get("paymentFieldKey") or nested.get("name") or nested.get("key"),
+                        "type": nested.get("type") or "text",
+                        "required": nested.get("required", False),
+                        "label": nested.get("paymentFieldLabel") or nested.get("label") or entry.get("label"),
+                        "validation": nested.get("validation"),
+                    })
+                continue
+
+            normalized_fields.append({
+                "name": entry.get("paymentFieldKey") or entry.get("name") or entry.get("key"),
+                "type": entry.get("type") or "text",
+                "required": entry.get("required", False),
+                "label": entry.get("paymentFieldLabel") or entry.get("label"),
+                "validation": entry.get("validation"),
+            })
+
+        normalized = data.copy()
+        products = data.get("products")
+        if isinstance(products, list):
+            for product in products:
+                if isinstance(product, dict) and product.get("uid"):
+                    normalized["productUid"] = product.get("uid")
+                    break
+
+        normalized["paymentFields"] = [field for field in normalized_fields if field.get("name")]
+        return normalized
 
 class PaymentFieldsData(BaseModel):
     barcode: Optional[str] = None
@@ -50,7 +100,7 @@ class BalanceRequest(BaseModel):
     terminalType: str = "terminal"
 
 class BalanceResponse(BaseModel):
-    balance: float
+    balance: Optional[float] = None
     currency: str = "RON"
     utilityData: Optional[UtilityData] = None
     success: bool = True
@@ -61,6 +111,7 @@ class PaymentRequest(BaseModel):
     productUid: str
     paymentFields: PaymentFieldsData
     amount: Optional[float] = None  # Optional - can be auto-filled from balance
+    billId: Optional[str] = None
     transactionId: Optional[str] = None
     partnerTransactionId: Optional[str] = None
     terminalType: str = "terminal"

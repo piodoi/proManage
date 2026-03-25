@@ -26,7 +26,7 @@ export interface UseUtilityPaymentReturn {
   clearError: () => void;
 }
 
-export function useUtilityPayment(): UseUtilityPaymentReturn {
+export function useUtilityPayment(renterToken?: string): UseUtilityPaymentReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +36,7 @@ export function useUtilityPayment(): UseUtilityPaymentReturn {
     setLoading(true);
     setError(null);
     try {
-      const suppliers = await matchBarcodeAPI(barcode);
+      const suppliers = await matchBarcodeAPI(barcode, renterToken);
       return suppliers;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to match barcode';
@@ -61,7 +61,7 @@ export function useUtilityPayment(): UseUtilityPaymentReturn {
         paymentFields: fields,
         terminalType: 'terminal',
       };
-      const balance = await getUtilityBalanceAPI(request);
+      const balance = await getUtilityBalanceAPI(request, renterToken);
       return balance;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to get balance';
@@ -76,7 +76,7 @@ export function useUtilityPayment(): UseUtilityPaymentReturn {
     setLoading(true);
     setError(null);
     try {
-      const transaction = await payUtilityBillAPI(paymentData);
+      const transaction = await payUtilityBillAPI(paymentData, renterToken);
       return transaction;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Payment failed';

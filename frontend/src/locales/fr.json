@@ -859,6 +859,9 @@
     "selectSupplierPlaceholder": "Sélectionner un fournisseur",
     "loadingSuppliers": "Chargement des fournisseurs...",
     "noSuppliersFound": "Aucun fournisseur trouvé",
+    "tryBarcode": "Tester le code-barres",
+    "editBarcodeHint": "Modifiez le code-barres scanné et relancez la recherche si le fournisseur n'a pas été identifié correctement.",
+    "detectedBarcodes": "Détectés depuis le PDF",
     "barcodeNoMatch": "Le code-barres ne correspond à aucun fournisseur. Veuillez sélectionner dans la liste ci-dessous.",
     "barcodeMatched": "{{count}} fournisseur(s) correspondant(s) depuis le code-barres"
   },

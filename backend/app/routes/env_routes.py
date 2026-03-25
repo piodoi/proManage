@@ -24,6 +24,14 @@ USERDATA_ADMIN_DIR = ROOT_DIR / "userdata" / "admin"
 # Feature flags file path
 FEATURE_FLAGS_FILE = USERDATA_ADMIN_DIR / "feature_flags.json"
 
+FEATURE_FLAG_ENV_KEYS = {
+    "payOnline": "VITE_FEATURE_PAY_ONLINE",
+    "barcodeExtraction": "VITE_FEATURE_BARCODE_EXTRACTION",
+    "facebookLogin": "VITE_FEATURE_FACEBOOK_LOGIN",
+    "demoLogin": "VITE_FEATURE_DEMO_LOGIN",
+    "usBuild": "VITE_FEATURE_US_BUILD",
+}
+
 # Default feature flags
 DEFAULT_FEATURE_FLAGS = {
     "payOnline": False,
@@ -149,6 +157,19 @@ def parse_env_file(file_path: Path) -> Dict[str, str]:
     return env_vars
 
 
+def parse_bool_env_value(value: Optional[str]) -> Optional[bool]:
+    """Parse a boolean-like environment variable value."""
+    if value is None:
+        return None
+
+    normalized = value.strip().lower()
+    if normalized in {'1', 'true', 'yes', 'on'}:
+        return True
+    if normalized in {'0', 'false', 'no', 'off'}:
+        return False
+    return None
+
+
 def write_env_file(file_path: Path, env_vars: Dict[str, str], preserve_comments: bool = True):
     """Write environment variables to a .env file, preserving structure and comments."""
     lines = []
@@ -202,6 +223,26 @@ def load_feature_flags() -> Dict[str, bool]:
         return DEFAULT_FEATURE_FLAGS.copy()
 
 
+def load_env_feature_flags() -> Dict[str, bool]:
+    """Load feature flags from frontend env values when explicitly configured."""
+    frontend_env = parse_env_file(get_env_file_path('frontend'))
+    env_flags: Dict[str, bool] = {}
+
+    for flag_name, env_key in FEATURE_FLAG_ENV_KEYS.items():
+        parsed_value = parse_bool_env_value(frontend_env.get(env_key))
+        if parsed_value is not None:
+            env_flags[flag_name] = parsed_value
+
+    return env_flags
+
+
+def get_effective_feature_flags() -> Dict[str, bool]:
+    """Resolve runtime feature flags, letting explicit frontend env values override JSON flags."""
+    effective_flags = load_feature_flags()
+    effective_flags.update(load_env_feature_flags())
+    return effective_flags
+
+
 def save_feature_flags(flags: Dict[str, bool]) -> None:
     """Save feature flags to JSON file."""
     USERDATA_ADMIN_DIR.mkdir(parents=True, exist_ok=True)
@@ -213,7 +254,7 @@ def save_feature_flags(flags: Dict[str, bool]) -> None:
 @router.get("/feature-flags/public")
 async def get_feature_flags_public() -> Dict[str, bool]:
     """Get current feature flag values. Public endpoint for frontend runtime checks."""
-    return load_feature_flags()
+    return get_effective_feature_flags()
 
 
 @router.get("/variables")
@@ -291,7 +332,7 @@ async def get_env_variables(_: TokenData = Depends(require_admin)) -> Dict[str, 
 @router.get("/feature-flags")
 async def get_feature_flags(_: TokenData = Depends(require_admin)) -> Dict[str, bool]:
     """Get current feature flag values from JSON file."""
-    return load_feature_flags()
+    return get_effective_feature_flags()
 
 
 @router.put("/feature-flags")

@@ -856,6 +856,9 @@
     "selectSupplierPlaceholder": "Select a supplier",
     "loadingSuppliers": "Loading suppliers...",
     "noSuppliersFound": "No suppliers found",
+    "tryBarcode": "Try Barcode",
+    "editBarcodeHint": "Edit the scanned barcode and retry matching if the supplier was not identified correctly.",
+    "detectedBarcodes": "Detected from PDF",
     "barcodeNoMatch": "Barcode did not match any supplier. Please select from the list below.",
     "barcodeMatched": "{{count}} supplier(s) matched from barcode"
   },

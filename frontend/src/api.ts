@@ -11,6 +11,26 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
+function getUtilityHeaders(renterToken?: string, includeJson: boolean = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (includeJson) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (renterToken) {
+    headers['X-Renter-Token'] = renterToken;
+    return headers;
+  }
+
+  const authToken = localStorage.getItem('token');
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  return headers;
+}
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -29,12 +49,10 @@ import {
 
 // Utility Payment API Functions
 
-export async function matchBarcodeAPI(barcode: string): Promise<SupplierMatch[]> {
+export async function matchBarcodeAPI(barcode: string, renterToken?: string): Promise<SupplierMatch[]> {
   const response = await fetch(`${API_URL}/api/utility/match-barcode?barcode=${encodeURIComponent(barcode)}`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken),
   });
 
   if (!response.ok) {
@@ -45,13 +63,10 @@ export async function matchBarcodeAPI(barcode: string): Promise<SupplierMatch[]>
   return response.json();
 }
 
-export async function getUtilityBalanceAPI(request: BalanceRequest): Promise<BalanceResponse> {
+export async function getUtilityBalanceAPI(request: BalanceRequest, renterToken?: string): Promise<BalanceResponse> {
   const response = await fetch(`${API_URL}/api/utility/balance`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken, true),
     body: JSON.stringify(request),
   });
 
@@ -63,13 +78,10 @@ export async function getUtilityBalanceAPI(request: BalanceRequest): Promise<Bal
   return response.json();
 }
 
-export async function payUtilityBillAPI(request: PaymentRequest): Promise<TransactionResponse> {
+export async function payUtilityBillAPI(request: PaymentRequest, renterToken?: string): Promise<TransactionResponse> {
   const response = await fetch(`${API_URL}/api/utility/pay`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken, true),
     body: JSON.stringify(request),
   });
 
@@ -81,11 +93,9 @@ export async function payUtilityBillAPI(request: PaymentRequest): Promise<Transa
   return response.json();
 }
 
-export async function getSuppliersAPI(): Promise<SupplierInfo[]> {
+export async function getSuppliersAPI(renterToken?: string): Promise<SupplierInfo[]> {
   const response = await fetch(`${API_URL}/api/utility/suppliers`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken),
   });
 
   if (!response.ok) {
@@ -95,11 +105,9 @@ export async function getSuppliersAPI(): Promise<SupplierInfo[]> {
   return response.json();
 }
 
-export async function getSupplierAPI(supplierUid: string): Promise<SupplierInfo> {
+export async function getSupplierAPI(supplierUid: string, renterToken?: string): Promise<SupplierInfo> {
   const response = await fetch(`${API_URL}/api/utility/suppliers/${supplierUid}`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken),
   });
 
   if (!response.ok) {
@@ -109,11 +117,9 @@ export async function getSupplierAPI(supplierUid: string): Promise<SupplierInfo>
   return response.json();
 }
 
-export async function getSupplierProductsAPI(supplierUid: string): Promise<ProductInfo[]> {
+export async function getSupplierProductsAPI(supplierUid: string, renterToken?: string): Promise<ProductInfo[]> {
   const response = await fetch(`${API_URL}/api/utility/suppliers/${supplierUid}/products`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken),
   });
 
   if (!response.ok) {
@@ -123,11 +129,9 @@ export async function getSupplierProductsAPI(supplierUid: string): Promise<Produ
   return response.json();
 }
 
-export async function getAllProductsAPI(): Promise<ProductInfo[]> {
+export async function getAllProductsAPI(renterToken?: string): Promise<ProductInfo[]> {
   const response = await fetch(`${API_URL}/api/utility/products`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken),
   });
 
   if (!response.ok) {
@@ -149,11 +153,9 @@ export interface BarcodeExtractionResult {
   bill_number: string | null;
 }
 
-export async function extractBarcodeFromBillAPI(billId: string): Promise<BarcodeExtractionResult> {
+export async function extractBarcodeFromBillAPI(billId: string, renterToken?: string): Promise<BarcodeExtractionResult> {
   const response = await fetch(`${API_URL}/api/utility/extract-barcode/${billId}`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: getUtilityHeaders(renterToken),
   });
 
   if (!response.ok) {

@@ -866,6 +866,9 @@
     "selectSupplierPlaceholder": "Selectează un furnizor",
     "loadingSuppliers": "Se încarcă furnizorii...",
     "noSuppliersFound": "Niciun furnizor găsit",
+    "tryBarcode": "Încearcă Codul",
+    "editBarcodeHint": "Editează codul de bare scanat și încearcă din nou potrivirea dacă furnizorul nu a fost identificat corect.",
+    "detectedBarcodes": "Detectate din PDF",
     "barcodeNoMatch": "Codul de bare nu a corespuns niciunui furnizor. Te rugăm să selectezi din lista de mai jos.",
     "barcodeMatched": "{{count}} furnizor(i) găsit(i) din codul de bare"
   },

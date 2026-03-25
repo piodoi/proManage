@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, CheckCircle2, AlertCircle, ChevronRight, ArrowLeft, Search, Receipt } from 'lucide-react';
 import { useUtilityPayment } from '../../hooks/useUtilityPayment';
 import { useI18n } from '../../lib/i18n';
-import { matchBarcodeAPI, getSuppliersAPI } from '../../api';
+import { getSuppliersAPI } from '../../api';
 import {
   SupplierMatch,
   SupplierInfo,
@@ -31,9 +31,12 @@ interface UtilityPaymentDialogProps {
   open: boolean;
   onClose: () => void;
   billBarcode?: string;
+  billId?: string;
   billInfo?: BillInfo;
   onSuccess?: (transaction: TransactionResponse) => void;
   mode: 'landlord' | 'renter';
+  renterToken?: string;
+  detectedBarcodes?: string[];
 }
 
 const steps = ['utility.step.identify', 'utility.step.verify', 'utility.step.confirm'];
@@ -42,12 +45,15 @@ export function UtilityPaymentDialog({
   open,
   onClose,
   billBarcode,
+  billId,
   billInfo,
   onSuccess,
   mode,
+  renterToken,
+  detectedBarcodes = [],
 }: UtilityPaymentDialogProps) {
   const { t } = useI18n();
-  const { getBalance, payBill, loading, error, clearError } = useUtilityPayment();
+  const { matchBarcode, getBalance, payBill, loading, error, clearError } = useUtilityPayment(renterToken);
 
   const [activeStep, setActiveStep] = useState(0);
   const [allSuppliers, setAllSuppliers] = useState<SupplierInfo[]>([]);
@@ -63,29 +69,20 @@ export function UtilityPaymentDialog({
     barcode: billBarcode || '',
   });
 
-  // Load suppliers on mount
-  useEffect(() => {
-    if (open) {
-      loadSuppliers();
-    }
-  }, [open]);
-
-  // Update barcode when prop changes
-  useEffect(() => {
-    if (billBarcode) {
-      setPaymentFields(prev => ({ ...prev, barcode: billBarcode }));
-    }
-  }, [billBarcode]);
-
-  const loadSuppliers = async () => {
+  const loadSuppliers = async (candidateBarcode?: string) => {
     setLoadingSuppliers(true);
     setBarcodeMatchFailed(false);
+    setMatchedSuppliers([]);
+    setAllSuppliers([]);
+    setSelectedSupplierUid('');
     
     try {
+      const barcode = (candidateBarcode ?? paymentFields.barcode ?? '').trim();
+
       // First try to match barcode if available
-      if (billBarcode) {
+      if (barcode) {
         try {
-          const matches = await matchBarcodeAPI(billBarcode);
+          const matches = await matchBarcode(barcode);
           if (matches && matches.length > 0) {
             setMatchedSuppliers(matches);
             // Auto-select if only one match
@@ -102,7 +99,7 @@ export function UtilityPaymentDialog({
       }
       
       // Load all suppliers as fallback
-      const suppliers = await getSuppliersAPI();
+      const suppliers = await getSuppliersAPI(renterToken);
       setAllSuppliers(suppliers);
       
       // Try to pre-select supplier based on bill description (case-insensitive)
@@ -122,6 +119,32 @@ export function UtilityPaymentDialog({
     } finally {
       setLoadingSuppliers(false);
     }
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const initialBarcode = billBarcode || '';
+    setActiveStep(0);
+    setAllSuppliers([]);
+    setMatchedSuppliers([]);
+    setSelectedSupplierUid('');
+    setSupplierSearch('');
+    setBalance(null);
+    setTransaction(null);
+    setBarcodeMatchFailed(false);
+    setPaymentFields({ barcode: initialBarcode });
+    clearError();
+    void loadSuppliers(initialBarcode);
+  }, [open, billBarcode, renterToken]);
+
+  const handleRetryBarcodeMatch = async () => {
+    setActiveStep(0);
+    setBalance(null);
+    setTransaction(null);
+    await loadSuppliers(paymentFields.barcode);
   };
 
   // Filter suppliers based on search
@@ -161,7 +184,7 @@ export function UtilityPaymentDialog({
     try {
       // Get the matched supplier for module info
       const matchedSupplier = matchedSuppliers.find(s => s.uid === selectedSupplierUid);
-      const productUid = matchedSupplier?.module || selectedSupplierUid;
+      const productUid = matchedSupplier?.productUid || matchedSupplier?.module || selectedSupplierUid;
       
       const balanceResponse = await getBalance(
         selectedSupplierUid,
@@ -181,13 +204,14 @@ export function UtilityPaymentDialog({
 
     try {
       const matchedSupplier = matchedSuppliers.find(s => s.uid === selectedSupplierUid);
-      const productUid = matchedSupplier?.module || selectedSupplierUid;
+      const productUid = matchedSupplier?.productUid || matchedSupplier?.module || selectedSupplierUid;
       
       const transactionResponse = await payBill({
         supplierUid: selectedSupplierUid,
         productUid: productUid,
         paymentFields: paymentFields,
         amount: balance.balance,
+        billId,
         terminalType: 'terminal',
       });
 
@@ -211,6 +235,7 @@ export function UtilityPaymentDialog({
     setBalance(null);
     setTransaction(null);
     setBarcodeMatchFailed(false);
+    setPaymentFields({ barcode: billBarcode || '' });
     clearError();
     onClose();
   };
@@ -276,9 +301,9 @@ export function UtilityPaymentDialog({
               {t('bill.dueDate')}: {new Date(billInfo.due_date).toLocaleDateString()}
             </p>
           )}
-          {billBarcode && (
+          {paymentFields.barcode && (
             <p className="text-xs text-slate-500 font-mono mt-2">
-              {t('utility.barcode')}: {billBarcode}
+              {t('utility.barcode')}: {paymentFields.barcode}
             </p>
           )}
         </div>
@@ -293,6 +318,46 @@ export function UtilityPaymentDialog({
         return (
           <div className="space-y-4">
             <BillInfoCard />
+
+            <div className="space-y-3">
+              <Label className="text-slate-300">{t('utility.barcode')}</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={paymentFields.barcode || ''}
+                  onChange={(e) => setPaymentFields(prev => ({ ...prev, barcode: e.target.value }))}
+                  placeholder={t('utility.barcodePlaceholder')}
+                  className="bg-slate-700 border-slate-600 text-slate-100 font-mono"
+                />
+                <Button
+                  type="button"
+                  onClick={() => void handleRetryBarcodeMatch()}
+                  disabled={loadingSuppliers || !(paymentFields.barcode || '').trim()}
+                  className="bg-slate-700 hover:bg-slate-600"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  {t('utility.tryBarcode')}
+                </Button>
+              </div>
+              <p className="text-xs text-slate-400">{t('utility.editBarcodeHint')}</p>
+              {detectedBarcodes.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t('utility.detectedBarcodes')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {detectedBarcodes.map((barcode) => (
+                      <Button
+                        key={barcode}
+                        type="button"
+                        variant="outline"
+                        onClick={() => setPaymentFields(prev => ({ ...prev, barcode }))}
+                        className="max-w-full border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600"
+                      >
+                        <span className="truncate font-mono text-xs">{barcode}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             
             {barcodeMatchFailed && (
               <Alert className="bg-amber-900/30 border-amber-600">

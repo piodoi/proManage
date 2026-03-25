@@ -170,18 +170,38 @@ class IncarcaService:
             response.raise_for_status()
             
             data = response.json()
+
+            response_status = data.get("responseStatus")
+            if isinstance(response_status, int) and response_status >= 400:
+                raise HTTPException(
+                    status_code=502,
+                    detail=data.get("responseMessage") or "Payment provider returned an invalid balance response"
+                )
+
+            balance_value = data.get("balance")
+            if balance_value is None:
+                balance_value = data.get("value")
+
+            if balance_value is None:
+                raise HTTPException(
+                    status_code=502,
+                    detail=data.get("responseMessage") or "Payment provider did not return a payable balance"
+                )
             
             # Parse response
             balance_response = BalanceResponse(
-                balance=data.get("balance", 0.0),
+                balance=balance_value,
                 currency=data.get("currency", "RON"),
                 utilityData=data.get("utilityData"),
-                success=True
+                success=True,
+                message=data.get("responseMessage"),
             )
             
             logger.info(f"Retrieved balance: {balance_response.balance} {balance_response.currency}")
             return balance_response
             
+        except HTTPException:
+            raise
         except httpx.HTTPStatusError as e:
             logger.error(f"Balance query failed: {e.response.status_code} - {e.response.text}")
             raise HTTPException(
@@ -216,6 +236,13 @@ class IncarcaService:
             response.raise_for_status()
             
             data = response.json()
+
+            response_status = data.get("responseStatus")
+            if isinstance(response_status, int) and response_status >= 400:
+                raise HTTPException(
+                    status_code=502,
+                    detail=data.get("responseMessage") or "Payment provider rejected the transaction"
+                )
             
             # Parse response
             transaction_response = TransactionResponse(
@@ -232,6 +259,8 @@ class IncarcaService:
             logger.info(f"Transaction created: {transaction_response.transactionId} - Status: {transaction_response.status}")
             return transaction_response
             
+        except HTTPException:
+            raise
         except httpx.HTTPStatusError as e:
             logger.error(f"Transaction failed: {e.response.status_code} - {e.response.text}")
             raise HTTPException(

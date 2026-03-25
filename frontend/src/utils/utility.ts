@@ -17,6 +17,7 @@ export interface SupplierMatch {
   uid: string;
   name: string;
   module: string;
+  productUid?: string;
   paymentLimit: PaymentLimitInfo;
   paymentFields: PaymentField[];
 }
@@ -58,6 +59,7 @@ export interface PaymentRequest {
   productUid: string;
   paymentFields: PaymentFieldsData;
   amount?: number;
+  billId?: string;
   transactionId?: string;
   partnerTransactionId?: string;
   terminalType?: string;
