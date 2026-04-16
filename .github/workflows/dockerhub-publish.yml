@@ -1,0 +1,297 @@
+name: Publish Docker Images to Docker Hub
+
+on:
+  push:
+    tags:
+      - '*FE*'
+      - '*BE*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish-frontend:
+    if: contains(github.ref_name, 'FE')
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Docker Hub namespace
+        id: namespace
+        shell: bash
+        run: |
+          namespace="${{ vars.DOCKERHUB_NAMESPACE }}"
+          if [ -z "$namespace" ]; then
+            namespace="${GITHUB_REPOSITORY_OWNER}"
+          fi
+          echo "value=${namespace,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.namespace.outputs.value }}/promanage-frontend:${{ github.ref_name }}
+            ${{ steps.namespace.outputs.value }}/promanage-frontend:latest
+          labels: |
+            org.opencontainers.image.title=ProManage Frontend
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          build-args: |
+            VITE_API_URL=${{ vars.FRONTEND_VITE_API_URL || 'https://api.promanage.urun.me' }}
+            VITE_GOOGLE_CLIENT_ID=${{ vars.FRONTEND_VITE_GOOGLE_CLIENT_ID || '329418258863-d5t19hcni8hse364bnj5q5dm7kkk5hbg.apps.googleusercontent.com' }}
+            VITE_FACEBOOK_APP_ID=${{ vars.FRONTEND_VITE_FACEBOOK_APP_ID || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+          - name: Prune old frontend tags from Docker Hub
+          shell: bash
+          env:
+            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+            DOCKERHUB_NAMESPACE: ${{ steps.namespace.outputs.value }}
+            DOCKERHUB_REPOSITORY: promanage-frontend
+            CURRENT_TAG: ${{ github.ref_name }}
+            KEEP_TAG_COUNT: '3'
+          run: |
+            python - <<'PY'
+            import json
+            import os
+            import sys
+            import urllib.error
+            import urllib.parse
+            import urllib.request
+
+            username = os.environ["DOCKERHUB_USERNAME"]
+            password = os.environ["DOCKERHUB_TOKEN"]
+            namespace = os.environ["DOCKERHUB_NAMESPACE"]
+            repository = os.environ["DOCKERHUB_REPOSITORY"]
+            current_tag = os.environ["CURRENT_TAG"]
+            keep_tag_count = int(os.environ.get("KEEP_TAG_COUNT", "3"))
+
+            def request_json(url, method="GET", payload=None, token=None):
+              data = None
+              headers = {"Content-Type": "application/json"}
+              if payload is not None:
+                data = json.dumps(payload).encode("utf-8")
+              if token:
+                headers["Authorization"] = f"Bearer {token}"
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req) as response:
+                content = response.read().decode("utf-8")
+                return json.loads(content) if content else {}
+
+            auth_response = request_json(
+              "https://hub.docker.com/v2/users/login/",
+              method="POST",
+              payload={"username": username, "password": password},
+            )
+            token = auth_response.get("token")
+            if not token:
+              print("Docker Hub login did not return a token.", file=sys.stderr)
+              sys.exit(1)
+
+            tags = []
+            next_url = (
+              f"https://hub.docker.com/v2/namespaces/"
+              f"{urllib.parse.quote(namespace)}/repositories/"
+              f"{urllib.parse.quote(repository)}/tags?page_size=100"
+            )
+            while next_url:
+              response = request_json(next_url, token=token)
+              tags.extend(response.get("results", []))
+              next_url = response.get("next")
+
+            version_tags = []
+            for tag in tags:
+              name = tag.get("name")
+              if not name or name == "latest":
+                continue
+              version_tags.append({
+                "name": name,
+                "last_updated": tag.get("last_updated", ""),
+              })
+
+            version_tags.sort(key=lambda item: item["last_updated"], reverse=True)
+            keep = [tag["name"] for tag in version_tags[:keep_tag_count]]
+            if current_tag not in keep:
+              keep.append(current_tag)
+
+            to_delete = [tag["name"] for tag in version_tags if tag["name"] not in keep]
+            if not to_delete:
+              print("No old Docker Hub tags to prune.")
+              sys.exit(0)
+
+            for tag_name in to_delete:
+              delete_url = (
+                f"https://hub.docker.com/v2/namespaces/"
+                f"{urllib.parse.quote(namespace)}/repositories/"
+                f"{urllib.parse.quote(repository)}/tags/"
+                f"{urllib.parse.quote(tag_name)}/"
+              )
+              req = urllib.request.Request(delete_url, method="DELETE")
+              req.add_header("Authorization", f"Bearer {token}")
+              try:
+                with urllib.request.urlopen(req):
+                  pass
+                print(f"Deleted old tag: {tag_name}")
+              except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                print(f"Failed to delete tag {tag_name}: {exc.code} {body}", file=sys.stderr)
+                raise
+            PY
+
+  publish-backend:
+    if: contains(github.ref_name, 'BE')
+    runs-on: ubuntu-latest
+        environment: prod
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Docker Hub namespace
+        id: namespace
+        shell: bash
+        run: |
+          namespace="${{ vars.DOCKERHUB_NAMESPACE }}"
+          if [ -z "$namespace" ]; then
+            namespace="${GITHUB_REPOSITORY_OWNER}"
+          fi
+          echo "value=${namespace,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.namespace.outputs.value }}/promanage-backend:${{ github.ref_name }}
+            ${{ steps.namespace.outputs.value }}/promanage-backend:latest
+          labels: |
+            org.opencontainers.image.title=ProManage Backend
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+          - name: Prune old backend tags from Docker Hub
+          shell: bash
+          env:
+            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+            DOCKERHUB_NAMESPACE: ${{ steps.namespace.outputs.value }}
+            DOCKERHUB_REPOSITORY: promanage-backend
+            CURRENT_TAG: ${{ github.ref_name }}
+            KEEP_TAG_COUNT: '3'
+          run: |
+            python - <<'PY'
+            import json
+            import os
+            import sys
+            import urllib.error
+            import urllib.parse
+            import urllib.request
+
+            username = os.environ["DOCKERHUB_USERNAME"]
+            password = os.environ["DOCKERHUB_TOKEN"]
+            namespace = os.environ["DOCKERHUB_NAMESPACE"]
+            repository = os.environ["DOCKERHUB_REPOSITORY"]
+            current_tag = os.environ["CURRENT_TAG"]
+            keep_tag_count = int(os.environ.get("KEEP_TAG_COUNT", "3"))
+
+            def request_json(url, method="GET", payload=None, token=None):
+              data = None
+              headers = {"Content-Type": "application/json"}
+              if payload is not None:
+                data = json.dumps(payload).encode("utf-8")
+              if token:
+                headers["Authorization"] = f"Bearer {token}"
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req) as response:
+                content = response.read().decode("utf-8")
+                return json.loads(content) if content else {}
+
+            auth_response = request_json(
+              "https://hub.docker.com/v2/users/login/",
+              method="POST",
+              payload={"username": username, "password": password},
+            )
+            token = auth_response.get("token")
+            if not token:
+              print("Docker Hub login did not return a token.", file=sys.stderr)
+              sys.exit(1)
+
+            tags = []
+            next_url = (
+              f"https://hub.docker.com/v2/namespaces/"
+              f"{urllib.parse.quote(namespace)}/repositories/"
+              f"{urllib.parse.quote(repository)}/tags?page_size=100"
+            )
+            while next_url:
+              response = request_json(next_url, token=token)
+              tags.extend(response.get("results", []))
+              next_url = response.get("next")
+
+            version_tags = []
+            for tag in tags:
+              name = tag.get("name")
+              if not name or name == "latest":
+                continue
+              version_tags.append({
+                "name": name,
+                "last_updated": tag.get("last_updated", ""),
+              })
+
+            version_tags.sort(key=lambda item: item["last_updated"], reverse=True)
+            keep = [tag["name"] for tag in version_tags[:keep_tag_count]]
+            if current_tag not in keep:
+              keep.append(current_tag)
+
+            to_delete = [tag["name"] for tag in version_tags if tag["name"] not in keep]
+            if not to_delete:
+              print("No old Docker Hub tags to prune.")
+              sys.exit(0)
+
+            for tag_name in to_delete:
+              delete_url = (
+                f"https://hub.docker.com/v2/namespaces/"
+                f"{urllib.parse.quote(namespace)}/repositories/"
+                f"{urllib.parse.quote(repository)}/tags/"
+                f"{urllib.parse.quote(tag_name)}/"
+              )
+              req = urllib.request.Request(delete_url, method="DELETE")
+              req.add_header("Authorization", f"Bearer {token}")
+              try:
+                with urllib.request.urlopen(req):
+                  pass
+                print(f"Deleted old tag: {tag_name}")
+              except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                print(f"Failed to delete tag {tag_name}: {exc.code} {body}", file=sys.stderr)
+                raise
+            PY
