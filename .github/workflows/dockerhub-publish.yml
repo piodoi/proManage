@@ -54,7 +54,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
           build-args: |
-            VITE_API_URL=${{ vars.FRONTEND_VITE_API_URL || 'https://api.promanage.urun.me' }}
+            VITE_API_URL=${{ vars.FRONTEND_VITE_API_URL || 'https://apipromanage.urun.me' }}
             VITE_GOOGLE_CLIENT_ID=${{ vars.FRONTEND_VITE_GOOGLE_CLIENT_ID || '329418258863-d5t19hcni8hse364bnj5q5dm7kkk5hbg.apps.googleusercontent.com' }}
             VITE_FACEBOOK_APP_ID=${{ vars.FRONTEND_VITE_FACEBOOK_APP_ID || '' }}
           cache-from: type=gha
