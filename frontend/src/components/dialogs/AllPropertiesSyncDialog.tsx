@@ -474,7 +474,7 @@ export default function AllPropertiesSyncDialog({
               <p className="text-sm text-slate-300">{syncProgress || t('common.syncing')}</p>
               {totalRentBillsGenerated > 0 && (
                 <p className="text-xs text-slate-400">
-                  {t('supplier.rentBillsGenerated')}: {totalRentBillsGenerated}
+                  {t('supplier.rentBillsGenerated', { count: totalRentBillsGenerated })}
                 </p>
               )}
             </div>
