@@ -660,6 +660,15 @@ export default function RenterView() {
     return (amount * ronRate / currencyRate).toFixed(2);
   };
 
+  const getMonthlySummaryAmountInRon = (bill: RenterBill) => {
+    const billAmount = Math.max(0, bill.bill.amount);
+    if (balance?.exchange_rates && bill.bill.currency && bill.bill.currency !== 'RON') {
+      return billAmount * (balance.exchange_rates.RON || 4.97) /
+        (balance.exchange_rates[bill.bill.currency as keyof typeof balance.exchange_rates] || 1);
+    }
+    return billAmount;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -1043,12 +1052,7 @@ export default function RenterView() {
                 <p className="text-slate-400 text-xs sm:text-sm">{t('renter.totalThisMonth') || 'Total This Month'}</p>
                 <p className="text-xl sm:text-2xl font-bold text-slate-100">
                   {thisMonthBills
-                    .reduce((sum, b) => {
-                      const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                        ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                        : b.bill.amount;
-                      return sum + ronValue;
-                    }, 0)
+                    .reduce((sum, b) => sum + getMonthlySummaryAmountInRon(b), 0)
                     .toFixed(2)} RON
                 </p>
               </CardContent>
@@ -1059,12 +1063,7 @@ export default function RenterView() {
                 <p className="text-xl sm:text-2xl font-bold text-green-400">
                   {thisMonthBills
                     .filter(b => b.bill.status === 'paid')
-                    .reduce((sum, b) => {
-                      const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                        ? (b.bill.amount * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                        : b.bill.amount;
-                      return sum + ronValue;
-                    }, 0)
+                    .reduce((sum, b) => sum + getMonthlySummaryAmountInRon(b), 0)
                     .toFixed(2)} RON
                 </p>
               </CardContent>
