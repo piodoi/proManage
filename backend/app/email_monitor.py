@@ -10,6 +10,8 @@ import re
 import imaplib
 import email
 import base64
+import socket
+import time
 from email.message import Message
 from typing import Optional, List, Tuple
 import logging
@@ -33,6 +35,9 @@ class EmailMonitor:
         self.username = os.getenv("EMAIL_MONITOR_USERNAME", "")
         self.password = os.getenv("EMAIL_MONITOR_PASSWORD", "")
         self.base_email = os.getenv("EMAIL_MONITOR_ADDRESS", "promanage.bill@gmail.com")
+        self.connect_timeout = float(os.getenv("EMAIL_MONITOR_CONNECT_TIMEOUT", "20"))
+        self.connect_retries = max(1, int(os.getenv("EMAIL_MONITOR_CONNECT_RETRIES", "3")))
+        self.retry_delay = max(0.0, float(os.getenv("EMAIL_MONITOR_RETRY_DELAY", "1.5")))
         
     def is_configured(self) -> bool:
         """Check if email monitoring is properly configured."""
@@ -87,17 +92,48 @@ class EmailMonitor:
         """Connect to Gmail IMAP server."""
         if not self.is_configured():
             raise ValueError("Email monitoring not configured. Check EMAIL_MONITOR_* env variables.")
-        
-        try:
-            mail = imaplib.IMAP4_SSL(self.host, self.port)
-            mail.login(self.username, self.password)
-            return mail
-        except imaplib.IMAP4.error as e:
-            logger.error(f"[Email Monitor] Gmail authentication failed: {e}")
-            raise ValueError(f"Gmail authentication failed: {e}. Check your EMAIL_MONITOR_USERNAME and EMAIL_MONITOR_PASSWORD in .env")
-        except Exception as e:
-            logger.error(f"[Email Monitor] Connection error: {e}")
-            raise ValueError(f"Failed to connect to Gmail: {e}")
+
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, self.connect_retries + 1):
+            try:
+                # Resolve first so DNS failures are explicit and can be retried.
+                socket.getaddrinfo(self.host, self.port, type=socket.SOCK_STREAM)
+                mail = imaplib.IMAP4_SSL(self.host, self.port, timeout=self.connect_timeout)
+                mail.login(self.username, self.password)
+                return mail
+            except imaplib.IMAP4.error as e:
+                logger.error(f"[Email Monitor] Gmail authentication failed: {e}")
+                raise ValueError(
+                    f"Gmail authentication failed: {e}. Check your EMAIL_MONITOR_USERNAME and EMAIL_MONITOR_PASSWORD in .env"
+                )
+            except (socket.gaierror, TimeoutError, OSError) as e:
+                last_error = e
+                logger.warning(
+                    "[Email Monitor] Connection attempt %s/%s failed for %s:%s: %s",
+                    attempt,
+                    self.connect_retries,
+                    self.host,
+                    self.port,
+                    e,
+                )
+                if attempt < self.connect_retries:
+                    time.sleep(self.retry_delay)
+            except Exception as e:
+                logger.error(f"[Email Monitor] Connection error: {e}")
+                raise ValueError(f"Failed to connect to Gmail: {e}")
+
+        logger.error(
+            "[Email Monitor] Unable to resolve or reach %s:%s after %s attempts: %s",
+            self.host,
+            self.port,
+            self.connect_retries,
+            last_error,
+        )
+        raise ValueError(
+            f"Failed to connect to Gmail: could not resolve or reach {self.host}:{self.port} after "
+            f"{self.connect_retries} attempts ({last_error}). Check DNS/outbound network access in the runtime environment."
+        )
     
     def fetch_unread_emails(self, user_id: Optional[str] = None) -> List[Tuple[str, Message, str]]:
         """
