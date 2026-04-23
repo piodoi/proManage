@@ -212,7 +212,9 @@ export function UtilityPaymentDialog({
         paymentFields: paymentFields,
         amount: balance.balance,
         billId,
-        terminalType: 'terminal',
+        transactionId: balance.transactionId,
+        partnerTransactionId: balance.partnerTransactionId,
+        terminalType: 'site',
       });
 
       setTransaction(transactionResponse);

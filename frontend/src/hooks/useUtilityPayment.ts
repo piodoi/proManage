@@ -59,7 +59,7 @@ export function useUtilityPayment(renterToken?: string): UseUtilityPaymentReturn
         supplierUid,
         productUid,
         paymentFields: fields,
-        terminalType: 'terminal',
+        terminalType: 'site',
       };
       const balance = await getUtilityBalanceAPI(request, renterToken);
       return balance;

@@ -97,12 +97,14 @@ class BalanceRequest(BaseModel):
     paymentFields: PaymentFieldsData
     transactionId: Optional[str] = None
     partnerTransactionId: Optional[str] = None
-    terminalType: str = "terminal"
+    terminalType: str = "site"
 
 class BalanceResponse(BaseModel):
     balance: Optional[float] = None
     currency: str = "RON"
     utilityData: Optional[UtilityData] = None
+    transactionId: Optional[str] = None
+    partnerTransactionId: Optional[str] = None
     success: bool = True
     message: Optional[str] = None
 
@@ -114,7 +116,8 @@ class PaymentRequest(BaseModel):
     billId: Optional[str] = None
     transactionId: Optional[str] = None
     partnerTransactionId: Optional[str] = None
-    terminalType: str = "terminal"
+    receiptNumber: Optional[int] = None
+    terminalType: str = "site"
 
 class TransactionStatus(str, Enum):
     PENDING = "pending"

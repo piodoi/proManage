@@ -50,6 +50,8 @@ export interface BalanceResponse {
   balance: number;
   currency: string;
   utilityData?: UtilityData;
+  transactionId?: string;
+  partnerTransactionId?: string;
   success: boolean;
   message?: string;
 }

@@ -2,6 +2,7 @@ import httpx
 import base64
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+import time
 import logging
 from fastapi import HTTPException
 import os
@@ -156,9 +157,13 @@ class IncarcaService:
         try:
             url = f"{self.base_url}/webapi/v2/transactions/utility/balance"
             headers = await self._get_headers()
-            
-            # Generate transaction ID if not provided
-            if not request.transactionId:
+
+            terminal_type = request.terminalType or "site"
+            if terminal_type == "site":
+                request.transactionId = None
+                if not request.partnerTransactionId:
+                    request.partnerTransactionId = str(uuid.uuid4())
+            elif not request.transactionId:
                 request.transactionId = str(uuid.uuid4())
             
             payload = request.dict(exclude_none=True)
@@ -193,6 +198,8 @@ class IncarcaService:
                 balance=balance_value,
                 currency=data.get("currency", "RON"),
                 utilityData=data.get("utilityData"),
+                transactionId=data.get("transactionId"),
+                partnerTransactionId=data.get("partnerTransactionId") or request.partnerTransactionId,
                 success=True,
                 message=data.get("responseMessage"),
             )
@@ -225,12 +232,26 @@ class IncarcaService:
         try:
             url = f"{self.base_url}/webapi/v2/transactions/utility"
             headers = await self._get_headers()
-            
-            # Generate transaction ID if not provided
-            if not request.transactionId:
+
+            terminal_type = request.terminalType or "site"
+            if terminal_type == "site":
+                request.transactionId = None
+                if not request.partnerTransactionId:
+                    request.partnerTransactionId = str(uuid.uuid4())
+            elif not request.transactionId:
                 request.transactionId = str(uuid.uuid4())
+
+            if request.amount is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Payment amount is required"
+                )
+
+            if not request.receiptNumber:
+                request.receiptNumber = int(time.time())
             
             payload = request.dict(exclude_none=True)
+            payload["value"] = payload.pop("amount")
             
             response = await self.http_client.post(url, headers=headers, json=payload)
             response.raise_for_status()
@@ -245,15 +266,24 @@ class IncarcaService:
                 )
             
             # Parse response
+            transaction_date = data.get("transactionDate")
+            if transaction_date:
+                try:
+                    timestamp = datetime.strptime(transaction_date, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    timestamp = datetime.now()
+            else:
+                timestamp = datetime.now()
+
             transaction_response = TransactionResponse(
-                transactionId=data.get("transactionId", request.transactionId),
-                status=data.get("status", "completed"),
-                amount=data.get("amount", request.amount),
+                transactionId=data.get("transactionId") or request.transactionId or request.partnerTransactionId,
+                status="completed" if data.get("responseStatus") == 200 else "failed",
+                amount=data.get("value", request.amount),
                 currency=data.get("currency", "RON"),
-                timestamp=datetime.now(),
+                timestamp=timestamp,
                 receiptData=data.get("receiptData"),
                 success=True,
-                message=data.get("message")
+                message=data.get("responseMessage")
             )
             
             logger.info(f"Transaction created: {transaction_response.transactionId} - Status: {transaction_response.status}")

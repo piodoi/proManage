@@ -21,6 +21,9 @@ from app.paths import get_bill_pdf_path, bill_pdf_exists
 # Apavital:
 # 1000284901011000001973921000000238530116
 
+#Swagger API
+#https://incarcawebapi-mdstage.evozon.com/incarca/swagger-ui.html#/utility-transactions
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/utility", tags=["Utility Payments"])
