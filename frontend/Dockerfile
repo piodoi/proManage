@@ -41,8 +41,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:80/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=5 \
+    CMD wget --quiet --tries=1 --spider http://127.0.0.1:80/healthz || exit 1
 
 # Run nginx
 CMD ["nginx", "-g", "daemon off;"]
