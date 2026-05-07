@@ -48,18 +48,27 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pendingSaveRef = useRef<Partial<Preferences> | null>(null);
+  const hasLoadedPreferencesRef = useRef(false);
 
   // Load preferences on mount or token change
   useEffect(() => {
     if (!token) {
+      hasLoadedPreferencesRef.current = false;
       setLoading(false);
       return;
     }
 
+    hasLoadedPreferencesRef.current = false;
+    setLoading(true);
+
     api.preferences.get(token)
-      .then(setPreferences)
+      .then((loadedPreferences) => {
+        setPreferences(loadedPreferences);
+        hasLoadedPreferencesRef.current = true;
+      })
       .catch(err => {
         console.error('[usePreferences] Failed to load preferences:', err);
+        hasLoadedPreferencesRef.current = true;
         // Use defaults on error
       })
       .finally(() => setLoading(false));
@@ -67,6 +76,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   // Sync preferences.language to localStorage and trigger i18n update
   useEffect(() => {
+    if (!token || !hasLoadedPreferencesRef.current) {
+      return;
+    }
+
     if (preferences.language) {
       const currentLang = localStorage.getItem('language');
       if (currentLang !== preferences.language) {
