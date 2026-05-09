@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple, cast
 
 from app.models import Bill, BillStatus, BillType
 from app.utils.currency import convert_currency
@@ -36,7 +36,8 @@ def _bill_due_sort_key(bill: Bill) -> Tuple[datetime, str]:
     due_date = bill.due_date
     if isinstance(due_date, str):
         try:
-            due_date = datetime.fromisoformat(due_date.replace("Z", "+00:00"))
+            due_date_str = cast(str, due_date)
+            due_date = datetime.fromisoformat(due_date_str.replace("Z", "+00:00"))
         except ValueError:
             due_date = datetime.max
     elif not isinstance(due_date, datetime):
@@ -52,15 +53,13 @@ def get_prioritized_renter_bills(renter_id: str, bills: Sequence[Bill]) -> List[
         and round_money(bill.amount) > 0
     ]
 
-    rent_bills = sorted(
-        [bill for bill in eligible if bill.bill_type == BillType.RENT and bill.renter_id == renter_id],
-        key=_bill_due_sort_key,
-    )
-    other_bills = sorted(
-        [bill for bill in eligible if not (bill.bill_type == BillType.RENT and bill.renter_id == renter_id)],
-        key=_bill_due_sort_key,
-    )
-    return [*rent_bills, *other_bills]
+    def sort_key(bill: Bill) -> Tuple[datetime, int, int, str]:
+        due_date, bill_id = _bill_due_sort_key(bill)
+        renter_specific_rank = 0 if bill.renter_id == renter_id else 1
+        rent_rank = 0 if bill.bill_type == BillType.RENT else 1
+        return due_date, renter_specific_rank, rent_rank, bill_id
+
+    return sorted(eligible, key=sort_key)
 
 
 def recalculate_bill_status_after_payment(bill: Bill) -> BillStatus:
@@ -70,7 +69,8 @@ def recalculate_bill_status_after_payment(bill: Bill) -> BillStatus:
     due_date = bill.due_date
     if isinstance(due_date, str):
         try:
-            due_date = datetime.fromisoformat(due_date.replace("Z", "+00:00"))
+            due_date_str = cast(str, due_date)
+            due_date = datetime.fromisoformat(due_date_str.replace("Z", "+00:00"))
         except ValueError:
             return BillStatus.PENDING
     elif not isinstance(due_date, datetime):

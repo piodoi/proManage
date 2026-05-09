@@ -13,6 +13,39 @@ from app.utils.renter_payments import allocate_payment_to_bills, get_credit_curr
 router = APIRouter(tags=["renters"])
 
 
+async def _apply_renter_funds(
+    renter: Renter,
+    payment_amount: float,
+    payment_currency: str,
+    message: str,
+):
+    exchange_rates = await get_exchange_rates()
+    bills = db.list_bills(property_id=renter.property_id)
+    applied, remaining_credit, credit_currency = allocate_payment_to_bills(
+        renter,
+        bills,
+        payment_amount,
+        payment_currency,
+        exchange_rates,
+    )
+
+    for bill in bills:
+        if any(item["bill_id"] == bill.id for item in applied):
+            db.save_bill(bill)
+
+    renter.credit = remaining_credit
+    renter.credit_currency = credit_currency
+    db.save_renter(renter)
+
+    return {
+        "renter": renter,
+        "applied": applied,
+        "unapplied_credit": remaining_credit,
+        "credit_currency": credit_currency,
+        "message": message,
+    }
+
+
 @router.get("/properties/{property_id}/renters")
 async def list_renters(property_id: str, current_user: TokenData = Depends(require_landlord)):
     prop = db.get_property(property_id)
@@ -134,26 +167,40 @@ async def record_renter_payment(
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
 
-    exchange_rates = await get_exchange_rates()
     payment_currency = (data.currency or 'RON').upper()
-    bills = db.list_bills(property_id=renter.property_id)
-    applied, remaining_credit, credit_currency = allocate_payment_to_bills(renter, bills, amount, payment_currency, exchange_rates)
+    return await _apply_renter_funds(
+        renter,
+        amount,
+        payment_currency,
+        "Payment recorded successfully.",
+    )
 
-    for bill in bills:
-        if any(item["bill_id"] == bill.id for item in applied):
-            db.save_bill(bill)
 
-    renter.credit = remaining_credit
-    renter.credit_currency = credit_currency
-    db.save_renter(renter)
+@router.post("/renters/{renter_id}/apply-credit")
+async def apply_renter_credit(
+    renter_id: str, current_user: TokenData = Depends(require_landlord)
+):
+    renter = db.get_renter(renter_id)
+    if not renter:
+        raise HTTPException(status_code=404, detail="Renter not found")
 
-    return {
-        "renter": renter,
-        "applied": applied,
-        "unapplied_credit": remaining_credit,
-        "credit_currency": credit_currency,
-        "message": "Payment recorded successfully.",
-    }
+    prop = db.get_property(renter.property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    current_credit = round_money(getattr(renter, 'credit', 0.0))
+    if current_credit <= 0:
+        raise HTTPException(status_code=400, detail="Renter has no credit to apply")
+
+    credit_currency = get_credit_currency(renter)
+    return await _apply_renter_funds(
+        renter,
+        0.0,
+        credit_currency,
+        "Credit applied successfully.",
+    )
 
 
 @router.delete("/renters/{renter_id}")

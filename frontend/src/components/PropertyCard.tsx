@@ -54,6 +54,7 @@ export default function PropertyCard({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState<'EUR' | 'RON' | 'USD'>('RON');
   const [recordingPayment, setRecordingPayment] = useState(false);
+  const [applyingCredit, setApplyingCredit] = useState(false);
 
   // Get pending bills for the property (all pending/overdue bills)
   const allPendingBills = useMemo(() => {
@@ -127,6 +128,21 @@ export default function PropertyCard({
       onError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
       setRecordingPayment(false);
+    }
+  };
+
+  const handleApplyCredit = async () => {
+    if (!token || !paymentDialogRenter) return;
+
+    setApplyingCredit(true);
+    try {
+      await api.renters.applyCredit(token, paymentDialogRenter.id);
+      setPaymentDialogRenter(null);
+      onDataChange();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setApplyingCredit(false);
     }
   };
 
@@ -320,8 +336,11 @@ export default function PropertyCard({
       <Dialog open={!!paymentDialogRenter} onOpenChange={(open) => !open && setPaymentDialogRenter(null)}>
         <DialogContent className="bg-slate-800 border-slate-700">
           <DialogHeader>
-            <DialogTitle className="text-slate-100">
-              {t('renter.recordPayment')}{paymentDialogRenter ? `: ${paymentDialogRenter.name}` : ''}
+            <DialogTitle className="flex items-center justify-between gap-4 text-slate-100">
+              <span>{t('renter.recordPayment')}{paymentDialogRenter ? `: ${paymentDialogRenter.name}` : ''}</span>
+              <span className="text-right text-sm font-normal text-slate-300">
+                {t('renter.credit')}: {formatAmount(paymentDialogRenter?.credit || 0, paymentDialogRenter?.credit_currency || 'RON')}
+              </span>
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -350,8 +369,15 @@ export default function PropertyCard({
               </div>
             </div>
             <Button
+              onClick={handleApplyCredit}
+              disabled={applyingCredit || recordingPayment || (paymentDialogRenter?.credit || 0) <= 0}
+              className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600"
+            >
+              {applyingCredit ? t('common.loading') : t('renter.applyCredit')}
+            </Button>
+            <Button
               onClick={handleRecordPayment}
-              disabled={recordingPayment}
+              disabled={recordingPayment || applyingCredit}
               className="w-full bg-emerald-600 hover:bg-emerald-700"
             >
               {recordingPayment ? t('common.loading') : t('renter.recordPayment')}
