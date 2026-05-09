@@ -164,7 +164,8 @@ async def renter_bills(token: str):
             remaining = 0.0
             paid_amount = bill.amount  # Assume full amount was paid
         else:
-            remaining = bill.amount - paid_amount  # Can be negative (credit)
+            paid_amount = min(round_money(paid_amount), round_money(bill.amount))
+            remaining = max(0.0, round_money(bill.amount - paid_amount))
         
         # Check if this bill's property supplier has direct_debit enabled
         is_direct_debit = False
@@ -269,11 +270,12 @@ async def renter_balance(token: str):
         if bill.status == BillStatus.PAID and not has_confirmed_notifications:
             # Bill was paid through other means, count full amount as paid
             paid_for_bill = bill_amount_converted
+        else:
+            paid_for_bill = min(round_money(paid_for_bill), round_money(bill_amount_converted))
         
         # Include all unpaid/pending bills in the balance (including direct debit)
         if bill.status != BillStatus.PAID:
-            # Calculate remaining amount for this bill (can be negative = credit)
-            remaining = bill_amount_converted - paid_for_bill
+            remaining = max(0.0, round_money(bill_amount_converted - paid_for_bill))
             total_due_original += remaining
         
         # Add to total paid

@@ -6,8 +6,50 @@ from pydantic import BaseModel
 from app.models import PaymentNotificationStatus, PaymentNotificationUpdate, BillStatus
 from app.database import db
 from app.auth import get_current_user
+from app.utils.currency import get_exchange_rates, convert_currency
+from app.utils.renter_payments import get_credit_currency, merge_credit_amount, round_money
 
 router = APIRouter(prefix="/payment-notifications", tags=["payment-notifications"])
+
+
+def _get_notification_amount_in_bill_currency(notification, exchange_rates: dict[str, float]) -> float:
+    if notification.amount_in_bill_currency is not None and notification.bill_currency:
+        return round_money(notification.amount_in_bill_currency)
+
+    notification_currency = (notification.currency or "RON").upper()
+    bill_currency = (notification.bill_currency or "RON").upper()
+    return round_money(convert_currency(notification.amount, notification_currency, bill_currency, exchange_rates))
+
+
+def _calculate_remaining_bill_amount(bill, notifications, exchange_rates: dict[str, float], exclude_notification_id: Optional[str] = None) -> float:
+    if bill.status == BillStatus.PAID and not any(n.status == PaymentNotificationStatus.CONFIRMED for n in notifications):
+        return 0.0
+
+    confirmed_paid = 0.0
+    for existing_notification in notifications:
+        if existing_notification.id == exclude_notification_id:
+            continue
+        if existing_notification.status != PaymentNotificationStatus.CONFIRMED:
+            continue
+        confirmed_paid += _get_notification_amount_in_bill_currency(existing_notification, exchange_rates)
+
+    return max(0.0, round_money(bill.amount - confirmed_paid))
+
+
+def _get_bill_status_for_remaining(bill, remaining_amount: float) -> BillStatus:
+    if remaining_amount <= 0:
+        return BillStatus.PAID
+
+    due_date = bill.due_date
+    if isinstance(due_date, str):
+        try:
+            due_date = datetime.fromisoformat(due_date.replace("Z", "+00:00"))
+        except ValueError:
+            return BillStatus.PENDING
+    elif not isinstance(due_date, datetime):
+        due_date = datetime.combine(due_date, datetime.min.time())
+
+    return BillStatus.OVERDUE if due_date.date() < datetime.utcnow().date() else BillStatus.PENDING
 
 
 class NotificationActionRequest(BaseModel):
@@ -139,6 +181,25 @@ async def confirm_notification(
             detail=f"Notification is already {notification.status}"
         )
     
+    bill = db.get_bill(notification.bill_id)
+    renter = db.get_renter(notification.renter_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if not renter:
+        raise HTTPException(status_code=404, detail="Renter not found")
+
+    exchange_rates = await get_exchange_rates()
+    existing_notifications = db.list_payment_notifications_by_bill(notification.bill_id)
+    remaining_before_confirmation = _calculate_remaining_bill_amount(
+        bill,
+        existing_notifications,
+        exchange_rates,
+        exclude_notification_id=notification.id,
+    )
+    notification_amount_in_bill_currency = _get_notification_amount_in_bill_currency(notification, exchange_rates)
+    applied_to_bill = min(remaining_before_confirmation, notification_amount_in_bill_currency)
+    extra_in_bill_currency = max(0.0, round_money(notification_amount_in_bill_currency - applied_to_bill))
+
     # Update the notification status
     updates = {
         "status": PaymentNotificationStatus.CONFIRMED,
@@ -148,16 +209,38 @@ async def confirm_notification(
     
     updated_notification = db.update_payment_notification(notification_id, updates)
     
-    # Mark the bill as paid
-    bill = db.get_bill(notification.bill_id)
-    if bill:
-        bill.status = BillStatus.PAID
-        db.save_bill(bill)
+    remaining_after_confirmation = max(0.0, round_money(remaining_before_confirmation - applied_to_bill))
+    bill.status = _get_bill_status_for_remaining(bill, remaining_after_confirmation)
+    db.save_bill(bill)
+
+    credited_amount = 0.0
+    credited_currency = None
+    if extra_in_bill_currency > 0:
+        notification_currency = (notification.currency or "RON").upper()
+        notification_bill_currency = (notification.bill_currency or bill.currency or "RON").upper()
+        if notification_amount_in_bill_currency > 0:
+            credited_amount = round_money(notification.amount * (extra_in_bill_currency / notification_amount_in_bill_currency))
+        else:
+            credited_amount = round_money(convert_currency(extra_in_bill_currency, notification_bill_currency, notification_currency, exchange_rates))
+
+        merged_credit, merged_currency = merge_credit_amount(
+            round_money(getattr(renter, 'credit', 0.0)),
+            get_credit_currency(renter),
+            credited_amount,
+            notification_currency,
+            exchange_rates,
+        )
+        renter.credit = merged_credit
+        renter.credit_currency = merged_currency
+        db.save_renter(renter)
+        credited_currency = merged_currency
     
     return {
         "notification": updated_notification,
-        "message": "Payment confirmed. Bill has been marked as paid.",
-        "bill_status": BillStatus.PAID
+        "message": "Payment confirmed.",
+        "bill_status": bill.status,
+        "credited_amount": credited_amount,
+        "credited_currency": credited_currency,
     }
 
 

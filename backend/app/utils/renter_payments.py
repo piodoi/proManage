@@ -9,6 +9,21 @@ def round_money(amount: float) -> float:
     return round(float(amount or 0.0) + 1e-9, 2)
 
 
+def merge_credit_amount(
+    current_credit: float,
+    current_currency: str,
+    added_credit: float,
+    added_currency: str,
+    exchange_rates: Dict[str, float],
+) -> Tuple[float, str]:
+    target_currency = (added_currency or current_currency or "RON").upper()
+    merged_credit = round_money(
+        convert_currency(current_credit, current_currency, target_currency, exchange_rates)
+    )
+    merged_credit += round_money(convert_currency(added_credit, added_currency, target_currency, exchange_rates))
+    return round_money(merged_credit), target_currency
+
+
 def get_credit_currency(renter: Any) -> str:
     return ((getattr(renter, "credit_currency", None) or getattr(renter, "rent_currency", None) or "RON")).upper()
 
