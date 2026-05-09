@@ -259,6 +259,8 @@ class MySQLDatabase:
                     start_contract_date=start_date_value,
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
+                    credit=float(getattr(row, 'credit', 0) or 0),
+                    credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
                     access_token=row.access_token,
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
@@ -304,6 +306,8 @@ class MySQLDatabase:
                     start_contract_date=start_date_value,
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
+                    credit=float(getattr(row, 'credit', 0) or 0),
+                    credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
                     access_token=row.access_token,
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
@@ -349,6 +353,8 @@ class MySQLDatabase:
                     start_contract_date=start_date_value,
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
+                    credit=float(getattr(row, 'credit', 0) or 0),
+                    credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
                     access_token=row.access_token,
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
@@ -365,11 +371,11 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
-                        start_contract_date, rent_amount, rent_currency, access_token,
+                        start_contract_date, rent_amount, rent_currency, credit, credit_currency, access_token,
                         password_hash, language, email_notifications, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
-                        :start_contract_date, :rent_amount, :rent_currency, :access_token,
+                        :start_contract_date, :rent_amount, :rent_currency, :credit, :credit_currency, :access_token,
                         :password_hash, :language, :email_notifications, :created_at
                     )
                 """),
@@ -383,6 +389,8 @@ class MySQLDatabase:
                     "start_contract_date": renter.start_contract_date,
                     "rent_amount": renter.rent_amount,
                     "rent_currency": renter.rent_currency or 'EUR',
+                    "credit": float(getattr(renter, 'credit', 0) or 0),
+                    "credit_currency": getattr(renter, 'credit_currency', None) or 'RON',
                     "access_token": renter.access_token,
                     "password_hash": renter.password_hash,
                     "language": renter.language or 'ro',

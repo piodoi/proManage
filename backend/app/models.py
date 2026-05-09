@@ -244,6 +244,8 @@ class Renter(BaseModel):
     password_hash: Optional[str] = None  # Password hash for renter account (optional)
     language: Optional[str] = "ro"  # Language preference: "en" or "ro"
     email_notifications: bool = False  # Whether to receive email notifications for new bills
+    credit: float = 0.0
+    credit_currency: str = "RON"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -417,6 +419,11 @@ class RenterUpdate(BaseModel):
     rent_currency: Optional[str] = None  # Currency for rent: "EUR", "RON", or "USD"
     password: Optional[str] = None  # Plain password (will be hashed) - landlord can update password
     language: Optional[str] = None  # Language preference: "en" or "ro"
+
+
+class RenterPaymentCreate(BaseModel):
+    amount: float
+    currency: Optional[str] = None
 
 
 class RenterAccountCreate(BaseModel):

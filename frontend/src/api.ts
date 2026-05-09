@@ -271,6 +271,7 @@ export const api = {
     create: (token: string, propertyId: string, data: RenterCreate) => request<Renter>(`/properties/${propertyId}/renters`, { method: 'POST', body: data, token }),
     get: (token: string, id: string) => request<Renter>(`/renters/${id}`, { token }),
     update: (token: string, id: string, data: RenterUpdate) => request<Renter>(`/renters/${id}`, { method: 'PUT', body: data, token }),
+      recordPayment: (token: string, id: string, data: RenterPaymentCreate) => request<RenterPaymentResponse>(`/renters/${id}/payments`, { method: 'POST', body: data, token }),
     delete: (token: string, id: string) => request<{ status: string }>(`/renters/${id}`, { method: 'DELETE', token }),
     getLink: (token: string, id: string) => request<{ access_token: string; link: string }>(`/renters/${id}/link`, { token }),
   },
@@ -540,6 +541,8 @@ export type Renter = {
   password_hash?: string;  // Not sent to frontend, but presence indicates account exists
   language?: string;  // Language preference: "en" or "ro"
   email_notifications?: boolean;  // Whether to receive email notifications
+  credit?: number;
+  credit_currency?: string;
   created_at: string;
 };
 
@@ -564,6 +567,27 @@ export type RenterUpdate = {
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
   password?: string;  // Optional password (landlord can update for renter)
   language?: string;  // Language preference: "en" or "ro"
+};
+
+export type RenterPaymentCreate = {
+  amount: number;
+  currency?: string;
+};
+
+export type RenterPaymentResponse = {
+  renter: Renter;
+  applied: Array<{
+    bill_id: string;
+    description: string;
+    bill_type: BillType;
+    applied_amount: number;
+    bill_currency: string;
+    remaining_bill_amount: number;
+    status: 'pending' | 'paid' | 'overdue';
+  }>;
+  unapplied_credit: number;
+  credit_currency: string;
+  message: string;
 };
 
 export type RenterAccountCreate = {
@@ -717,6 +741,8 @@ export type RenterBalance = {
   total_paid: number;
   balance: number;
   currency: string; // Landlord's preferred currency
+  credit?: number;
+  credit_currency?: string;
   exchange_rates?: {
     EUR: number;
     USD: number;

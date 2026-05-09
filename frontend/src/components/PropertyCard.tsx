@@ -2,8 +2,12 @@ import { useState, useMemo } from 'react';
 import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateWithPreferences } from '../lib/utils';
-import { ExternalLink, Trash2, Pencil, Factory } from 'lucide-react';
+import { ExternalLink, Trash2, Pencil, Factory, Banknote } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import RenterAccessLinkDialog from './dialogs/RenterAccessLinkDialog';
@@ -12,6 +16,7 @@ import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { convertCurrency, formatAmount } from '../utils/currency';
+import { getAvailableCurrencies } from '../lib/currencyConfig';
 
 type PropertyCardProps = {
   token: string | null;
@@ -45,6 +50,10 @@ export default function PropertyCard({
   const [showSupplierSettings, setShowSupplierSettings] = useState(false);
   const [editingRenter, setEditingRenter] = useState<Renter | null>(null);
   const [renterLink, setRenterLink] = useState<{ token: string; link: string; renter: Renter | null } | null>(null);
+  const [paymentDialogRenter, setPaymentDialogRenter] = useState<Renter | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentCurrency, setPaymentCurrency] = useState<'EUR' | 'RON' | 'USD'>('RON');
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   // Get pending bills for the property (all pending/overdue bills)
   const allPendingBills = useMemo(() => {
@@ -88,6 +97,37 @@ export default function PropertyCard({
   const openEditRenter = (renter: Renter) => {
     setEditingRenter(renter);
     setShowRenterDialog(true);
+  };
+
+  const openRecordPayment = (renter: Renter) => {
+    setPaymentDialogRenter(renter);
+    setPaymentAmount('');
+    setPaymentCurrency('RON');
+  };
+
+  const handleRecordPayment = async () => {
+    if (!token || !paymentDialogRenter) return;
+
+    const amount = parseFloat(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      onError(t('renter.paymentAmountRequired'));
+      return;
+    }
+
+    setRecordingPayment(true);
+    try {
+      await api.renters.recordPayment(token, paymentDialogRenter.id, {
+        amount,
+        currency: paymentCurrency,
+      });
+      setPaymentDialogRenter(null);
+      setPaymentAmount('');
+      onDataChange();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('errors.generic'));
+    } finally {
+      setRecordingPayment(false);
+    }
   };
 
   return (
@@ -195,7 +235,7 @@ export default function PropertyCard({
                   <div key={renter.id} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-slate-300 font-medium">{renter.name}</span>
-                      {(rentAmount > 0 || renter.rent_day || renter.start_contract_date) && (
+                      {(rentAmount > 0 || renter.rent_day || renter.start_contract_date || (renter.credit || 0) > 0) && (
                         <span className="text-xs text-slate-400">
                           {rentAmount > 0 && (
                             <>
@@ -211,10 +251,21 @@ export default function PropertyCard({
                           {renter.start_contract_date && (
                             <span className="ml-2">• {t('renter.start')}: {formatDateWithPreferences(renter.start_contract_date, preferences.date_format, language)}</span>
                           )}
+                          {(renter.credit || 0) > 0 && (
+                            <span className="ml-2">• {t('renter.credit')}: {formatAmount(renter.credit || 0, renter.credit_currency || 'RON')}</span>
+                          )}
                         </span>
                       )}
                     </div>
                     <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        onClick={() => openRecordPayment(renter)}
+                        className="bg-slate-700 text-emerald-400 hover:bg-slate-600 hover:text-emerald-300 border border-slate-600 h-6 px-2 w-6"
+                        title={t('renter.recordPayment')}
+                      >
+                        <Banknote className="w-3 h-3" />
+                      </Button>
                       <Button
                         size="sm"
                         onClick={() => openEditRenter(renter)}
@@ -265,6 +316,49 @@ export default function PropertyCard({
         renterLink={renterLink}
         pendingBills={renterLink?.renter ? getPendingBillsForRenter(renterLink.renter.id) : []}
       />
+
+      <Dialog open={!!paymentDialogRenter} onOpenChange={(open) => !open && setPaymentDialogRenter(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-slate-100">
+              {t('renter.recordPayment')}{paymentDialogRenter ? `: ${paymentDialogRenter.name}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-slate-300">{t('renter.paymentAmount')}</Label>
+              <div className="mt-1 flex gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-slate-100"
+                  placeholder="0.00"
+                />
+                <Select value={paymentCurrency} onValueChange={(value) => setPaymentCurrency(value as 'EUR' | 'RON' | 'USD')}>
+                  <SelectTrigger className="w-24 bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    {getAvailableCurrencies().map((currency) => (
+                      <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button
+              onClick={handleRecordPayment}
+              disabled={recordingPayment}
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+            >
+              {recordingPayment ? t('common.loading') : t('renter.recordPayment')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

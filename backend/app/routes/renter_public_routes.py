@@ -9,6 +9,7 @@ from app.models import PaymentNotification, PaymentNotificationCreate, PaymentNo
 from app.database import db
 from app.routes.auth_routes import hash_password, verify_password
 from app.utils.currency import get_exchange_rates, convert_currency
+from app.utils.renter_payments import get_credit_currency, preview_credit_application, round_money
 from app.paths import get_bill_pdf_path, bill_pdf_exists
 
 router = APIRouter(prefix="/renter", tags=["renter-public"])
@@ -196,6 +197,23 @@ async def renter_bills(token: str):
                 for n in notifications if n.renter_id == renter.id
             ]
         })
+
+    credit_amount = round_money(getattr(renter, 'credit', 0.0))
+    if credit_amount > 0:
+        adjustments, _ = preview_credit_application(
+            renter.id,
+            credit_amount,
+            get_credit_currency(renter),
+            result,
+            exchange_rates,
+        )
+        for entry in result:
+            adjustment = adjustments.get(entry["bill"].id)
+            if not adjustment:
+                continue
+            credit_applied = adjustment["credit_applied"]
+            entry["remaining"] = adjustment["adjusted_remaining"]
+            entry["paid_amount"] = round_money(entry["paid_amount"] + credit_applied)
     
     return result
 
@@ -262,12 +280,18 @@ async def renter_balance(token: str):
         total_paid_original += paid_for_bill
     
     balance_original = total_due_original  # Balance is just the remaining due amount
+    credit_currency = get_credit_currency(renter)
+    credit_converted = convert_currency(round_money(getattr(renter, 'credit', 0.0)), credit_currency, bill_currency, exchange_rates)
+    balance_original = round_money(balance_original - credit_converted)
+    total_paid_original = round_money(total_paid_original + credit_converted)
     
     response = {
         "total_due": total_due_original,
         "total_paid": total_paid_original,
         "balance": balance_original,
         "currency": bill_currency,
+        "credit": round_money(getattr(renter, 'credit', 0.0)),
+        "credit_currency": credit_currency,
         "exchange_rates": exchange_rates,
     }
     

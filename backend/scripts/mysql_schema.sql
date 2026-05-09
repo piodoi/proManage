@@ -54,6 +54,8 @@ CREATE TABLE renters (
     start_contract_date DATE NULL,
     rent_amount FLOAT NULL,
     rent_currency VARCHAR(10) DEFAULT 'EUR',
+    credit FLOAT NOT NULL DEFAULT 0,
+    credit_currency VARCHAR(10) NOT NULL DEFAULT 'RON',
     access_token VARCHAR(36) NOT NULL UNIQUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,

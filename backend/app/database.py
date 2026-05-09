@@ -245,6 +245,8 @@ class Database:
                         start_contract_date=start_date_value,
                         rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
                         rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
+                        credit=float(getattr(row, 'credit', 0) or 0),
+                        credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
                         access_token=row.access_token,
                         created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
                     ))
@@ -254,7 +256,7 @@ class Database:
         existing = self._impl.get_renter_by_id(renter.id)
         if existing:
             updates = {}
-            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'rent_currency', 'password_hash', 'language', 'email_notifications']:
+            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'rent_currency', 'password_hash', 'language', 'email_notifications', 'credit', 'credit_currency']:
                 if getattr(renter, field) != getattr(existing, field):
                     updates[field] = getattr(renter, field)
             if updates:

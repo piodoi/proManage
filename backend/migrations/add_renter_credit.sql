@@ -1,0 +1,9 @@
+ALTER TABLE renters
+ADD COLUMN IF NOT EXISTS credit FLOAT NOT NULL DEFAULT 0;
+
+ALTER TABLE renters
+ADD COLUMN IF NOT EXISTS credit_currency VARCHAR(10) NOT NULL DEFAULT 'RON';
+
+UPDATE renters
+SET credit_currency = COALESCE(NULLIF(rent_currency, ''), 'RON')
+WHERE credit <> 0;
