@@ -173,8 +173,8 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
     }
   };
 
-  // Refresh bills for a specific property
-  const refreshPropertyBills = useCallback(async (propertyId: string) => {
+  // Refresh bills and renters for a specific property
+  const refreshPropertyData = useCallback(async (propertyId: string) => {
     if (!token) return;
     
     // Set loading state for this specific property
@@ -185,8 +185,17 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
           : pwb
       )
     );
-    
-    await loadBillsForProperty(propertyId);
+
+    try {
+      const [_, rentersData] = await Promise.all([
+        loadBillsForProperty(propertyId),
+        api.renters.list(token, propertyId),
+      ]);
+
+      setRenters(prev => ({ ...prev, [propertyId]: rentersData }));
+    } catch (err) {
+      console.error(`Failed to refresh property data for ${propertyId}:`, err);
+    }
   }, [token, loadBillsForProperty]);
 
   const handleDeleteProperty = async (propertyId: string) => {
@@ -296,7 +305,7 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
               bills={pwb.bills}
               exchangeRates={exchangeRates}
               onDelete={handleDeleteProperty}
-              onDataChange={() => refreshPropertyBills(pwb.property.id)}
+              onDataChange={() => refreshPropertyData(pwb.property.id)}
               onError={setError}
               subscription={subscription}
               onUpgradeClick={navigateToSubscription}
