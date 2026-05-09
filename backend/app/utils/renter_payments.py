@@ -116,8 +116,14 @@ def allocate_payment_to_bills(
         )
         remaining_credit = max(0.0, round_money(remaining_credit - consumed_credit))
 
-        bill.amount = round_money(current_amount - applied_in_bill_currency)
-        bill.status = recalculate_bill_status_after_payment(bill)
+        is_full_payment = round_money(current_amount - applied_in_bill_currency) <= 0
+        if is_full_payment:
+            bill.status = BillStatus.PAID
+            remaining_bill_amount = 0.0
+        else:
+            bill.amount = round_money(current_amount - applied_in_bill_currency)
+            bill.status = recalculate_bill_status_after_payment(bill)
+            remaining_bill_amount = round_money(bill.amount)
 
         applied.append({
             "bill_id": bill.id,
@@ -125,7 +131,8 @@ def allocate_payment_to_bills(
             "bill_type": bill.bill_type,
             "applied_amount": applied_in_bill_currency,
             "bill_currency": bill_currency,
-            "remaining_bill_amount": round_money(bill.amount),
+            "remaining_bill_amount": remaining_bill_amount,
+            "marks_bill_paid": is_full_payment,
             "status": bill.status,
         })
 

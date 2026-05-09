@@ -1,7 +1,16 @@
 """Renter management routes."""
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from app.models import (
-    Renter, RenterCreate, RenterUpdate, RenterPaymentCreate, TokenData, UserRole
+    PaymentNotification,
+    PaymentNotificationStatus,
+    Renter,
+    RenterCreate,
+    RenterUpdate,
+    RenterPaymentCreate,
+    TokenData,
+    UserRole,
 )
 from app.auth import require_landlord
 from app.routes.auth_routes import hash_password
@@ -15,6 +24,7 @@ router = APIRouter(tags=["renters"])
 
 async def _apply_renter_funds(
     renter: Renter,
+    landlord_id: str,
     payment_amount: float,
     payment_currency: str,
     message: str,
@@ -29,9 +39,32 @@ async def _apply_renter_funds(
         exchange_rates,
     )
 
+    applied_by_bill_id = {item["bill_id"]: item for item in applied}
+    confirmed_at = datetime.utcnow().isoformat()
+
     for bill in bills:
-        if any(item["bill_id"] == bill.id for item in applied):
-            db.save_bill(bill)
+        applied_item = applied_by_bill_id.get(bill.id)
+        if not applied_item:
+            continue
+
+        if applied_item.get("marks_bill_paid"):
+            db.save_payment_notification(
+                PaymentNotification(
+                    bill_id=bill.id,
+                    renter_id=renter.id,
+                    landlord_id=landlord_id,
+                    amount=applied_item["applied_amount"],
+                    currency=applied_item["bill_currency"],
+                    amount_in_bill_currency=applied_item["applied_amount"],
+                    bill_currency=applied_item["bill_currency"],
+                    status=PaymentNotificationStatus.CONFIRMED,
+                    renter_note=message,
+                    landlord_note=message,
+                    confirmed_at=confirmed_at,
+                )
+            )
+
+        db.save_bill(bill)
 
     renter.credit = remaining_credit
     renter.credit_currency = credit_currency
@@ -170,9 +203,10 @@ async def record_renter_payment(
     payment_currency = (data.currency or 'RON').upper()
     return await _apply_renter_funds(
         renter,
+        prop.landlord_id,
         amount,
         payment_currency,
-        "Payment recorded successfully.",
+        "AutoPay",
     )
 
 
@@ -197,6 +231,7 @@ async def apply_renter_credit(
     credit_currency = get_credit_currency(renter)
     return await _apply_renter_funds(
         renter,
+        prop.landlord_id,
         0.0,
         credit_currency,
         "Credit applied successfully.",

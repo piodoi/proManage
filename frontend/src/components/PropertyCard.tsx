@@ -2,21 +2,17 @@ import { useState, useMemo } from 'react';
 import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateWithPreferences } from '../lib/utils';
 import { ExternalLink, Trash2, Pencil, Factory, Banknote } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import RenterAccessLinkDialog from './dialogs/RenterAccessLinkDialog';
+import RenterPaymentDialog from './dialogs/RenterPaymentDialog';
 import PropertySupplierSettingsDialog from './dialogs/PropertySupplierSettingsDialog';
 import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { convertCurrency, formatAmount } from '../utils/currency';
-import { getAvailableCurrencies } from '../lib/currencyConfig';
 
 type PropertyCardProps = {
   token: string | null;
@@ -261,14 +257,14 @@ export default function PropertyCard({
                               )}
                             </>
                           )}
+                          {(renter.credit || 0) > 0 && (
+                            <span className="ml-2">• {t('renter.credit')}: {formatAmount(renter.credit || 0, renter.credit_currency || 'RON')}</span>
+                          )}
                           {renter.rent_day && (
                             <span className="ml-2">• {t('renter.dueDay')}: {renter.rent_day}</span>
                           )}
                           {renter.start_contract_date && (
                             <span className="ml-2">• {t('renter.start')}: {formatDateWithPreferences(renter.start_contract_date, preferences.date_format, language)}</span>
-                          )}
-                          {(renter.credit || 0) > 0 && (
-                            <span className="ml-2">• {t('renter.credit')}: {formatAmount(renter.credit || 0, renter.credit_currency || 'RON')}</span>
                           )}
                         </span>
                       )}
@@ -333,58 +329,19 @@ export default function PropertyCard({
         pendingBills={renterLink?.renter ? getPendingBillsForRenter(renterLink.renter.id) : []}
       />
 
-      <Dialog open={!!paymentDialogRenter} onOpenChange={(open) => !open && setPaymentDialogRenter(null)}>
-        <DialogContent className="bg-slate-800 border-slate-700">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between gap-4 text-slate-100">
-              <span>{t('renter.recordPayment')}{paymentDialogRenter ? `: ${paymentDialogRenter.name}` : ''}</span>
-              <span className="text-right text-sm font-normal text-slate-300">
-                {t('renter.credit')}: {formatAmount(paymentDialogRenter?.credit || 0, paymentDialogRenter?.credit_currency || 'RON')}
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-slate-300">{t('renter.paymentAmount')}</Label>
-              <div className="mt-1 flex gap-2">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-slate-100"
-                  placeholder="0.00"
-                />
-                <Select value={paymentCurrency} onValueChange={(value) => setPaymentCurrency(value as 'EUR' | 'RON' | 'USD')}>
-                  <SelectTrigger className="w-24 bg-slate-700 border-slate-600 text-slate-100">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-700 border-slate-600">
-                    {getAvailableCurrencies().map((currency) => (
-                      <SelectItem key={currency} value={currency}>{currency}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <Button
-              onClick={handleApplyCredit}
-              disabled={applyingCredit || recordingPayment || (paymentDialogRenter?.credit || 0) <= 0}
-              className="w-full bg-slate-700 text-slate-100 hover:bg-slate-600"
-            >
-              {applyingCredit ? t('common.loading') : t('renter.applyCredit')}
-            </Button>
-            <Button
-              onClick={handleRecordPayment}
-              disabled={recordingPayment || applyingCredit}
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-            >
-              {recordingPayment ? t('common.loading') : t('renter.recordPayment')}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <RenterPaymentDialog
+        renter={paymentDialogRenter}
+        open={!!paymentDialogRenter}
+        onOpenChange={(open) => !open && setPaymentDialogRenter(null)}
+        paymentAmount={paymentAmount}
+        onPaymentAmountChange={setPaymentAmount}
+        paymentCurrency={paymentCurrency}
+        onPaymentCurrencyChange={setPaymentCurrency}
+        applyingCredit={applyingCredit}
+        recordingPayment={recordingPayment}
+        onApplyCredit={handleApplyCredit}
+        onRecordPayment={handleRecordPayment}
+      />
     </>
   );
 }
