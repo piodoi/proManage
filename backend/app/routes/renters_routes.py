@@ -6,6 +6,7 @@ from app.models import (
     PaymentNotification,
     PaymentNotificationStatus,
     Renter,
+    RenterCreditApplyRequest,
     RenterCreate,
     RenterUpdate,
     RenterPaymentCreate,
@@ -28,6 +29,7 @@ async def _apply_renter_funds(
     payment_amount: float,
     payment_currency: str,
     message: str,
+    include_common_bills: bool = True,
 ):
     exchange_rates = await get_exchange_rates()
     bills = db.list_bills(property_id=renter.property_id)
@@ -37,6 +39,7 @@ async def _apply_renter_funds(
         payment_amount,
         payment_currency,
         exchange_rates,
+        include_common_bills=include_common_bills,
     )
 
     applied_by_bill_id = {item["bill_id"]: item for item in applied}
@@ -207,12 +210,15 @@ async def record_renter_payment(
         amount,
         payment_currency,
         "AutoPay",
+        include_common_bills=data.include_common_bills,
     )
 
 
 @router.post("/renters/{renter_id}/apply-credit")
 async def apply_renter_credit(
-    renter_id: str, current_user: TokenData = Depends(require_landlord)
+    renter_id: str,
+    data: RenterCreditApplyRequest | None = None,
+    current_user: TokenData = Depends(require_landlord),
 ):
     renter = db.get_renter(renter_id)
     if not renter:
@@ -235,6 +241,7 @@ async def apply_renter_credit(
         0.0,
         credit_currency,
         "Credit applied successfully.",
+        include_common_bills=data.include_common_bills if data else True,
     )
 
 

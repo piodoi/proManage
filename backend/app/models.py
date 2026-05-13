@@ -424,6 +424,11 @@ class RenterUpdate(BaseModel):
 class RenterPaymentCreate(BaseModel):
     amount: float
     currency: Optional[str] = None
+    include_common_bills: bool = True
+
+
+class RenterCreditApplyRequest(BaseModel):
+    include_common_bills: bool = True
 
 
 class RenterAccountCreate(BaseModel):

@@ -172,6 +172,8 @@
     "credit": "Credit",
     "applyCredit": "Aplică creditul",
     "recordPayment": "Înregistrează plată",
+    "includeCommonBills": "Include și facturile comune",
+    "includeCommonBillsHelp": "Lasă bifat pentru a include facturile comune ale proprietății. Debifează dacă plata trebuie folosită doar pentru facturile proprii ale chiriașului.",
     "downloadPdf": "Descarcă PDF",
     "amountToPay": "Sumă de Plătit",
     "getBankDetails": "Obține Detalii Bancare",

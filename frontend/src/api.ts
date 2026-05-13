@@ -272,7 +272,7 @@ export const api = {
     get: (token: string, id: string) => request<Renter>(`/renters/${id}`, { token }),
     update: (token: string, id: string, data: RenterUpdate) => request<Renter>(`/renters/${id}`, { method: 'PUT', body: data, token }),
     recordPayment: (token: string, id: string, data: RenterPaymentCreate) => request<RenterPaymentResponse>(`/renters/${id}/payments`, { method: 'POST', body: data, token }),
-    applyCredit: (token: string, id: string) => request<RenterPaymentResponse>(`/renters/${id}/apply-credit`, { method: 'POST', token }),
+    applyCredit: (token: string, id: string, data: RenterCreditApplyRequest = {}) => request<RenterPaymentResponse>(`/renters/${id}/apply-credit`, { method: 'POST', body: data, token }),
     delete: (token: string, id: string) => request<{ status: string }>(`/renters/${id}`, { method: 'DELETE', token }),
     getLink: (token: string, id: string) => request<{ access_token: string; link: string }>(`/renters/${id}/link`, { token }),
   },
@@ -573,6 +573,11 @@ export type RenterUpdate = {
 export type RenterPaymentCreate = {
   amount: number;
   currency?: string;
+  include_common_bills?: boolean;
+};
+
+export type RenterCreditApplyRequest = {
+  include_common_bills?: boolean;
 };
 
 export type RenterPaymentResponse = {

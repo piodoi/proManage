@@ -49,6 +49,7 @@ export default function PropertyCard({
   const [paymentDialogRenter, setPaymentDialogRenter] = useState<Renter | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState<'EUR' | 'RON' | 'USD'>('RON');
+  const [includeCommonBills, setIncludeCommonBills] = useState(true);
   const [recordingPayment, setRecordingPayment] = useState(false);
   const [applyingCredit, setApplyingCredit] = useState(false);
 
@@ -100,6 +101,7 @@ export default function PropertyCard({
     setPaymentDialogRenter(renter);
     setPaymentAmount('');
     setPaymentCurrency('RON');
+    setIncludeCommonBills(true);
   };
 
   const handleRecordPayment = async () => {
@@ -116,6 +118,7 @@ export default function PropertyCard({
       await api.renters.recordPayment(token, paymentDialogRenter.id, {
         amount,
         currency: paymentCurrency,
+        include_common_bills: includeCommonBills,
       });
       setPaymentDialogRenter(null);
       setPaymentAmount('');
@@ -132,7 +135,9 @@ export default function PropertyCard({
 
     setApplyingCredit(true);
     try {
-      await api.renters.applyCredit(token, paymentDialogRenter.id);
+      await api.renters.applyCredit(token, paymentDialogRenter.id, {
+        include_common_bills: includeCommonBills,
+      });
       setPaymentDialogRenter(null);
       onDataChange();
     } catch (err) {
@@ -337,6 +342,8 @@ export default function PropertyCard({
         onPaymentAmountChange={setPaymentAmount}
         paymentCurrency={paymentCurrency}
         onPaymentCurrencyChange={setPaymentCurrency}
+        includeCommonBills={includeCommonBills}
+        onIncludeCommonBillsChange={setIncludeCommonBills}
         applyingCredit={applyingCredit}
         recordingPayment={recordingPayment}
         onApplyCredit={handleApplyCredit}

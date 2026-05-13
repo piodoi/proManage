@@ -172,6 +172,8 @@
     "credit": "Credit",
     "applyCredit": "Apply Credit",
     "recordPayment": "Record Payment",
+    "includeCommonBills": "Also apply to common bills",
+    "includeCommonBillsHelp": "Keep this checked to include shared property bills. Uncheck it to use the payment only on this renter's own bills.",
     "downloadPdf": "Download PDF",
     "iMadeTheTransfer": "I made the transfer",
     "notifyPaymentDescription": "After making the transfer, notify the landlord:",

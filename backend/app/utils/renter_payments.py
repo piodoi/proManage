@@ -45,10 +45,17 @@ def _bill_due_sort_key(bill: Bill) -> Tuple[datetime, str]:
     return due_date, bill.id
 
 
-def get_prioritized_renter_bills(renter_id: str, bills: Sequence[Bill]) -> List[Bill]:
+def get_prioritized_renter_bills(
+    renter_id: str,
+    bills: Sequence[Bill],
+    include_common_bills: bool = True,
+) -> List[Bill]:
     eligible = [
         bill for bill in bills
-        if (bill.renter_id is None or bill.renter_id == 'all' or bill.renter_id == renter_id)
+        if (
+            bill.renter_id == renter_id
+            or (include_common_bills and (bill.renter_id is None or bill.renter_id == 'all'))
+        )
         and bill.status != BillStatus.PAID
         and round_money(bill.amount) > 0
     ]
@@ -85,6 +92,7 @@ def allocate_payment_to_bills(
     payment_amount: float,
     payment_currency: str,
     exchange_rates: Dict[str, float],
+    include_common_bills: bool = True,
 ) -> Tuple[List[Dict[str, Any]], float, str]:
     target_credit_currency = payment_currency.upper()
     existing_credit = round_money(getattr(renter, 'credit', 0.0))
@@ -95,7 +103,7 @@ def allocate_payment_to_bills(
     remaining_credit += round_money(convert_currency(payment_amount, payment_currency, target_credit_currency, exchange_rates))
     applied: List[Dict[str, Any]] = []
 
-    for bill in get_prioritized_renter_bills(renter.id, bills):
+    for bill in get_prioritized_renter_bills(renter.id, bills, include_common_bills=include_common_bills):
         if remaining_credit <= 0:
             break
 
