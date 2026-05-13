@@ -2,8 +2,6 @@
 # This file does not depend on docker-compose.yml or docker-compose.prod.yml.
 # It is intended for copy/paste into an Unraid compose stack.
 
-version: '3.8'
-
 services:
   backend:
     image: piodoi/promanage-backend:latest
