@@ -26,7 +26,7 @@ services:
       - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET:-}
     volumes:
       # Persist database and user data
-      - ./userdata:/userdata
+      - ${PROMANAGE_USERDATA_PATH:-./userdata}:/userdata
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -58,29 +58,29 @@ services:
   # MySQL Database (optional - for production)
   # Uncomment this section if using MySQL instead of SQLite
   mysql:
-    image: mysql:8.0
+    image: lscr.io/linuxserver/mariadb:latest
     container_name: promanage-mysql
     restart: unless-stopped
     environment:
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - TZ=${TZ:-Etc/UTC}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
       - MYSQL_DATABASE=promanage
       - MYSQL_USER=promanage
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-promanagepassword}
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./backend/scripts/mysql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ${MARIADB_CONFIG_PATH:-./mariadb-config}:/config
+      - ./backend/scripts/mysql_schema.sql:/config/initdb.d/01-schema.sql:ro
     ports:
       - "3306:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - promanage-network
-
-volumes:
-  mysql-data:
 
 networks:
   promanage-network:

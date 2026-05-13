@@ -1,0 +1,71 @@
+# Standalone production compose for Unraid.
+# This file does not depend on docker-compose.yml or docker-compose.prod.yml.
+# It is intended for copy/paste into an Unraid compose stack.
+
+version: '3.8'
+
+services:
+  backend:
+    image: piodoi/promanage-backend:latest
+    container_name: promanage-backend
+    restart: always
+    env_file:
+      - ${BACKEND_ENV_FILE:-/mnt/user/appdata/proManage/backend/.env}
+    environment:
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-promanage}
+    volumes:
+      - ${PROMANAGE_USERDATA_PATH:-/mnt/user/appdata/proManage/userdata}:/userdata
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - promanage-network
+
+  frontend:
+    image: piodoi/promanage-frontend:latest
+    container_name: promanage-frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - promanage-network
+
+  mysql:
+    image: lscr.io/linuxserver/mariadb:latest
+    container_name: promanage-mysql
+    restart: always
+    environment:
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - TZ=${TZ:-Europe/Bucharest}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-promanage}
+      - MYSQL_USER=${MYSQL_USER:-promanage}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - REMOTE_SQL=${REMOTE_SQL:-https://raw.githubusercontent.com/PioDoi/proManage/main/backend/scripts/mysql_schema.sql}
+    volumes:
+      - ${MARIADB_CONFIG_PATH:-/mnt/user/appdata/mariadb}:/config
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - promanage-network
+
+networks:
+  promanage-network:
+    driver: bridge

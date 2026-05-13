@@ -6,6 +6,8 @@ version: '3.8'
 services:
   backend:
     restart: always
+    env_file:
+      - ${BACKEND_ENV_FILE:-/mnt/user/appdata/proManage/backend/.env}
     environment:
       # Use MySQL in production
       - DATABASE_URL=mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/promanage
@@ -20,25 +22,25 @@ services:
         - VITE_API_URL=${PRODUCTION_API_URL}
 
   mysql:
-    image: mysql:8.0
+    image: lscr.io/linuxserver/mariadb:latest
     container_name: promanage-mysql
     restart: always
     environment:
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - TZ=${TZ:-Etc/UTC}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=promanage
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-promanage}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./backend/scripts/mysql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ${MARIADB_CONFIG_PATH:-/mnt/user/appdata/mariadb}:/config
+      - ./backend/scripts/mysql_schema.sql:/config/initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - promanage-network
-
-volumes:
-  mysql-data:
 
