@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN marketing_unsubscribed BOOLEAN NOT NULL DEFAULT FALSE;

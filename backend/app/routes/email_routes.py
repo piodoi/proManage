@@ -11,7 +11,7 @@ from app.email_scraper import extract_bill_info, match_address_to_property
 from app.email_monitor import email_monitor
 from app.limits import check_email_sync_allowed
 import logging
-from app.email_sender import send_email
+from app.email_sender import send_email, verify_marketing_unsubscribe_token
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,11 @@ router = APIRouter(prefix="/email", tags=["email"])
 
 class MarkEmailsReadRequest(BaseModel):
     email_ids: List[str]  # List of email IDs to mark as read
+
+
+class MarketingUnsubscribeRequest(BaseModel):
+    user_id: str
+    token: str
 
 
 @router.post("/process")
@@ -230,4 +235,23 @@ async def contact_support(
     except Exception as e:
         logger.error(f"[Email] Contact send failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/marketing/unsubscribe")
+async def unsubscribe_marketing_emails(request: MarketingUnsubscribeRequest):
+    if not verify_marketing_unsubscribe_token(request.user_id, request.token):
+        raise HTTPException(status_code=400, detail="Invalid unsubscribe link")
+
+    user = db.get_user(request.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.marketing_unsubscribed:
+        user.marketing_unsubscribed = True
+        db.save_user(user)
+
+    return {
+        "status": "success",
+        "message": "You have been unsubscribed from marketing emails.",
+    }
 

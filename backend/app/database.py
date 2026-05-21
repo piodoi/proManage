@@ -133,6 +133,7 @@ class Database:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
+                    marketing_unsubscribed=bool(getattr(row, 'marketing_unsubscribed', False)),
                     subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires and hasattr(row.subscription_expires, 'isoformat') else row.subscription_expires,
                     created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
                 ))
@@ -148,7 +149,7 @@ class Database:
         existing = self._impl.get_user_by_id(user.id)
         if existing:
             updates = {}
-            for field in ['email', 'name', 'password_hash', 'subscription_tier', 'subscription_expires']:
+            for field in ['email', 'name', 'role', 'password_hash', 'subscription_tier', 'marketing_unsubscribed', 'subscription_expires']:
                 if getattr(user, field, None) != getattr(existing, field, None):
                     updates[field] = getattr(user, field)
             if updates:

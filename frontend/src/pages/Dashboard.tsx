@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -34,7 +35,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord', password: '', subscription_tier: 0 });
+  const [formData, setFormData] = useState({ email: '', name: '', role: 'landlord' as 'admin' | 'landlord', password: '', subscription_tier: 0, marketing_unsubscribed: false });
+  const [marketingForm, setMarketingForm] = useState({ target_type: 'all_non_admin' as 'single' | 'all_non_admin', user_id: '', subject: '', body: '' });
+  const [marketingSending, setMarketingSending] = useState(false);
+  const [marketingStatus, setMarketingStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -114,7 +118,7 @@ export default function Dashboard() {
     try {
       await api.admin.createUser(token, formData);
       setShowCreate(false);
-      setFormData({ email: '', name: '', role: 'landlord', password: '', subscription_tier: 0 });
+      setFormData({ email: '', name: '', role: 'landlord', password: '', subscription_tier: 0, marketing_unsubscribed: false });
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user');
@@ -135,7 +139,7 @@ export default function Dashboard() {
       }
       await api.admin.updateUser(token, editUser.id, updateData);
       setEditUser(null);
-      setFormData({ email: '', name: '', role: 'landlord', password: '', subscription_tier: 0 });
+      setFormData({ email: '', name: '', role: 'landlord', password: '', subscription_tier: 0, marketing_unsubscribed: false });
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update user');
@@ -164,7 +168,31 @@ export default function Dashboard() {
 
   const openEdit = (user: User) => {
     setEditUser(user);
-    setFormData({ email: user.email, name: user.name, role: user.role, password: '', subscription_tier: user.subscription_tier ?? 0 });
+    setFormData({ email: user.email, name: user.name, role: user.role, password: '', subscription_tier: user.subscription_tier ?? 0, marketing_unsubscribed: user.marketing_unsubscribed ?? false });
+  };
+
+  const handleMarketingSend = async () => {
+    if (!token) return;
+    setMarketingSending(true);
+    setMarketingStatus('');
+    setError('');
+    try {
+      const result = await api.admin.sendMarketing(token, marketingForm);
+      setMarketingStatus(
+        `${result.sent} sent, ${result.failed.length} failed, ${result.skipped_unsubscribed.length} unsubscribed, ${result.skipped_missing_email.length} missing email.`
+      );
+      setMarketingForm((current) => ({
+        ...current,
+        subject: '',
+        body: '',
+        user_id: current.target_type === 'single' ? current.user_id : '',
+      }));
+      loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send marketing email');
+    } finally {
+      setMarketingSending(false);
+    }
   };
 
   const loadSuppliers = async () => {
@@ -348,7 +376,12 @@ export default function Dashboard() {
                   handleUpdate={handleUpdate}
                   handleDelete={handleDelete}
                   handleSubscription={handleSubscription}
+                  handleMarketingSend={handleMarketingSend}
                   openEdit={openEdit}
+                  marketingForm={marketingForm}
+                  setMarketingForm={setMarketingForm}
+                  marketingSending={marketingSending}
+                  marketingStatus={marketingStatus}
                   showSupplierCreate={showSupplierCreate}
                   setShowSupplierCreate={setShowSupplierCreate}
                   editSupplier={editSupplier}
@@ -396,7 +429,12 @@ function AdminTabsContent({
   handleUpdate,
   handleDelete,
   handleSubscription,
+  handleMarketingSend,
   openEdit,
+  marketingForm,
+  setMarketingForm,
+  marketingSending,
+  marketingStatus,
   showSupplierCreate,
   setShowSupplierCreate,
   editSupplier,
@@ -795,6 +833,7 @@ function AdminTabsContent({
                         <TableHead className="text-slate-400">{t('common.password')}</TableHead>
                         <TableHead className="text-slate-400">{t('admin.role')}</TableHead>
                         <TableHead className="text-slate-400">{t('admin.subscription')}</TableHead>
+                        <TableHead className="text-slate-400">{t('admin.marketingStatus') || 'Marketing'}</TableHead>
                         <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -819,6 +858,13 @@ function AdminTabsContent({
                               onChange={(e) => handleSubscription(user.id, parseInt(e.target.value, 10) || 0)}
                               className="w-16 h-8 bg-slate-700 border-slate-600 text-slate-100 text-center"
                             />
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded text-xs ${user.marketing_unsubscribed ? 'bg-amber-900 text-amber-200' : 'bg-emerald-900 text-emerald-200'}`}>
+                              {user.marketing_unsubscribed
+                                ? (t('admin.marketingUnsubscribed') || 'Unsubscribed')
+                                : (t('admin.marketingSubscribed') || 'Subscribed')}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
@@ -911,6 +957,77 @@ function AdminTabsContent({
               </CardContent>
             </Card>
 
+            <Card className="bg-slate-800 border-0 shadow-none">
+              <CardHeader>
+                <CardTitle className="text-slate-100">{t('admin.marketingTitle') || 'Marketing Email'}</CardTitle>
+                <p className="text-sm text-slate-400">{t('admin.marketingDescription') || 'Send a message to one user or to all non-admin users. Unsubscribed users are skipped automatically.'}</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label className="text-slate-300">{t('admin.marketingTarget') || 'Target'}</Label>
+                    <Select
+                      value={marketingForm.target_type}
+                      onValueChange={(value) => setMarketingForm({ ...marketingForm, target_type: value as 'single' | 'all_non_admin', user_id: value === 'single' ? marketingForm.user_id : '' })}
+                    >
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectItem value="all_non_admin">{t('admin.marketingAllNonAdmin') || 'All except admin'}</SelectItem>
+                        <SelectItem value="single">{t('admin.marketingSingleUser') || 'Single user'}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {marketingForm.target_type === 'single' && (
+                    <div>
+                      <Label className="text-slate-300">{t('admin.marketingUser') || 'User'}</Label>
+                      <Select value={marketingForm.user_id} onValueChange={(value) => setMarketingForm({ ...marketingForm, user_id: value })}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                          <SelectValue placeholder={t('admin.marketingSelectUser') || 'Select a user'} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600 max-h-72">
+                          {users.map((user: User) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name} ({user.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label className="text-slate-300">{t('admin.marketingSubject') || 'Subject'}</Label>
+                  <Input
+                    value={marketingForm.subject}
+                    onChange={(e) => setMarketingForm({ ...marketingForm, subject: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-slate-300">{t('admin.marketingBody') || 'Body'}</Label>
+                  <Textarea
+                    value={marketingForm.body}
+                    onChange={(e) => setMarketingForm({ ...marketingForm, body: e.target.value })}
+                    className="min-h-48 bg-slate-700 border-slate-600 text-slate-100"
+                    placeholder={t('admin.marketingBodyPlaceholder') || 'Write the email content here. An unsubscribe link is appended automatically.'}
+                  />
+                </div>
+
+                <p className="text-xs text-slate-500">{t('admin.marketingFooterHint') || 'Each email automatically includes a secure unsubscribe link tied to that user.'}</p>
+
+                {marketingStatus && <p className="text-sm text-emerald-300">{marketingStatus}</p>}
+
+                <Button onClick={handleMarketingSend} disabled={marketingSending} className="bg-emerald-600 hover:bg-emerald-700">
+                  {marketingSending ? (t('admin.marketingSending') || 'Sending...') : (t('admin.marketingSend') || 'Send email')}
+                </Button>
+              </CardContent>
+            </Card>
+
             <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
               <DialogContent className="bg-slate-800 border-slate-700">
                 <DialogHeader>
@@ -975,6 +1092,15 @@ function AdminTabsContent({
                       0 = {t('settings.freeTier')}, 1+ = {t('admin.paidTierProperties')}
                     </p>
                   </div>
+                  <label className="flex items-center gap-3 rounded-md border border-slate-700 bg-slate-900/40 px-3 py-3 text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={formData.marketing_unsubscribed}
+                      onChange={(e) => setFormData({ ...formData, marketing_unsubscribed: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <span>{t('admin.marketingOptOutLabel') || 'User is unsubscribed from marketing emails'}</span>
+                  </label>
                   <Button onClick={handleUpdate} className="w-full bg-emerald-600 hover:bg-emerald-700">
                     {t('admin.update')}
                   </Button>

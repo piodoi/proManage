@@ -24,6 +24,7 @@ CREATE TABLE users (
     oauth_provider ENUM('google', 'facebook') NULL,
     oauth_id VARCHAR(255) NULL,
     subscription_tier INT DEFAULT 0,
+    marketing_unsubscribed BOOLEAN NOT NULL DEFAULT FALSE,
     subscription_expires DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_users_email (email),

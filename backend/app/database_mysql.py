@@ -45,7 +45,16 @@ class MySQLDatabase:
             pool_recycle=3600,  # Recycle connections after 1 hour
             echo=False,  # Set to True for SQL debugging
         )
+        self._ensure_user_marketing_unsubscribed_column()
         print(f"[Database] MySQL engine initialized: {database_url.split('@')[1] if '@' in database_url else 'localhost'}")
+
+    def _ensure_user_marketing_unsubscribed_column(self) -> None:
+        with self.engine.connect() as conn:
+            result = conn.execute(text("SHOW COLUMNS FROM users LIKE 'marketing_unsubscribed'"))
+            if result.fetchone() is None:
+                conn.execute(text("ALTER TABLE users ADD COLUMN marketing_unsubscribed BOOLEAN NOT NULL DEFAULT FALSE AFTER subscription_tier"))
+                conn.commit()
+                logger.info("[Database] Added users.marketing_unsubscribed column")
     
     # ==================== USER OPERATIONS ====================
     
@@ -67,6 +76,7 @@ class MySQLDatabase:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
+                    marketing_unsubscribed=bool(getattr(row, 'marketing_unsubscribed', False)),
                     subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires else None,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
@@ -90,6 +100,7 @@ class MySQLDatabase:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
+                    marketing_unsubscribed=bool(getattr(row, 'marketing_unsubscribed', False)),
                     subscription_expires=row.subscription_expires.isoformat() if row.subscription_expires else None,
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
@@ -102,10 +113,10 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO users (
                         id, email, name, role, password_hash, oauth_provider, oauth_id,
-                        subscription_tier, subscription_expires, created_at
+                        subscription_tier, marketing_unsubscribed, subscription_expires, created_at
                     ) VALUES (
                         :id, :email, :name, :role, :password_hash, :oauth_provider, :oauth_id,
-                        :subscription_tier, :subscription_expires, :created_at
+                        :subscription_tier, :marketing_unsubscribed, :subscription_expires, :created_at
                     )
                 """),
                 {
@@ -117,6 +128,7 @@ class MySQLDatabase:
                     "oauth_provider": user.oauth_provider,
                     "oauth_id": user.oauth_id,
                     "subscription_tier": user.subscription_tier or 0,
+                    "marketing_unsubscribed": user.marketing_unsubscribed,
                     "subscription_expires": user.subscription_expires,
                     "created_at": user.created_at or datetime.now().isoformat()
                 }

@@ -47,8 +47,18 @@ class SQLiteDatabase:
             conn.execute(text("PRAGMA busy_timeout=30000"))
             conn.execute(text("PRAGMA foreign_keys=ON"))
             conn.commit()
+        self._ensure_user_marketing_unsubscribed_column()
         
         print(f"[Database] SQLite typed-column engine initialized")
+
+    def _ensure_user_marketing_unsubscribed_column(self) -> None:
+        with self.engine.connect() as conn:
+            columns = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            has_column = any(getattr(column, 'name', None) == 'marketing_unsubscribed' for column in columns)
+            if not has_column:
+                conn.execute(text("ALTER TABLE users ADD COLUMN marketing_unsubscribed INTEGER NOT NULL DEFAULT 0"))
+                conn.commit()
+                print("[Database] Added users.marketing_unsubscribed column")
     
     # ==================== USER OPERATIONS ====================
     
@@ -70,6 +80,7 @@ class SQLiteDatabase:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
+                    marketing_unsubscribed=bool(getattr(row, 'marketing_unsubscribed', False)),
                     subscription_expires=row.subscription_expires,
                     created_at=row.created_at
                 )
@@ -93,6 +104,7 @@ class SQLiteDatabase:
                     oauth_provider=row.oauth_provider,
                     oauth_id=row.oauth_id,
                     subscription_tier=row.subscription_tier,
+                    marketing_unsubscribed=bool(getattr(row, 'marketing_unsubscribed', False)),
                     subscription_expires=row.subscription_expires,
                     created_at=row.created_at
                 )
@@ -105,10 +117,10 @@ class SQLiteDatabase:
                 text("""
                     INSERT INTO users (
                         id, email, name, role, password_hash, oauth_provider, oauth_id,
-                        subscription_tier, subscription_expires, created_at
+                        subscription_tier, marketing_unsubscribed, subscription_expires, created_at
                     ) VALUES (
                         :id, :email, :name, :role, :password_hash, :oauth_provider, :oauth_id,
-                        :subscription_tier, :subscription_expires, :created_at
+                        :subscription_tier, :marketing_unsubscribed, :subscription_expires, :created_at
                     )
                 """),
                 {
@@ -120,6 +132,7 @@ class SQLiteDatabase:
                     "oauth_provider": user.oauth_provider,
                     "oauth_id": user.oauth_id,
                     "subscription_tier": user.subscription_tier or 0,
+                    "marketing_unsubscribed": 1 if user.marketing_unsubscribed else 0,
                     "subscription_expires": user.subscription_expires,
                     "created_at": user.created_at or datetime.now().isoformat()
                 }

@@ -211,6 +211,7 @@ class User(BaseModel):
     oauth_id: Optional[str] = None
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE  # Deprecated, use subscription_tier
     subscription_tier: int = 0  # 0 = off, 1 = on (reserved for future tiers)
+    marketing_unsubscribed: bool = False
     subscription_expires: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -370,6 +371,8 @@ class UserCreate(BaseModel):
     name: str
     role: UserRole
     password: Optional[str] = None
+    subscription_tier: int = 0
+    marketing_unsubscribed: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -377,6 +380,8 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[UserRole] = None
     password: Optional[str] = None
+    subscription_tier: Optional[int] = None
+    marketing_unsubscribed: Optional[bool] = None
 
 
 class PropertyCreate(BaseModel):

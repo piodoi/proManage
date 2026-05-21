@@ -1,12 +1,16 @@
 import os
 import logging
 import smtplib
+import hashlib
+import hmac
+import html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +29,55 @@ def get_smtp_config():
         "password": os.getenv("SMTP_PASSWORD", ""),
         "from_email": os.getenv("SMTP_FROM_EMAIL", ""),
         "frontend_url": os.getenv("FRONTEND_URL", "http://localhost:5173"),
+        "jwt_secret": os.getenv("JWT_SECRET", "dev-secret-key-change-in-production"),
     }
+
+
+def build_marketing_unsubscribe_token(user_id: str) -> str:
+    config = get_smtp_config()
+    return hmac.new(
+        config["jwt_secret"].encode("utf-8"),
+        user_id.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def verify_marketing_unsubscribe_token(user_id: str, token: str) -> bool:
+    expected = build_marketing_unsubscribe_token(user_id)
+    return hmac.compare_digest(expected, token)
+
+
+def build_marketing_unsubscribe_url(user_id: str) -> str:
+    config = get_smtp_config()
+    token = build_marketing_unsubscribe_token(user_id)
+    return f"{config['frontend_url'].rstrip('/')}/unsubscribe?user_id={quote(user_id)}&token={quote(token)}"
+
+
+def build_marketing_email_content(body: str, unsubscribe_url: str) -> tuple[str, str]:
+    safe_body = html.escape(body).replace("\n", "<br />")
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 640px; margin: 0 auto; padding: 20px; }}
+            .footer {{ margin-top: 32px; font-size: 12px; color: #666; border-top: 1px solid #e5e7eb; padding-top: 16px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div>{safe_body}</div>
+            <div class="footer">
+                <p>If you no longer want to receive these emails, you can <a href="{unsubscribe_url}">unsubscribe here</a>.</p>
+                <p>ProManage - Property & Rent Management</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"{body.strip()}\n\nUnsubscribe: {unsubscribe_url}\n\nProManage - Property & Rent Management"
+    return html_body, text_body
 
 
 def is_email_configured() -> bool:

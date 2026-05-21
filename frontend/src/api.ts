@@ -219,6 +219,8 @@ export const api = {
     deleteUser: (token: string, id: string) => request<{ status: string }>(`/admin/users/${id}`, { method: 'DELETE', token }),
     updateSubscription: (token: string, id: string, tier: number, expires?: string) =>
       request<User>(`/admin/users/${id}/subscription?tier=${tier}${expires ? `&expires=${expires}` : ''}`, { method: 'PUT', token }),
+    sendMarketing: (token: string, data: MarketingEmailRequest) =>
+      request<{ status: string; sent: number; failed: string[]; skipped_unsubscribed: string[]; skipped_missing_email: string[]; targeted: number }>('/admin/marketing/send', { method: 'POST', body: data, token }),
     suppliers: {
       list: (token: string) => request<Supplier[]>('/admin/suppliers', { token }),
       create: (token: string, data: SupplierCreate) => request<Supplier>('/admin/suppliers', { method: 'POST', body: data, token }),
@@ -375,6 +377,11 @@ export const api = {
         body: { email_ids: emailIds }, 
         token 
       }),
+    unsubscribeMarketing: (userId: string, unsubscribeToken: string) =>
+      request<{ status: string; message: string }>('/email/marketing/unsubscribe', {
+        method: 'POST',
+        body: { user_id: userId, token: unsubscribeToken },
+      }),
   },
 
   ebloc: {
@@ -461,13 +468,21 @@ export type User = {
   oauth_provider?: 'google' | 'facebook';
   subscription_status: 'active' | 'expired' | 'none';  // Deprecated, use subscription_tier
   subscription_tier?: number;  // 0 = off, 1 = on (defaults to 0 if not present)
+  marketing_unsubscribed?: boolean;
   subscription_expires?: string;
   created_at: string;
   password_hash?: string;  // For display purposes only
 };
 
-export type UserCreate = { email: string; name: string; role: 'admin' | 'landlord'; password?: string };
-export type UserUpdate = { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string };
+export type UserCreate = { email: string; name: string; role: 'admin' | 'landlord'; password?: string; subscription_tier?: number; marketing_unsubscribed?: boolean };
+export type UserUpdate = { email?: string; name?: string; role?: 'admin' | 'landlord'; password?: string; subscription_tier?: number; marketing_unsubscribed?: boolean };
+
+export type MarketingEmailRequest = {
+  target_type: 'single' | 'all_non_admin';
+  subject: string;
+  body: string;
+  user_id?: string;
+};
 
 export type Property = {
   id: string;

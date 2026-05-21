@@ -1,4 +1,5 @@
 """Admin management routes."""
+import asyncio
 import logging
 import json
 import os
@@ -6,10 +7,10 @@ import re
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from app.models import (
     User, UserCreate, UserUpdate, TokenData, SubscriptionStatus,
-    Supplier, BillType
+    Supplier, BillType, UserRole
 )
 from app.auth import require_admin
 from app.database import db
@@ -17,6 +18,7 @@ from app.routes.auth_routes import hash_password
 from app.paths import USERDATA_DIR, TEXT_PATTERNS_DIR
 from app.utils.suppliers import save_suppliers_to_json
 from app.contract_expiry_checker import check_and_notify_expiring_contracts
+from app.email_sender import build_marketing_email_content, build_marketing_unsubscribe_url, is_email_configured, send_email
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -47,7 +49,14 @@ async def create_user(data: UserCreate, _: TokenData = Depends(require_admin)):
     password_hash = None
     if data.password:
         password_hash = hash_password(data.password)
-    user = User(email=data.email, name=data.name, role=data.role, password_hash=password_hash)
+    user = User(
+        email=data.email,
+        name=data.name,
+        role=data.role,
+        password_hash=password_hash,
+        subscription_tier=data.subscription_tier,
+        marketing_unsubscribed=data.marketing_unsubscribed,
+    )
     db.save_user(user)
     return user
 
@@ -71,6 +80,13 @@ async def update_user(user_id: str, data: UserUpdate, _: TokenData = Depends(req
         user.name = data.name
     if data.role is not None:
         user.role = data.role
+    if data.password:
+        user.password_hash = hash_password(data.password)
+    if data.subscription_tier is not None:
+        user.subscription_tier = data.subscription_tier
+        user.subscription_status = SubscriptionStatus.ACTIVE if data.subscription_tier > 0 else SubscriptionStatus.NONE
+    if data.marketing_unsubscribed is not None:
+        user.marketing_unsubscribed = data.marketing_unsubscribed
     db.save_user(user)
     return user
 
@@ -99,6 +115,79 @@ async def update_subscription(
     user.subscription_expires = expires
     db.save_user(user)
     return user
+
+
+class MarketingEmailRequest(BaseModel):
+    target_type: str
+    subject: str
+    body: str
+    user_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if self.target_type not in {"single", "all_non_admin"}:
+            raise ValueError("target_type must be 'single' or 'all_non_admin'")
+        if self.target_type == "single" and not self.user_id:
+            raise ValueError("user_id is required for single target emails")
+        if not self.subject.strip():
+            raise ValueError("subject is required")
+        if not self.body.strip():
+            raise ValueError("body is required")
+        return self
+
+
+@router.post("/marketing/send")
+async def send_marketing_campaign(
+    request: MarketingEmailRequest,
+    _: TokenData = Depends(require_admin),
+):
+    if not is_email_configured():
+        raise HTTPException(status_code=503, detail="SMTP is not configured")
+
+    if request.target_type == "single":
+        user = db.get_user(request.user_id or "")
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        recipients = [user]
+    else:
+        recipients = [user for user in db.list_users() if user.role != UserRole.ADMIN]
+
+    sendable_users: List[User] = []
+    skipped_unsubscribed: List[str] = []
+    skipped_missing_email: List[str] = []
+    for user in recipients:
+        if user.marketing_unsubscribed:
+            skipped_unsubscribed.append(user.id)
+            continue
+        if not user.email:
+            skipped_missing_email.append(user.id)
+            continue
+        sendable_users.append(user)
+
+    if not sendable_users:
+        raise HTTPException(
+            status_code=400,
+            detail="No eligible recipients found. Selected users may be unsubscribed or missing an email address.",
+        )
+
+    async def _send_to_user(user: User) -> tuple[str, bool]:
+        unsubscribe_url = build_marketing_unsubscribe_url(user.id)
+        html_body, text_body = build_marketing_email_content(request.body, unsubscribe_url)
+        sent = await send_email(user.email, request.subject, html_body, text_body)
+        return user.id, sent
+
+    results = await asyncio.gather(*[_send_to_user(user) for user in sendable_users])
+    failed_user_ids = [user_id for user_id, sent in results if not sent]
+    sent_count = sum(1 for _, sent in results if sent)
+
+    return {
+        "status": "success",
+        "sent": sent_count,
+        "failed": failed_user_ids,
+        "skipped_unsubscribed": skipped_unsubscribed,
+        "skipped_missing_email": skipped_missing_email,
+        "targeted": len(recipients),
+    }
 
 
 # ========================================================================
