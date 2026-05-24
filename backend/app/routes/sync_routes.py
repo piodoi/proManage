@@ -271,6 +271,7 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
     
     bills_created = 0
     errors = []
+    saved_discovered_bill_ids: list[str] = []
     
     for bill_data in bills:
         try:
@@ -382,6 +383,9 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
             
             db.save_bill(bill)
             bills_created += 1
+            discovered_bill_id = bill_data.get("id")
+            if discovered_bill_id:
+                saved_discovered_bill_ids.append(discovered_bill_id)
             logger.info(f"[Save Bills] Created bill: {description}, amount={bill.amount}, property={property_id}")
             
             # Save contract_id to PropertySupplier if resolved and contract_id exists
@@ -417,5 +421,6 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
     
     return {
         "bills_created": bills_created,
+        "saved_discovered_bill_ids": saved_discovered_bill_ids,
         "errors": errors,
     }

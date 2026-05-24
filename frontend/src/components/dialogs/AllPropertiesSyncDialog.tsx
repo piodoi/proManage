@@ -45,7 +45,6 @@ export default function AllPropertiesSyncDialog({
   const emailSyncNeedsUpgrade = syncEmailBills && subscription && !subscription.can_use_email_sync;
   const [discoveredBills, setDiscoveredBills] = useState<DiscoveredBill[]>([]);
   const [selectedBillIds, setSelectedBillIds] = useState<Set<string>>(new Set());
-  const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
   const [savingBills, setSavingBills] = useState(false);
   const [totalRentBillsGenerated, setTotalRentBillsGenerated] = useState(0);
   const [propertiesWithRentersCount, setPropertiesWithRentersCount] = useState(0);
@@ -62,7 +61,6 @@ export default function AllPropertiesSyncDialog({
       setSyncEmailBills(true);
       setDiscoveredBills([]);
       setSelectedBillIds(new Set());
-      setProcessedEmailIds(new Set());
       setSyncing(false);
       setSavingBills(false);
       setTotalRentBillsGenerated(0);
@@ -184,15 +182,6 @@ export default function AllPropertiesSyncDialog({
             email_id: bill.email_id,
           }));
           
-          // Collect email_ids for deletion later
-          const newEmailIds = new Set(processedEmailIds);
-          emailBills.forEach((bill) => {
-            if (bill.email_id) {
-              newEmailIds.add(bill.email_id);
-            }
-          });
-          setProcessedEmailIds(newEmailIds);
-          
           allDiscoveredBills.push(...emailBills);
         } else {
           onError(result.message || 'Failed to sync email bills');
@@ -310,10 +299,26 @@ export default function AllPropertiesSyncDialog({
           const error = await response.json().catch(() => ({ detail: 'Request failed' }));
           throw new Error(error.detail || 'Failed to save bills');
         }
-      }
 
-      // Close dialog and delete emails in background
-      handleCloseAndCleanup();
+        const saveResult = await response.json();
+        const savedBillIds = new Set<string>(saveResult.saved_discovered_bill_ids || []);
+        const emailIdsToDelete = getEmailIdsReadyForDeletion(savedBillIds);
+
+        handleClose();
+
+        if (emailIdsToDelete.length > 0) {
+          console.log(`[Email Delete] Deleting ${emailIdsToDelete.length} emails after confirmed bill save`);
+          api.email.delete(token, emailIdsToDelete)
+            .then(() => {
+              console.log(`[Email Delete] ✓ Successfully deleted ${emailIdsToDelete.length} emails`);
+            })
+            .catch((err) => {
+              console.error('[Email Delete] ✗ Failed to delete emails:', err);
+            });
+        }
+      } else {
+        handleClose();
+      }
       onSuccess();
     } catch (err) {
       setSavingBills(false);
@@ -321,34 +326,41 @@ export default function AllPropertiesSyncDialog({
     }
   };
 
-  const handleCloseAndCleanup = () => {
-    // Close dialog immediately
-    onOpenChange(false);
-    
-    // Delete processed emails in background (fire-and-forget)
-    if (processedEmailIds.size > 0 && token) {
-      const emailIdsToDelete = Array.from(processedEmailIds);
-      console.log(`[Email Delete] Deleting ${emailIdsToDelete.length} emails in background`);
-      
-      api.email.delete(token, emailIdsToDelete)
-        .then(() => {
-          console.log(`[Email Delete] ✓ Successfully deleted ${emailIdsToDelete.length} emails`);
-        })
-        .catch((err) => {
-          console.error('[Email Delete] ✗ Failed to delete emails:', err);
-        });
+  const getEmailIdsReadyForDeletion = (savedBillIds: Set<string>) => {
+    const emailBills = discoveredBillsRef.current.filter((bill) => bill.source === 'email' && bill.email_id);
+    const emailBillIdsByEmail = new Map<string, string[]>();
+
+    for (const bill of emailBills) {
+      if (!bill.email_id) continue;
+      const existingIds = emailBillIdsByEmail.get(bill.email_id) || [];
+      existingIds.push(bill.id);
+      emailBillIdsByEmail.set(bill.email_id, existingIds);
     }
+
+    const emailIdsToDelete: string[] = [];
+    for (const [emailId, billIds] of emailBillIdsByEmail.entries()) {
+      const allBillsSaved = billIds.every((billId) => savedBillIds.has(billId));
+      if (allBillsSaved) {
+        emailIdsToDelete.push(emailId);
+      }
+    }
+
+    return emailIdsToDelete;
   };
 
   const handleClose = () => {
+    onOpenChange(false);
+  };
+
+  const handleDialogOpenChange = () => {
     if (syncing) {
       return; // Don't allow closing while syncing
     }
-    handleCloseAndCleanup();
+    handleClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="bg-slate-800 border-slate-700 max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-slate-100">

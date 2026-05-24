@@ -163,8 +163,8 @@ class EmailMonitor:
             
             for email_id in email_ids:
                 try:
-                    # Fetch email
-                    status, msg_data = mail.fetch(email_id, '(RFC822)')
+                    # Peek avoids setting \Seen before we decide whether the email should be deleted.
+                    status, msg_data = mail.fetch(email_id, '(BODY.PEEK[])')
                     if status != 'OK':
                         continue
                     
@@ -376,6 +376,7 @@ class EmailMonitor:
         bills_created = 0
         errors = []
         discovered_bills = []
+        processed_email_ids = []
         
         try:
             # Fetch unread emails
@@ -389,6 +390,7 @@ class EmailMonitor:
                     'bills_discovered': 0,
                     'bills_created': 0,
                     'discovered_bills': [],
+                    'processed_email_ids': [],
                     'errors': []
                 }
             
@@ -411,9 +413,7 @@ class EmailMonitor:
                     logger.info(f"[Email Monitor] Found {len(pdf_attachments)} PDF attachments in email {email_id}")
                     
                     if not pdf_attachments:
-                        logger.info(f"[Email Monitor] No PDF attachments in email {email_id}, marking as read")
-                        # Mark as read anyway to avoid reprocessing
-                        self.mark_as_read(email_id)
+                        logger.info(f"[Email Monitor] No PDF attachments in email {email_id}, leaving cleanup to caller")
                         continue
                     
                     # Process each PDF attachment
@@ -611,6 +611,8 @@ class EmailMonitor:
                             }
                             
                             discovered_bills.append(discovered_bill)
+                            if email_id not in processed_email_ids:
+                                processed_email_ids.append(email_id)
                             
                             # If create_bills is True, create the bill immediately
                             if create_bills and matched_property:
@@ -691,10 +693,6 @@ class EmailMonitor:
                             logger.error(f"[Email Monitor] {error_msg}", exc_info=True)
                             errors.append(error_msg)
                     
-                    # Mark email as read after processing (only if create_bills is True)
-                    if create_bills:
-                        self.mark_as_read(email_id)
-                    
                 except Exception as e:
                     error_msg = f"Error processing email {email_id}: {str(e)}"
                     logger.error(f"[Email Monitor] {error_msg}", exc_info=True)
@@ -707,6 +705,7 @@ class EmailMonitor:
                 'bills_discovered': len(discovered_bills),
                 'bills_created': bills_created,
                 'discovered_bills': discovered_bills,
+                'processed_email_ids': processed_email_ids,
                 'errors': errors if errors else None
             }
             
@@ -719,6 +718,7 @@ class EmailMonitor:
                 'bills_discovered': len(discovered_bills),
                 'bills_created': bills_created,
                 'discovered_bills': discovered_bills,
+                'processed_email_ids': processed_email_ids,
                 'errors': errors
             }
 

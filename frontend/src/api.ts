@@ -363,6 +363,7 @@ export const api = {
       bills_discovered: number;
       bills_created: number; 
       discovered_bills?: Array<any>;
+      processed_email_ids?: string[];
       errors?: string[] 
     }>('/email/sync', { method: 'POST', token }),
     markRead: (token: string, emailIds: string[]) => 
