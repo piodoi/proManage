@@ -306,6 +306,9 @@ class EmailMonitor:
             if status != 'OK':
                 logger.warning(f"[Email Delete] Email {email_id} not found in INBOX (may have been moved/deleted manually)")
                 return  # Skip deletion if email doesn't exist
+
+            # Mark as read before moving so the Trash copy does not appear unread.
+            mail.store(email_id_bytes, '+FLAGS', '\\Seen')
             
             # Gmail-specific: Move to Trash (Gmail auto-deletes from Trash after 30 days)
             if 'gmail' in self.host.lower():
