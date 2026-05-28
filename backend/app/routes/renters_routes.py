@@ -17,7 +17,7 @@ from app.auth import require_landlord
 from app.routes.auth_routes import hash_password
 from app.database import db
 from app.limits import check_can_add_renter
-from app.utils.currency import get_exchange_rates
+from app.utils.currency import get_exchange_rates, convert_currency
 from app.utils.renter_payments import allocate_payment_to_bills, get_credit_currency, round_money
 
 router = APIRouter(tags=["renters"])
@@ -33,6 +33,31 @@ async def _apply_renter_funds(
 ):
     exchange_rates = await get_exchange_rates()
     bills = db.list_bills(property_id=renter.property_id)
+    remaining_amount_overrides: dict[str, float] = {}
+    for bill in bills:
+        if bill.bill_type == "rent":
+            continue
+
+        notifications = db.list_payment_notifications_by_bill(bill.id)
+        confirmed_paid = 0.0
+        bill_currency = (bill.currency or "RON").upper()
+        for notification in notifications:
+            if notification.status != PaymentNotificationStatus.CONFIRMED:
+                continue
+            if notification.amount_in_bill_currency is not None and (notification.bill_currency or bill_currency).upper() == bill_currency:
+                confirmed_paid += round_money(notification.amount_in_bill_currency)
+            else:
+                confirmed_paid += round_money(
+                    convert_currency(
+                        notification.amount,
+                        (notification.currency or "RON").upper(),
+                        bill_currency,
+                        exchange_rates,
+                    )
+                )
+
+        remaining_amount_overrides[bill.id] = max(0.0, round_money(bill.amount - confirmed_paid))
+
     applied, remaining_credit, credit_currency = allocate_payment_to_bills(
         renter,
         bills,
@@ -40,6 +65,7 @@ async def _apply_renter_funds(
         payment_currency,
         exchange_rates,
         include_common_bills=include_common_bills,
+        remaining_amount_overrides=remaining_amount_overrides,
     )
 
     applied_by_bill_id = {item["bill_id"]: item for item in applied}
@@ -50,14 +76,14 @@ async def _apply_renter_funds(
         if not applied_item:
             continue
 
-        if applied_item.get("marks_bill_paid"):
+        if not applied_item.get("direct_bill_reduction"):
             db.save_payment_notification(
                 PaymentNotification(
                     bill_id=bill.id,
                     renter_id=renter.id,
                     landlord_id=landlord_id,
-                    amount=applied_item["applied_amount"],
-                    currency=applied_item["bill_currency"],
+                    amount=applied_item["consumed_amount"],
+                    currency=applied_item["payment_currency"],
                     amount_in_bill_currency=applied_item["applied_amount"],
                     bill_currency=applied_item["bill_currency"],
                     status=PaymentNotificationStatus.CONFIRMED,

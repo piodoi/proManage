@@ -70,7 +70,11 @@ def get_prioritized_renter_bills(
 
 
 def recalculate_bill_status_after_payment(bill: Bill) -> BillStatus:
-    if round_money(bill.amount) <= 0:
+    return recalculate_bill_status_for_remaining(bill, round_money(bill.amount))
+
+
+def recalculate_bill_status_for_remaining(bill: Bill, remaining_amount: float) -> BillStatus:
+    if round_money(remaining_amount) <= 0:
         return BillStatus.PAID
 
     due_date = bill.due_date
@@ -93,6 +97,7 @@ def allocate_payment_to_bills(
     payment_currency: str,
     exchange_rates: Dict[str, float],
     include_common_bills: bool = True,
+    remaining_amount_overrides: Dict[str, float] | None = None,
 ) -> Tuple[List[Dict[str, Any]], float, str]:
     target_credit_currency = payment_currency.upper()
     existing_credit = round_money(getattr(renter, 'credit', 0.0))
@@ -108,13 +113,20 @@ def allocate_payment_to_bills(
             break
 
         bill_currency = get_bill_currency(bill)
+        current_amount = round_money(
+            remaining_amount_overrides.get(bill.id, bill.amount)
+            if remaining_amount_overrides is not None
+            else bill.amount
+        )
+        if current_amount <= 0:
+            continue
+
         available_in_bill_currency = round_money(
             convert_currency(remaining_credit, target_credit_currency, bill_currency, exchange_rates)
         )
         if available_in_bill_currency <= 0:
             continue
 
-        current_amount = round_money(bill.amount)
         applied_in_bill_currency = min(current_amount, available_in_bill_currency)
         if applied_in_bill_currency <= 0:
             continue
@@ -125,13 +137,18 @@ def allocate_payment_to_bills(
         remaining_credit = max(0.0, round_money(remaining_credit - consumed_credit))
 
         is_full_payment = round_money(current_amount - applied_in_bill_currency) <= 0
-        if is_full_payment:
-            bill.status = BillStatus.PAID
-            remaining_bill_amount = 0.0
+        direct_bill_reduction = bill.bill_type == BillType.RENT
+        remaining_bill_amount = max(0.0, round_money(current_amount - applied_in_bill_currency))
+
+        if direct_bill_reduction:
+            if is_full_payment:
+                bill.amount = 0.0
+                bill.status = BillStatus.PAID
+            else:
+                bill.amount = remaining_bill_amount
+                bill.status = recalculate_bill_status_for_remaining(bill, remaining_bill_amount)
         else:
-            bill.amount = round_money(current_amount - applied_in_bill_currency)
-            bill.status = recalculate_bill_status_after_payment(bill)
-            remaining_bill_amount = round_money(bill.amount)
+            bill.status = recalculate_bill_status_for_remaining(bill, remaining_bill_amount)
 
         applied.append({
             "bill_id": bill.id,
@@ -139,8 +156,11 @@ def allocate_payment_to_bills(
             "bill_type": bill.bill_type,
             "applied_amount": applied_in_bill_currency,
             "bill_currency": bill_currency,
+            "consumed_amount": consumed_credit,
+            "payment_currency": target_credit_currency,
             "remaining_bill_amount": remaining_bill_amount,
             "marks_bill_paid": is_full_payment,
+            "direct_bill_reduction": direct_bill_reduction,
             "status": bill.status,
         })
 
