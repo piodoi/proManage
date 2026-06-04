@@ -208,6 +208,13 @@ export const api = {
     google: (token: string) => request<AuthResponse>(`/auth/google?token=${token}`, { method: 'POST' }),
     facebook: (token: string) => request<AuthResponse>(`/auth/facebook?token=${token}`, { method: 'POST' }),
     me: (token: string) => request<User>('/auth/me', { token }),
+    requestAccountDeletion: (token: string) =>
+      request<{ status: string; message: string }>('/auth/request-account-deletion', { method: 'POST', token }),
+    confirmAccountDeletion: (userId: string, deletionToken: string, issuedAt: number) =>
+      request<{ status: string; message: string }>('/auth/confirm-account-deletion', {
+        method: 'POST',
+        body: { user_id: userId, token: deletionToken, issued_at: issuedAt },
+      }),
   },
 
   admin: {

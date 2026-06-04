@@ -600,7 +600,20 @@
     "personalEmail": "Personal Email",
     "personalEmailPlaceholder": "your.email@example.com",
     "personalEmailHelp": "Your email address for receiving notifications.",
-    "manageSuppliersCredentials": "Manage Suppliers Credentials"
+    "manageSuppliersCredentials": "Manage Suppliers Credentials",
+    "accountDeletionTitle": "Delete Account",
+    "accountDeletionDescription": "This permanently deletes your account and related data. A confirmation link will be sent to your account email before anything is removed.",
+    "accountDeletionEmailHint": "Deletion only happens after you open the email confirmation link.",
+    "accountDeletionButton": "Send Deletion Email",
+    "accountDeletionSending": "Sending...",
+    "accountDeletionEmailSent": "Check your email to confirm account deletion.",
+    "accountDeletionRequestFailed": "Failed to send account deletion email.",
+    "accountDeletionPageTitle": "Account Deletion",
+    "accountDeletionProcessing": "Confirming account deletion...",
+    "accountDeletionCompleted": "Your account has been deleted.",
+    "accountDeletionConfirmFailed": "Failed to confirm account deletion.",
+    "accountDeletionInvalidLink": "This account deletion link is invalid or expired.",
+    "accountDeletionBackHome": "Back to home"
   },
   "errors": {
     "generic": "An error occurred",

@@ -9,10 +9,16 @@ import httpx
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 
-from app.models import User, UserRole, OAuthProvider
+from app.models import User, UserRole, OAuthProvider, TokenData
 from app.auth import create_access_token, require_auth
 from app.database import db, has_any_admin
-from app.email_sender import send_confirmation_email
+from app.email_sender import (
+    build_account_deletion_url,
+    is_email_configured,
+    send_account_deletion_email,
+    send_confirmation_email,
+    verify_account_deletion_token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,6 +40,12 @@ class LoginRequest(BaseModel):
 
 class ConfirmEmailRequest(BaseModel):
     token: str
+
+
+class ConfirmAccountDeletionRequest(BaseModel):
+    user_id: str
+    token: str
+    issued_at: int
 
 
 rate_limit_store: dict[str, list[float]] = defaultdict(list)
@@ -75,6 +87,11 @@ def verify_password(password: str, hashed: str) -> bool:
 def generate_confirmation_token() -> str:
     """Generate a secure random token for email confirmation."""
     return secrets.token_urlsafe(32)
+
+
+def is_last_admin(user_id: str) -> bool:
+    admins = [user for user in db.list_users() if user.role == UserRole.ADMIN]
+    return len(admins) == 1 and admins[0].id == user_id
 
 
 @router.get("/has-admin")
@@ -211,6 +228,56 @@ async def auth_login(data: LoginRequest, request: Request):
         "user": user,
         "preferences": preferences_data
     }
+
+
+@router.post("/request-account-deletion")
+async def request_account_deletion(current_user: TokenData = Depends(require_auth)):
+    """Send an email confirmation link for self-service account deletion."""
+    user = db.get_user(current_user.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role == UserRole.ADMIN and is_last_admin(user.id):
+        raise HTTPException(status_code=400, detail="Cannot delete the last admin account")
+
+    if not user.email:
+        raise HTTPException(status_code=400, detail="Your account does not have an email address")
+
+    if not is_email_configured():
+        raise HTTPException(status_code=503, detail="Email delivery is not configured")
+
+    deletion_url = build_account_deletion_url(user.id, user.email)
+    email_sent = await send_account_deletion_email(user.email, user.name, deletion_url)
+    if not email_sent:
+        raise HTTPException(status_code=503, detail="Failed to send account deletion email")
+
+    logger.info(f"[Auth] Account deletion confirmation email sent to {user.email}")
+    return {"status": "pending_confirmation", "message": "Check your email to confirm account deletion"}
+
+
+@router.post("/confirm-account-deletion")
+async def confirm_account_deletion(data: ConfirmAccountDeletionRequest, request: Request):
+    """Delete the account after email confirmation."""
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute.")
+
+    user = db.get_user(data.user_id)
+    if not user or not user.email:
+        raise HTTPException(status_code=400, detail="Invalid or expired account deletion link")
+
+    if user.role == UserRole.ADMIN and is_last_admin(user.id):
+        raise HTTPException(status_code=400, detail="Cannot delete the last admin account")
+
+    if not verify_account_deletion_token(user.id, user.email, data.token, data.issued_at):
+        raise HTTPException(status_code=400, detail="Invalid or expired account deletion link")
+
+    deleted = db.delete_user(user.id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail="Failed to delete account")
+
+    logger.info(f"[Auth] Account deleted for user {user.email}")
+    return {"status": "deleted", "message": "Your account has been deleted"}
 
 
 @router.post("/google")

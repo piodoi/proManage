@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
 import FeatureSlideshow from './pages/FeatureSlideshow';
 import ConfirmEmail from './pages/ConfirmEmail';
+import ConfirmAccountDeletion from './pages/ConfirmAccountDeletion';
 import UnsubscribeMarketing from './pages/UnsubscribeMarketing';
 import HelpManualView from './components/HelpManualView';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -97,6 +98,7 @@ function App() {
                 <Route path="/features" element={<FeatureSlideshow />} />
                 <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
                 <Route path="/confirm-email" element={<ConfirmEmail />} />
+                <Route path="/confirm-account-deletion" element={<ConfirmAccountDeletion />} />
                 <Route path="/unsubscribe" element={<UnsubscribeMarketing />} />
                 <Route path="/help" element={<HelpManualView />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />

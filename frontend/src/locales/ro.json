@@ -48,7 +48,21 @@
     "pending": "În așteptare",
     "confirmed": "Confirmat",
     "rejected": "Respins",
-    "optional": "opțional"
+    "optional": "opțional",
+    "manageSuppliersCredentials": "Gestionează credențialele furnizorilor",
+    "accountDeletionTitle": "Șterge contul",
+    "accountDeletionDescription": "Acest lucru îți șterge definitiv contul și datele asociate. Un link de confirmare va fi trimis la emailul contului înainte să fie eliminat ceva.",
+    "accountDeletionEmailHint": "Ștergerea are loc doar după ce deschizi linkul de confirmare din email.",
+    "accountDeletionButton": "Trimite emailul de ștergere",
+    "accountDeletionSending": "Se trimite...",
+    "accountDeletionEmailSent": "Verifică emailul pentru a confirma ștergerea contului.",
+    "accountDeletionRequestFailed": "Trimiterea emailului pentru ștergerea contului a eșuat.",
+    "accountDeletionPageTitle": "Ștergere cont",
+    "accountDeletionProcessing": "Se confirmă ștergerea contului...",
+    "accountDeletionCompleted": "Contul tău a fost șters.",
+    "accountDeletionConfirmFailed": "Confirmarea ștergerii contului a eșuat.",
+    "accountDeletionInvalidLink": "Acest link de ștergere a contului este invalid sau expirat.",
+    "accountDeletionBackHome": "Înapoi acasă"
   },
   "app": {
     "title": "ProManage",

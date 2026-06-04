@@ -11,6 +11,7 @@ import { useI18n } from '../lib/i18n';
 import { usePreferences } from '../hooks/usePreferences';
 import { validateIban, formatIban } from '../utils/iban';
 import { getAvailableCurrencies, getDefaultCurrency } from '../lib/currencyConfig';
+import { useAuth } from '../App';
 
 // Cache lifetime for subscription data (15 minutes in milliseconds)
 const SUBSCRIPTION_CACHE_LIFETIME = 15 * 60 * 1000;
@@ -103,6 +104,7 @@ function calculateSubscriptionPrice(propertyCount: number): { total: number; per
 
 export default function SettingsView({ token, user, onError, forceTab, hideTabBar = false, onNavigateToSubscription }: SettingsViewProps) {
   const { t, language } = useI18n();
+  const { logout } = useAuth();
   const { preferences, setRentWarningDays, setRentCurrency, setBillCurrency, setDateFormat, setPhoneNumber, setLandlordName, setPersonalEmail, setIban, setIbanEur, setIbanUsd } = usePreferences();
   
   // Initialize state from cache if available
@@ -132,6 +134,9 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [propertyQuantity, setPropertyQuantity] = useState<number>(1);
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
+  const [accountDeletionMessage, setAccountDeletionMessage] = useState<string>('');
+  const [accountDeletionError, setAccountDeletionError] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>(() => {
     return forceTab || sessionStorage.getItem('settingsActiveTab') || 'personal';
   });
@@ -414,6 +419,32 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
       if (onError) {
         onError(err instanceof Error ? err.message : 'Failed to open subscription portal');
       }
+    }
+  };
+
+  const handleRequestAccountDeletion = async () => {
+    if (!token) {
+      return;
+    }
+
+    setIsRequestingDeletion(true);
+    setAccountDeletionMessage('');
+    setAccountDeletionError('');
+
+    try {
+      const response = await api.auth.requestAccountDeletion(token);
+      setAccountDeletionMessage(response.message || t('settings.accountDeletionEmailSent'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('settings.accountDeletionRequestFailed');
+      setAccountDeletionError(message);
+      if (message.toLowerCase().includes('deleted')) {
+        logout();
+      }
+      if (onError) {
+        onError(message);
+      }
+    } finally {
+      setIsRequestingDeletion(false);
     }
   };
 
@@ -866,6 +897,28 @@ export default function SettingsView({ token, user, onError, forceTab, hideTabBa
                 >
                   {t('common.save')}
                 </Button>
+
+                <div className="rounded-lg border border-red-900/60 bg-red-950/20 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-red-300 font-medium">{t('settings.accountDeletionTitle')}</h3>
+                    <p className="text-sm text-slate-400 mt-1">{t('settings.accountDeletionDescription')}</p>
+                    <p className="text-xs text-slate-500 mt-2">{t('settings.accountDeletionEmailHint')}</p>
+                  </div>
+                  {accountDeletionMessage && (
+                    <p className="text-sm text-emerald-300">{accountDeletionMessage}</p>
+                  )}
+                  {accountDeletionError && (
+                    <p className="text-sm text-red-300">{accountDeletionError}</p>
+                  )}
+                  <Button
+                    onClick={handleRequestAccountDeletion}
+                    variant="destructive"
+                    disabled={isRequestingDeletion || !token}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isRequestingDeletion ? t('settings.accountDeletionSending') : t('settings.accountDeletionButton')}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

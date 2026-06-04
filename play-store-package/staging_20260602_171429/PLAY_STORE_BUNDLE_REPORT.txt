@@ -1,0 +1,21 @@
+﻿ProManage Play Store Materials Bundle
+Generated: 2026-06-02T17:14:29
+
+Included files:
+- PLAY_STORE_READINESS.md
+- README.md
+- frontend/package.json
+- frontend/index.html
+- frontend/public/manifest.json
+- frontend/public/icon.png
+- frontend/src/pages/PrivacyPolicy.tsx
+- frontend/src/pages/TermsOfService.tsx
+
+Known missing items for Google Play submission:
+- Android project or signed .aab
+- Play screenshots
+- 1024x500 feature graphic
+- Confirmed production privacy policy URL
+- Confirmed account deletion URL/flow
+- Data safety form answers
+- Content rating answers

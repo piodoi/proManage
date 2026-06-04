@@ -4,6 +4,7 @@ import smtplib
 import hashlib
 import hmac
 import html
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -15,6 +16,7 @@ from urllib.parse import quote
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=2)
+ACCOUNT_DELETION_TOKEN_TTL_SECONDS = 3600
 
 
 def get_smtp_config():
@@ -51,6 +53,37 @@ def build_marketing_unsubscribe_url(user_id: str) -> str:
     config = get_smtp_config()
     token = build_marketing_unsubscribe_token(user_id)
     return f"{config['frontend_url'].rstrip('/')}/unsubscribe?user_id={quote(user_id)}&token={quote(token)}"
+
+
+def build_account_deletion_token(user_id: str, email: str, issued_at: int) -> str:
+    config = get_smtp_config()
+    payload = f"account-delete:{user_id}:{email.lower()}:{issued_at}"
+    return hmac.new(
+        config["jwt_secret"].encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def verify_account_deletion_token(user_id: str, email: str, token: str, issued_at: int) -> bool:
+    now = int(time.time())
+    if issued_at > now + 300:
+        return False
+    if now - issued_at > ACCOUNT_DELETION_TOKEN_TTL_SECONDS:
+        return False
+
+    expected = build_account_deletion_token(user_id, email, issued_at)
+    return hmac.compare_digest(expected, token)
+
+
+def build_account_deletion_url(user_id: str, email: str) -> str:
+    config = get_smtp_config()
+    issued_at = int(time.time())
+    token = build_account_deletion_token(user_id, email, issued_at)
+    return (
+        f"{config['frontend_url'].rstrip('/')}/confirm-account-deletion"
+        f"?user_id={quote(user_id)}&issued_at={issued_at}&token={quote(token)}"
+    )
 
 
 def build_marketing_email_content(body: str, unsubscribe_url: str) -> tuple[str, str]:
@@ -292,4 +325,63 @@ async def send_bill_notification_email(
 ProManage - Property & Rent Management
     """
     
+    return await send_email(to_email, subject, html_body, text_body)
+
+
+async def send_account_deletion_email(to_email: str, name: str, deletion_url: str) -> bool:
+    subject = "Confirm your ProManage account deletion"
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .button {{
+                display: inline-block;
+                padding: 12px 24px;
+                background-color: #dc2626;
+                color: white;
+                text-decoration: none;
+                border-radius: 6px;
+                margin: 20px 0;
+            }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Hello {html.escape(name or to_email)},</h2>
+            <p>We received a request to delete your ProManage account.</p>
+            <p>Click the button below to permanently delete your account and related data.</p>
+            <a href="{deletion_url}" class="button">Delete My Account</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p><a href="{deletion_url}">{deletion_url}</a></p>
+            <p>This link will expire in 1 hour.</p>
+            <div class="footer">
+                <p>If you did not request this, you can safely ignore this email.</p>
+                <p>ProManage - Property & Rent Management</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    text_body = f"""
+Hello {name or to_email},
+
+We received a request to delete your ProManage account.
+
+Confirm deletion by opening this link:
+
+{deletion_url}
+
+This link will expire in 1 hour.
+
+If you did not request this, you can safely ignore this email.
+
+ProManage - Property & Rent Management
+    """
+
     return await send_email(to_email, subject, html_body, text_body)

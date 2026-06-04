@@ -48,7 +48,21 @@
     "pending": "En attente",
     "confirmed": "Confirmé",
     "rejected": "Rejeté",
-    "optional": "optionnel"
+    "optional": "optionnel",
+    "manageSuppliersCredentials": "Gérer les identifiants des fournisseurs",
+    "accountDeletionTitle": "Supprimer le compte",
+    "accountDeletionDescription": "Cela supprime définitivement votre compte et les données associées. Un lien de confirmation sera envoyé à l'adresse e-mail du compte avant toute suppression.",
+    "accountDeletionEmailHint": "La suppression n'a lieu qu'après ouverture du lien de confirmation reçu par e-mail.",
+    "accountDeletionButton": "Envoyer l'e-mail de suppression",
+    "accountDeletionSending": "Envoi en cours...",
+    "accountDeletionEmailSent": "Vérifiez votre e-mail pour confirmer la suppression du compte.",
+    "accountDeletionRequestFailed": "Échec de l'envoi de l'e-mail de suppression du compte.",
+    "accountDeletionPageTitle": "Suppression du compte",
+    "accountDeletionProcessing": "Confirmation de la suppression du compte...",
+    "accountDeletionCompleted": "Votre compte a été supprimé.",
+    "accountDeletionConfirmFailed": "Échec de la confirmation de la suppression du compte.",
+    "accountDeletionInvalidLink": "Ce lien de suppression du compte est invalide ou expiré.",
+    "accountDeletionBackHome": "Retour à l'accueil"
   },
   "app": {
     "title": "ProManage",
