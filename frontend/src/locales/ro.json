@@ -24,6 +24,9 @@
     "status": "Status",
     "date": "Data",
     "amount": "Sumă",
+    "property": "Proprietate",
+    "properties": "Proprietăți",
+    "bills": "Facturi",
     "currency": "Monedă",
     "paymentDetails": "Detalii Plată",
     "description": "Descriere",
@@ -103,7 +106,6 @@
     "rentersUseLink": "Chiriași: Folosiți link-ul furnizat de proprietar"
   },
   "property": {
-    "properties": "Proprietăți",
     "addProperty": "Adaugă Proprietate",
     "editProperty": "Editează Proprietate",
     "deleteProperty": "Șterge Proprietate",
@@ -144,7 +146,6 @@
     "totalThisMonth": "Total Luna Aceasta",
     "totalPaid": "Total Plătit",
     "balance": "Sold",
-    "bills": "Facturi",
     "pay": "Plătește",
     "payBill": "Plătește Factura",
     "paymentMethod": "Metodă Plată",
@@ -183,6 +184,8 @@
     "billsSelectedCount": "{count} factură/i selectată/e - vor fi incluse în mesaj",
     "dueDay": "Zi scadență",
     "start": "Început",
+    "securityDeposit": "Garanție",
+    "securityDepositHelp": "Garanția inițială reținută pentru acest chiriaș. Pentru chiriașii noi, implicit este egală cu suma chiriei.",
     "credit": "Credit",
     "applyCredit": "Aplică creditul",
     "recordPayment": "Înregistrează plată",
@@ -236,7 +239,6 @@
     "yourEmail": "Emailul Tău"
   },
   "bill": {
-    "bills": "Facturi",
     "addBill": "Adaugă Factură",
     "editBill": "Editează Factură",
     "clickToToggleStatus": "Click pentru a comuta între Plătit/Urmează",

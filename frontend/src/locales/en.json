@@ -24,6 +24,9 @@
     "status": "Status",
     "date": "Date",
     "amount": "Amount",
+    "property": "Property",
+    "properties": "Properties",
+    "bills": "Bills",
     "currency": "Currency",
     "paymentDetails": "Payment Details",
     "description": "Description",
@@ -89,7 +92,6 @@
     "rentersUseLink": "Renters: Use the link provided by your landlord"
   },
   "property": {
-    "properties": "Properties",
     "addProperty": "Add Property",
     "editProperty": "Edit Property",
     "deleteProperty": "Delete Property",
@@ -130,7 +132,6 @@
     "totalThisMonth": "Total This Month",
     "totalPaid": "Total Paid",
     "balance": "Balance",
-    "bills": "Bills",
     "pay": "Pay",
     "payBill": "Pay Bill",
     "paymentMethod": "Payment Method",
@@ -169,6 +170,8 @@
     "billsSelectedCount": "{count} bill(s) selected - will be included in message",
     "dueDay": "Due day",
     "start": "Start",
+    "securityDeposit": "Security Deposit",
+    "securityDepositHelp": "Initial deposit held for this renter. For new renters it defaults to the rent amount.",
     "credit": "Credit",
     "applyCredit": "Apply Credit",
     "recordPayment": "Record Payment",
@@ -214,7 +217,6 @@
     "yourEmail": "Your Email"
   },
   "bill": {
-    "bills": "Bills",
     "addBill": "Add Bill",
     "editBill": "Edit Bill",
     "clickToToggleStatus": "Click to toggle between Paid/Pending",

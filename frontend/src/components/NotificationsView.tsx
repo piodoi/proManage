@@ -355,7 +355,7 @@ export default function NotificationsView({ onCountChange }: NotificationsViewPr
                         />
                       </TableHead>
                       <TableHead className="text-slate-400">{t('notifications.notificationDate')}</TableHead>
-                      <TableHead className="text-slate-400">{t('notifications.property')}</TableHead>
+                      <TableHead className="text-slate-400">{t('common.property')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.notes')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.renter')}</TableHead>
                       <TableHead className="text-slate-400">{t('notifications.bill')}</TableHead>

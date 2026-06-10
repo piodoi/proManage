@@ -46,6 +46,7 @@ class MySQLDatabase:
             echo=False,  # Set to True for SQL debugging
         )
         self._ensure_user_marketing_unsubscribed_column()
+        self._ensure_renter_security_deposit_column()
         print(f"[Database] MySQL engine initialized: {database_url.split('@')[1] if '@' in database_url else 'localhost'}")
 
     def _ensure_user_marketing_unsubscribed_column(self) -> None:
@@ -55,6 +56,14 @@ class MySQLDatabase:
                 conn.execute(text("ALTER TABLE users ADD COLUMN marketing_unsubscribed BOOLEAN NOT NULL DEFAULT FALSE AFTER subscription_tier"))
                 conn.commit()
                 logger.info("[Database] Added users.marketing_unsubscribed column")
+
+    def _ensure_renter_security_deposit_column(self) -> None:
+        with self.engine.connect() as conn:
+            result = conn.execute(text("SHOW COLUMNS FROM renters LIKE 'security_deposit'"))
+            if result.fetchone() is None:
+                conn.execute(text("ALTER TABLE renters ADD COLUMN security_deposit FLOAT NULL AFTER rent_amount"))
+                conn.commit()
+                logger.info("[Database] Added renters.security_deposit column")
     
     # ==================== USER OPERATIONS ====================
     
@@ -270,6 +279,7 @@ class MySQLDatabase:
                     rent_day=row.rent_day,
                     start_contract_date=start_date_value,
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                    security_deposit=float(getattr(row, 'security_deposit', 0) or 0) if getattr(row, 'security_deposit', None) is not None else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     credit=float(getattr(row, 'credit', 0) or 0),
                     credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
@@ -317,6 +327,7 @@ class MySQLDatabase:
                     rent_day=row.rent_day,
                     start_contract_date=start_date_value,
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                    security_deposit=float(getattr(row, 'security_deposit', 0) or 0) if getattr(row, 'security_deposit', None) is not None else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     credit=float(getattr(row, 'credit', 0) or 0),
                     credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
@@ -364,6 +375,7 @@ class MySQLDatabase:
                     rent_day=row.rent_day,
                     start_contract_date=start_date_value,
                     rent_amount=float(row.rent_amount) if getattr(row, 'rent_amount', None) else None,
+                    security_deposit=float(getattr(row, 'security_deposit', 0) or 0) if getattr(row, 'security_deposit', None) is not None else None,
                     rent_currency=getattr(row, 'rent_currency', None) or 'EUR',
                     credit=float(getattr(row, 'credit', 0) or 0),
                     credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
@@ -383,11 +395,11 @@ class MySQLDatabase:
                 text("""
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
-                        start_contract_date, rent_amount, rent_currency, credit, credit_currency, access_token,
+                        start_contract_date, rent_amount, security_deposit, rent_currency, credit, credit_currency, access_token,
                         password_hash, language, email_notifications, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
-                        :start_contract_date, :rent_amount, :rent_currency, :credit, :credit_currency, :access_token,
+                        :start_contract_date, :rent_amount, :security_deposit, :rent_currency, :credit, :credit_currency, :access_token,
                         :password_hash, :language, :email_notifications, :created_at
                     )
                 """),
@@ -400,6 +412,7 @@ class MySQLDatabase:
                     "rent_day": renter.rent_day,
                     "start_contract_date": renter.start_contract_date,
                     "rent_amount": renter.rent_amount,
+                    "security_deposit": renter.security_deposit,
                     "rent_currency": renter.rent_currency or 'EUR',
                     "credit": float(getattr(renter, 'credit', 0) or 0),
                     "credit_currency": getattr(renter, 'credit_currency', None) or 'RON',

@@ -295,7 +295,7 @@ export default function Dashboard() {
             </TabsTrigger>
             <TabsTrigger value="property" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
               <Building2 className="w-4 h-4 mr-1 sm:mr-2" />
-              {t('property.properties')}
+              {t('common.properties')}
             </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-slate-700 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 rounded-none px-2 sm:px-4 py-2 border-b-2 border-transparent text-xs sm:text-sm">
               <Settings className="w-4 h-4 mr-1 sm:mr-2" />

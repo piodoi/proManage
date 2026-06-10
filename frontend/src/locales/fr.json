@@ -24,6 +24,9 @@
     "status": "Statut",
     "date": "Date",
     "amount": "Montant",
+    "property": "Propriété",
+    "properties": "Propriétés",
+    "bills": "Factures",
     "currency": "Devise",
     "paymentDetails": "Détails du paiement",
     "description": "Description",
@@ -103,7 +106,6 @@
     "rentersUseLink": "Locataires : Utilisez le lien fourni par votre propriétaire"
   },
   "property": {
-    "properties": "Propriétés",
     "addProperty": "Ajouter une propriété",
     "editProperty": "Modifier la propriété",
     "deleteProperty": "Supprimer la propriété",
@@ -144,7 +146,6 @@
     "totalThisMonth": "Total ce mois",
     "totalPaid": "Total payé",
     "balance": "Solde",
-    "bills": "Factures",
     "pay": "Payer",
     "payBill": "Payer la facture",
     "paymentMethod": "Mode de paiement",
@@ -182,6 +183,8 @@
     "billsSelectedCount": "{count} facture(s) sélectionnée(s) - sera incluse dans le message",
     "dueDay": "Jour d'échéance",
     "start": "Début",
+    "securityDeposit": "Dépôt de garantie",
+    "securityDepositHelp": "Montant du dépôt initial conservé pour ce locataire. Pour les nouveaux locataires, il est initialisé au montant du loyer.",
     "downloadPdf": "Télécharger le PDF",
     "iMadeTheTransfer": "J'ai effectué le virement",
     "notifyPaymentDescription": "Après avoir effectué le virement, notifiez le propriétaire :",
@@ -222,7 +225,6 @@
     "yourEmail": "Votre e-mail"
   },
   "bill": {
-    "bills": "Factures",
     "addBill": "Ajouter une facture",
     "editBill": "Modifier la facture",
     "clickToToggleStatus": "Cliquez pour basculer entre Payé/En attente",

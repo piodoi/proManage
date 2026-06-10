@@ -562,6 +562,7 @@ export type Renter = {
   rent_day?: number;  // Day of month (1-28) for recurring rent
   start_contract_date?: string;  // Optional start date of contract
   rent_amount?: number;  // Rent amount
+  security_deposit?: number;  // Initial security deposit amount
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
   access_token: string;
   password_hash?: string;  // Not sent to frontend, but presence indicates account exists
@@ -579,6 +580,7 @@ export type RenterCreate = {
   rent_day?: number;  // Day of month (1-28) for recurring rent
   start_contract_date?: string;  // Optional start date of contract
   rent_amount?: number;  // Rent amount
+  security_deposit?: number;  // Initial security deposit amount
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
   password?: string;  // Optional password (landlord can set for renter)
   language?: string;  // Language preference: "en" or "ro"
@@ -590,6 +592,7 @@ export type RenterUpdate = {
   rent_day?: number;  // Day of month (1-28) for recurring rent
   start_contract_date?: string;  // Optional start date of contract
   rent_amount?: number;  // Rent amount
+  security_deposit?: number;  // Initial security deposit amount
   rent_currency?: string;  // Currency for rent: "EUR", "RON", or "USD"
   password?: string;  // Optional password (landlord can update for renter)
   language?: string;  // Language preference: "en" or "ro"

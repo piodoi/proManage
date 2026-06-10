@@ -378,7 +378,7 @@ export default function LandlordView({ token, onError, hideSettings: _hideSettin
                 <span className="hidden sm:inline">{t('supplier.syncBills')}</span>
               </Button>
             </div>
-            <h2 className="text-sm sm:text-lg font-medium text-slate-100 truncate">{t('property.properties')}</h2>
+            <h2 className="text-sm sm:text-lg font-medium text-slate-100 truncate">{t('common.properties')}</h2>
             <div className="flex gap-2">
               {/* E-bloc import only available in standard (non-US) build */}
               {!featureFlags.usBuild && (

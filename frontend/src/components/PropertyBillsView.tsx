@@ -613,7 +613,7 @@ export default function PropertyBillsView({
         <div className="flex justify-between items-center">
           <CardTitle className="text-slate-100 flex items-center gap-2">
             <Receipt className="w-5 h-5" />
-            {t('bill.bills')}
+            {t('common.bills')}
           </CardTitle>
           <div className="flex gap-2">
             <input

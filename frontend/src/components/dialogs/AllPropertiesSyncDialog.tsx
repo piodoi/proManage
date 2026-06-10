@@ -398,7 +398,7 @@ export default function AllPropertiesSyncDialog({
                     </Label>
                     <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
                       <span>
-                        {t('supplier.properties')}: <span className="text-slate-300">{propertiesWithRentersCount}</span>
+                        {t('common.properties')}: <span className="text-slate-300">{propertiesWithRentersCount}</span>
                       </span>
                       <span>
                         {t('supplier.renters')}: <span className="text-slate-300">{totalRentersCount}</span>

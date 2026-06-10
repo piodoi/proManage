@@ -54,6 +54,7 @@ CREATE TABLE renters (
     rent_day INT NULL,
     start_contract_date DATE NULL,
     rent_amount FLOAT NULL,
+    security_deposit FLOAT NULL,
     rent_currency VARCHAR(10) DEFAULT 'EUR',
     credit FLOAT NOT NULL DEFAULT 0,
     credit_currency VARCHAR(10) NOT NULL DEFAULT 'RON',

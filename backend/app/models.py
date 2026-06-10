@@ -242,6 +242,7 @@ class Renter(BaseModel):
     rent_day: Optional[int] = Field(None, ge=1, le=28)  # Day of month (1-28) for recurring rent
     start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount: Optional[float] = None  # Rent amount
+    security_deposit: Optional[float] = None  # Initial security deposit amount
     rent_currency: Optional[str] = "EUR"  # Currency for rent: "EUR", "RON", or "USD"
     access_token: str = Field(default_factory=gen_token)
     password_hash: Optional[str] = None  # Password hash for renter account (optional)
@@ -411,6 +412,7 @@ class RenterCreate(BaseModel):
     rent_day: Optional[int] = Field(None, ge=1, le=28)  # Day of month (1-28) for recurring rent
     start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount: Optional[float] = None  # Rent amount
+    security_deposit: Optional[float] = None  # Initial security deposit amount
     rent_currency: Optional[str] = "EUR"  # Currency for rent: "EUR", "RON", or "USD"
     password: Optional[str] = None  # Plain password (will be hashed) - landlord can set initial password
     language: Optional[str] = "ro"  # Language preference: "en" or "ro"
@@ -423,6 +425,7 @@ class RenterUpdate(BaseModel):
     rent_day: Optional[int] = Field(None, ge=1, le=28)  # Day of month (1-28) for recurring rent
     start_contract_date: Optional[date] = None  # Optional start date of contract
     rent_amount: Optional[float] = None  # Rent amount
+    security_deposit: Optional[float] = None  # Initial security deposit amount
     rent_currency: Optional[str] = None  # Currency for rent: "EUR", "RON", or "USD"
     password: Optional[str] = None  # Plain password (will be hashed) - landlord can update password
     language: Optional[str] = None  # Language preference: "en" or "ro"

@@ -825,7 +825,7 @@ export default function RenterView() {
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2">
               <Receipt className="w-5 h-5" />
-              {t('renter.bills')}
+              {t('common.bills')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto mobile-scroll">

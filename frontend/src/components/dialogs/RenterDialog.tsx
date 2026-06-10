@@ -35,6 +35,7 @@ export default function RenterDialog({
     rent_day: '',
     start_contract_date: '',
     rent_amount: '',
+    security_deposit: '',
     rent_currency: 'EUR' as 'EUR' | 'RON' | 'USD',
     email: '',
     phone: '',
@@ -62,6 +63,7 @@ export default function RenterDialog({
         rent_day: renter.rent_day ? renter.rent_day.toString() : '',
         start_contract_date: formattedStartDate,
         rent_amount: renter.rent_amount ? renter.rent_amount.toString() : '',
+        security_deposit: renter.security_deposit !== undefined && renter.security_deposit !== null ? renter.security_deposit.toString() : (renter.rent_amount ? renter.rent_amount.toString() : ''),
         rent_currency: (renter.rent_currency || 'EUR') as 'EUR' | 'RON' | 'USD',
         email: renter.email || '',
         phone: renter.phone || '',
@@ -74,6 +76,7 @@ export default function RenterDialog({
         rent_day: '',
         start_contract_date: '',
         rent_amount: '',
+        security_deposit: '',
         rent_currency: 'EUR',
         email: '',
         phone: '',
@@ -92,6 +95,7 @@ export default function RenterDialog({
 
     try {
       const rentAmount = parseFloat(form.rent_amount);
+      const securityDeposit = form.security_deposit ? parseFloat(form.security_deposit) : rentAmount;
       const rentDay = form.rent_day ? parseInt(form.rent_day, 10) : undefined;
       const startContractDate = form.start_contract_date || undefined;
 
@@ -103,6 +107,7 @@ export default function RenterDialog({
           rent_day: rentDay,
           start_contract_date: startContractDate,
           rent_amount: rentAmount,
+          security_deposit: securityDeposit,
           rent_currency: form.rent_currency,
           password: form.password || undefined,  // Only send if provided
           language: form.language,
@@ -115,6 +120,7 @@ export default function RenterDialog({
           rent_day: rentDay,
           start_contract_date: startContractDate,
           rent_amount: rentAmount,
+          security_deposit: securityDeposit,
           rent_currency: form.rent_currency,
           password: form.password || undefined,  // Only send if provided
           language: form.language,
@@ -196,6 +202,11 @@ export default function RenterDialog({
                 step="0.01"
                 value={form.rent_amount}
                 onChange={(e) => setForm({ ...form, rent_amount: e.target.value })}
+                onBlur={() => {
+                  if (!renter && form.rent_amount && !form.security_deposit) {
+                    setForm((current) => ({ ...current, security_deposit: current.rent_amount }));
+                  }
+                }}
                 className="bg-slate-700 border-slate-600 text-slate-100 w-32 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 placeholder="0.00"
                 required
@@ -217,6 +228,21 @@ export default function RenterDialog({
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {t('renter.rentAmountHelp')}
+            </p>
+          </div>
+          <div>
+            <Label className="text-slate-300">{t('renter.securityDeposit')}</Label>
+            <Input
+              key={`security_deposit-${renter?.id || 'new'}`}
+              type="number"
+              step="0.01"
+              value={form.security_deposit}
+              onChange={(e) => setForm({ ...form, security_deposit: e.target.value })}
+              className="bg-slate-700 border-slate-600 text-slate-100 w-32 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              placeholder="0.00"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              {t('renter.securityDepositHelp')}
             </p>
           </div>
           <div>

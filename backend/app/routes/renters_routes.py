@@ -152,6 +152,7 @@ async def create_renter(
         rent_day=data.rent_day,
         start_contract_date=data.start_contract_date,
         rent_amount=data.rent_amount,
+        security_deposit=data.security_deposit if data.security_deposit is not None else data.rent_amount,
         rent_currency=data.rent_currency or 'EUR',
         credit=0.0,
         credit_currency='RON',
@@ -199,6 +200,8 @@ async def update_renter(
         renter.start_contract_date = data.start_contract_date
     if data.rent_amount is not None:
         renter.rent_amount = data.rent_amount
+    if data.security_deposit is not None:
+        renter.security_deposit = data.security_deposit
     if data.rent_currency is not None:
         renter.rent_currency = data.rent_currency
     # Hash password if provided

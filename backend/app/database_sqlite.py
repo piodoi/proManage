@@ -48,6 +48,7 @@ class SQLiteDatabase:
             conn.execute(text("PRAGMA foreign_keys=ON"))
             conn.commit()
         self._ensure_user_marketing_unsubscribed_column()
+        self._ensure_renter_security_deposit_column()
         
         print(f"[Database] SQLite typed-column engine initialized")
 
@@ -59,6 +60,15 @@ class SQLiteDatabase:
                 conn.execute(text("ALTER TABLE users ADD COLUMN marketing_unsubscribed INTEGER NOT NULL DEFAULT 0"))
                 conn.commit()
                 print("[Database] Added users.marketing_unsubscribed column")
+
+    def _ensure_renter_security_deposit_column(self) -> None:
+        with self.engine.connect() as conn:
+            columns = conn.execute(text("PRAGMA table_info(renters)")).fetchall()
+            has_column = any(getattr(column, 'name', None) == 'security_deposit' for column in columns)
+            if not has_column:
+                conn.execute(text("ALTER TABLE renters ADD COLUMN security_deposit FLOAT NULL"))
+                conn.commit()
+                print("[Database] Added renters.security_deposit column")
     
     # ==================== USER OPERATIONS ====================
     
@@ -256,6 +266,7 @@ class SQLiteDatabase:
                     rent_day=row.rent_day,
                     start_contract_date=row.start_contract_date,
                     rent_amount=float(row.rent_amount) if row.rent_amount else None,
+                    security_deposit=float(getattr(row, 'security_deposit', 0) or 0) if getattr(row, 'security_deposit', None) is not None else None,
                     rent_currency=row.rent_currency or 'EUR',
                     credit=float(getattr(row, 'credit', 0) or 0),
                     credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
@@ -282,6 +293,7 @@ class SQLiteDatabase:
                     rent_day=row.rent_day,
                     start_contract_date=row.start_contract_date,
                     rent_amount=float(row.rent_amount) if row.rent_amount else None,
+                    security_deposit=float(getattr(row, 'security_deposit', 0) or 0) if getattr(row, 'security_deposit', None) is not None else None,
                     rent_currency=row.rent_currency or 'EUR',
                     credit=float(getattr(row, 'credit', 0) or 0),
                     credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
@@ -311,6 +323,7 @@ class SQLiteDatabase:
                     rent_day=row.rent_day,
                     start_contract_date=row.start_contract_date,
                     rent_amount=float(row.rent_amount) if row.rent_amount else None,
+                    security_deposit=float(getattr(row, 'security_deposit', 0) or 0) if getattr(row, 'security_deposit', None) is not None else None,
                     rent_currency=row.rent_currency or 'EUR',
                     credit=float(getattr(row, 'credit', 0) or 0),
                     credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
@@ -329,11 +342,11 @@ class SQLiteDatabase:
                 text("""
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
-                        start_contract_date, rent_amount, rent_currency, credit, credit_currency, access_token,
+                        start_contract_date, rent_amount, security_deposit, rent_currency, credit, credit_currency, access_token,
                         password_hash, language, email_notifications, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
-                        :start_contract_date, :rent_amount, :rent_currency, :credit, :credit_currency, :access_token,
+                        :start_contract_date, :rent_amount, :security_deposit, :rent_currency, :credit, :credit_currency, :access_token,
                         :password_hash, :language, :email_notifications, :created_at
                     )
                 """),
@@ -346,6 +359,7 @@ class SQLiteDatabase:
                     "rent_day": renter.rent_day,
                     "start_contract_date": renter.start_contract_date,
                     "rent_amount": renter.rent_amount,
+                    "security_deposit": renter.security_deposit,
                     "rent_currency": renter.rent_currency or 'EUR',
                     "credit": float(getattr(renter, 'credit', 0) or 0),
                     "credit_currency": getattr(renter, 'credit_currency', None) or 'RON',
