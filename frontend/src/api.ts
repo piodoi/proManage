@@ -477,6 +477,8 @@ export type User = {
   subscription_status: 'active' | 'expired' | 'none';  // Deprecated, use subscription_tier
   subscription_tier?: number;  // 0 = off, 1 = on (defaults to 0 if not present)
   marketing_unsubscribed?: boolean;
+  properties_count?: number;
+  bills_count?: number;
   subscription_expires?: string;
   created_at: string;
   password_hash?: string;  // For display purposes only

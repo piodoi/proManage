@@ -443,6 +443,7 @@
     "tier": "Niveau",
     "paidTierProperties": "nombre de propriétés",
     "showingUsers": "Affichage de {from} à {to} sur {total} utilisateurs",
+    "usersPerPage": "Utilisateurs par page",
     "previous": "Précédent",
     "next": "Suivant",
     "update": "Mettre à jour",

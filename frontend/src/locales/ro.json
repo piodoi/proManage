@@ -456,6 +456,7 @@
     "tier": "Nivel",
     "paidTierProperties": "număr de proprietăți",
     "showingUsers": "Afișează {from} până la {to} din {total} utilizatori",
+    "usersPerPage": "Utilizatori pe pagină",
     "previous": "Anterior",
     "next": "Următor",
     "update": "Actualizează",

@@ -212,6 +212,8 @@ class User(BaseModel):
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE  # Deprecated, use subscription_tier
     subscription_tier: int = 0  # 0 = off, 1 = on (reserved for future tiers)
     marketing_unsubscribed: bool = False
+    properties_count: int = 0
+    bills_count: int = 0
     subscription_expires: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

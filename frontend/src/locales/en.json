@@ -435,6 +435,7 @@
     "tier": "Tier",
     "paidTierProperties": "number of properties",
     "showingUsers": "Showing {from} to {to} of {total} users",
+    "usersPerPage": "Users per page",
     "previous": "Previous",
     "next": "Next",
     "update": "Update",

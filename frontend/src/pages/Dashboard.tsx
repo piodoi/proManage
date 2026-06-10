@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [marketingSending, setMarketingSending] = useState(false);
   const [marketingStatus, setMarketingStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [usersPerPage, setUsersPerPage] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -93,12 +94,12 @@ export default function Dashboard() {
       loadUsers();
       loadSuppliers();
     }
-  }, [token, currentPage, isAdmin]);
+  }, [token, currentPage, usersPerPage, isAdmin]);
 
   const loadUsers = async () => {
     if (!token || !isAdmin) return;
     try {
-      const data = await api.admin.listUsers(token, currentPage, 50);
+      const data = await api.admin.listUsers(token, currentPage, usersPerPage);
       setUsers(data.users);
       setTotalPages(data.total_pages);
       setTotalUsers(data.total);
@@ -369,7 +370,9 @@ export default function Dashboard() {
                   formData={formData}
                   setFormData={setFormData}
                   currentPage={currentPage}
+                  usersPerPage={usersPerPage}
                   setCurrentPage={setCurrentPage}
+                  setUsersPerPage={setUsersPerPage}
                   totalPages={totalPages}
                   totalUsers={totalUsers}
                   handleCreate={handleCreate}
@@ -422,7 +425,9 @@ function AdminTabsContent({
   formData,
   setFormData,
   currentPage,
+  usersPerPage,
   setCurrentPage,
+  setUsersPerPage,
   totalPages,
   totalUsers,
   handleCreate,
@@ -833,6 +838,8 @@ function AdminTabsContent({
                         <TableHead className="text-slate-400">{t('common.password')}</TableHead>
                         <TableHead className="text-slate-400">{t('admin.role')}</TableHead>
                         <TableHead className="text-slate-400">{t('admin.subscription')}</TableHead>
+                        <TableHead className="text-slate-400">{t('common.properties')}</TableHead>
+                        <TableHead className="text-slate-400">{t('common.bills')}</TableHead>
                         <TableHead className="text-slate-400">{t('admin.marketingStatus') || 'Marketing'}</TableHead>
                         <TableHead className="text-slate-400">{t('common.actions')}</TableHead>
                       </TableRow>
@@ -859,6 +866,12 @@ function AdminTabsContent({
                               className="w-16 h-8 bg-slate-700 border-slate-600 text-slate-100 text-center"
                             />
                           </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded text-xs ${(user.properties_count ?? 0) > 0 ? 'bg-emerald-900 text-emerald-200' : 'bg-slate-700 text-slate-300'}`}>
+                              {user.properties_count ?? 0}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-slate-200">{user.bills_count ?? 0}</TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded text-xs ${user.marketing_unsubscribed ? 'bg-amber-900 text-amber-200' : 'bg-emerald-900 text-emerald-200'}`}>
                               {user.marketing_unsubscribed
@@ -891,67 +904,90 @@ function AdminTabsContent({
                     </TableBody>
                   </Table>
                 )}
-                {totalPages > 1 && (
+                {totalUsers > 0 && (
                   <div className="mt-4 flex items-center justify-between">
-                    <p className="text-sm text-slate-400">
-                      {t('admin.showingUsers', { 
-                        from: ((currentPage - 1) * 50) + 1, 
-                        to: Math.min(currentPage * 50, totalUsers), 
-                        total: totalUsers 
-                      })}
-                    </p>
-                    <Pagination>
-                      <PaginationContent>
-                        <PaginationItem>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className="text-slate-400 hover:text-slate-100"
-                          >
-                            <ChevronLeft className="h-4 w-4 mr-1" />
-                            {t('admin.previous')}
-                          </Button>
-                        </PaginationItem>
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-                          return (
-                            <PaginationItem key={pageNum}>
-                              <Button
-                                variant={currentPage === pageNum ? "outline" : "ghost"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                className={currentPage === pageNum ? 'bg-slate-700 text-slate-100 border-slate-600' : 'text-slate-400 hover:text-slate-100'}
-                              >
-                                {pageNum}
-                              </Button>
-                            </PaginationItem>
-                          );
+                    <div className="flex items-center gap-4">
+                      <p className="text-sm text-slate-400">
+                        {t('admin.showingUsers', {
+                          from: ((currentPage - 1) * usersPerPage) + 1,
+                          to: Math.min(currentPage * usersPerPage, totalUsers),
+                          total: totalUsers
                         })}
-                        <PaginationItem>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className="text-slate-400 hover:text-slate-100"
-                          >
-                            {t('admin.next')}
-                            <ChevronRight className="h-4 w-4 ml-1" />
-                          </Button>
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
+                      </p>
+                      <div className="flex items-center gap-2 text-sm text-slate-400">
+                        <span>{t('admin.usersPerPage') || 'Users per page'}</span>
+                        <Select
+                          value={String(usersPerPage)}
+                          onValueChange={(value) => {
+                            setCurrentPage(1);
+                            setUsersPerPage(parseInt(value, 10));
+                          }}
+                        >
+                          <SelectTrigger className="w-24 h-8 bg-slate-700 border-slate-600 text-slate-100">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-700 border-slate-600">
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {totalPages > 1 && (
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                              disabled={currentPage === 1}
+                              className="text-slate-400 hover:text-slate-100"
+                            >
+                              <ChevronLeft className="h-4 w-4 mr-1" />
+                              {t('admin.previous')}
+                            </Button>
+                          </PaginationItem>
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <Button
+                                  variant={currentPage === pageNum ? "outline" : "ghost"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  className={currentPage === pageNum ? 'bg-slate-700 text-slate-100 border-slate-600' : 'text-slate-400 hover:text-slate-100'}
+                                >
+                                  {pageNum}
+                                </Button>
+                              </PaginationItem>
+                            );
+                          })}
+                          <PaginationItem>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                              disabled={currentPage === totalPages}
+                              className="text-slate-400 hover:text-slate-100"
+                            >
+                              {t('admin.next')}
+                              <ChevronRight className="h-4 w-4 ml-1" />
+                            </Button>
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    )}
                   </div>
                 )}
               </CardContent>

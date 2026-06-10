@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, model_validator
+from sqlalchemy import text
 from app.models import (
     User, UserCreate, UserUpdate, TokenData, SubscriptionStatus,
     Supplier, BillType, UserRole
@@ -32,6 +33,39 @@ async def list_users(
 ):
     offset = (page - 1) * limit
     users = db.list_users(limit=limit, offset=offset)
+    user_ids = [user.id for user in users]
+
+    if user_ids:
+        placeholders = ", ".join(f":user_id_{index}" for index in range(len(user_ids)))
+        params = {f"user_id_{index}": user_id for index, user_id in enumerate(user_ids)}
+
+        with db._impl.engine.connect() as conn:
+            property_rows = conn.execute(text(
+                f"""
+                SELECT landlord_id, COUNT(*) AS property_count
+                FROM properties
+                WHERE landlord_id IN ({placeholders})
+                GROUP BY landlord_id
+                """
+            ), params).fetchall()
+
+            bill_rows = conn.execute(text(
+                f"""
+                SELECT p.landlord_id, COUNT(b.id) AS bill_count
+                FROM properties p
+                LEFT JOIN bills b ON b.property_id = p.id
+                WHERE p.landlord_id IN ({placeholders})
+                GROUP BY p.landlord_id
+                """
+            ), params).fetchall()
+
+        property_counts = {row.landlord_id: int(row.property_count or 0) for row in property_rows}
+        bill_counts = {row.landlord_id: int(row.bill_count or 0) for row in bill_rows}
+
+        for user in users:
+            user.properties_count = property_counts.get(user.id, 0)
+            user.bills_count = bill_counts.get(user.id, 0)
+
     total = db.count_users()
     return {
         "users": users,
