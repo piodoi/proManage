@@ -341,6 +341,9 @@ async def save_discovered_bills(data: dict, current_user: TokenData = Depends(re
                 for existing_bill in existing_bills:
                     if existing_bill.bill_number == bill_number:
                         logger.info(f"[Save Bills] Skipping duplicate bill_number {bill_number}")
+                        discovered_bill_id = bill_data.get("id")
+                        if discovered_bill_id:
+                            saved_discovered_bill_ids.append(discovered_bill_id)
                         skip_bill = True
                         break
             

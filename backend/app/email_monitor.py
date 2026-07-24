@@ -143,7 +143,7 @@ class EmailMonitor:
             user_id: If provided, only fetch emails for this user
             
         Returns:
-            List of tuples: (email_id, email_message, user_id)
+            List of tuples: (email_uid, email_message, user_id)
         """
         mail = self.connect()
         results = []
@@ -152,19 +152,20 @@ class EmailMonitor:
             # Select inbox
             mail.select('INBOX')
             
-            # Search for unread emails
-            status, messages = mail.search(None, 'UNSEEN')
+            # Search for unread emails using UID so identifiers remain valid
+            # across later read/delete operations that open a new IMAP session.
+            status, messages = mail.uid('search', None, 'UNSEEN')
             
             if status != 'OK':
                 return results
             
-            email_ids = messages[0].split()
-            logger.info(f"[Email Monitor] Found {len(email_ids)} unread emails")
+            email_uids = messages[0].split()
+            logger.info(f"[Email Monitor] Found {len(email_uids)} unread emails")
             
-            for email_id in email_ids:
+            for email_uid in email_uids:
                 try:
                     # Peek avoids setting \Seen before we decide whether the email should be deleted.
-                    status, msg_data = mail.fetch(email_id, '(BODY.PEEK[])')
+                    status, msg_data = mail.uid('fetch', email_uid, '(BODY.PEEK[])')
                     if status != 'OK':
                         continue
                     
@@ -181,10 +182,10 @@ class EmailMonitor:
                     # If user_id filter is specified, check if it matches
                     if user_id and extracted_user_id != user_id:
                         continue
-                    results.append((email_id.decode(), msg, extracted_user_id))
+                    results.append((email_uid.decode(), msg, extracted_user_id))
                     
                 except Exception as e:
-                    logger.error(f"Error processing email {email_id}: {e}")
+                    logger.error(f"Error processing email UID {email_uid}: {e}")
                     continue
             
         finally:
@@ -272,11 +273,11 @@ class EmailMonitor:
         return attachments
     
     def mark_as_read(self, email_id: str):
-        """Mark email as read."""
+        """Mark email as read using its stable IMAP UID."""
         mail = self.connect()
         try:
             mail.select('INBOX')
-            mail.store(email_id, '+FLAGS', '\\Seen')
+            mail.uid('store', str(email_id), '+FLAGS', '(\\Seen)')
         finally:
             mail.close()
             mail.logout()
@@ -288,27 +289,22 @@ class EmailMonitor:
         For Gmail: moves to Trash folder (Gmail auto-deletes after 30 days).
         For other providers: permanently deletes via IMAP.
         
-        Note: IMAP message IDs are ephemeral. If email was moved manually,
-        the ID will be invalid and deletion will fail silently.
+        Uses IMAP UIDs so the identifier remains valid across sessions.
+        If email was moved manually, the UID lookup may still fail.
         """
         mail = self.connect()
         try:
             mail.select('INBOX')
-            
-            # Ensure email_id is bytes if needed
-            if isinstance(email_id, str):
-                email_id_bytes = email_id.encode() if email_id else email_id
-            else:
-                email_id_bytes = email_id
+            email_uid = str(email_id)
             
             # Verify email exists before trying to delete
-            status, check_data = mail.fetch(email_id_bytes, '(FLAGS)')
+            status, check_data = mail.uid('fetch', email_uid, '(FLAGS)')
             if status != 'OK':
                 logger.warning(f"[Email Delete] Email {email_id} not found in INBOX (may have been moved/deleted manually)")
                 return  # Skip deletion if email doesn't exist
 
             # Mark as read before moving so the Trash copy does not appear unread.
-            mail.store(email_id_bytes, '+FLAGS', '\\Seen')
+            mail.uid('store', email_uid, '+FLAGS', '(\\Seen)')
             
             # Gmail-specific: Move to Trash (Gmail auto-deletes from Trash after 30 days)
             if 'gmail' in self.host.lower():
@@ -318,7 +314,7 @@ class EmailMonitor:
                     trash_used = None
                     for trash_folder in ['[Gmail]/Trash', '[Gmail]/Bin', 'Trash']:
                         try:
-                            result = mail.copy(email_id_bytes, trash_folder)
+                            result = mail.uid('COPY', email_uid, trash_folder)
                             if result[0] == 'OK':
                                 trash_used = trash_folder
                                 break
@@ -327,7 +323,7 @@ class EmailMonitor:
                     
                     # Only mark as deleted in INBOX (keeps copy in Trash)
                     # This removes from INBOX but email stays in Trash for 30 days
-                    mail.store(email_id_bytes, '+FLAGS', '\\Deleted')
+                    mail.uid('store', email_uid, '+FLAGS', '(\\Deleted)')
                     mail.expunge()
                     
                     if trash_used:
@@ -335,12 +331,12 @@ class EmailMonitor:
                 except Exception as gmail_err:
                     logger.warning(f"[Email Delete] Gmail-specific deletion failed: {gmail_err}, trying standard method")
                     # Fallback to standard deletion
-                    mail.store(email_id_bytes, '+FLAGS', '\\Deleted')
+                    mail.uid('store', email_uid, '+FLAGS', '(\\Deleted)')
                     mail.expunge()
                     logger.info(f"[Email Delete] ✓ Deleted email {email_id} (standard method)")
             else:
                 # Standard IMAP deletion for non-Gmail providers
-                mail.store(email_id_bytes, '+FLAGS', '\\Deleted')
+                mail.uid('store', email_uid, '+FLAGS', '(\\Deleted)')
                 mail.expunge()
                 logger.info(f"[Email Delete] ✓ Deleted email {email_id}")
         except Exception as e:
