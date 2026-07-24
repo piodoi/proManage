@@ -1035,21 +1035,21 @@ export default function RenterView() {
               <CardContent className="pt-3 sm:pt-4 px-2 sm:px-4 pb-3 sm:pb-4">
                 <p className="text-slate-400 text-xs sm:text-sm mb-1 sm:mb-2">{t('renter.balance')}</p>
                 
-                {/* Bills breakdown inside balance card - all unpaid bills with non-zero effective remaining */}
-                {balanceBills.filter(b => getEffectiveRemaining(b) !== 0).length > 0 && (
+                {/* Bills breakdown inside balance card - all unpaid bills with non-zero remaining */}
+                {balanceBills.filter(b => b.remaining !== 0).length > 0 && (
                   <div className="mb-2 space-y-0 text-xs">
-                    {balanceBills.filter(b => getEffectiveRemaining(b) !== 0).map((item) => {
-                      const effectiveRemaining = getEffectiveRemaining(item);
+                    {balanceBills.filter(b => b.remaining !== 0).map((item) => {
+                      const remaining = Math.max(0, item.remaining);
                       return (
-                        <div key={item.bill.id} className={`flex justify-between items-center ${effectiveRemaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
+                        <div key={item.bill.id} className={`flex justify-between items-center ${remaining < 0 ? 'text-green-400' : 'text-slate-400'}`}>
                           <span className="truncate mr-1">{item.bill.description}</span>
                           <span className="tabular-nums text-right flex-shrink-0 whitespace-nowrap">
                             {item.bill.currency && item.bill.currency !== 'RON' && (
-                              <> {effectiveRemaining.toFixed(2)} {item.bill.currency} / </>
+                              <> {remaining.toFixed(2)} {item.bill.currency} / </>
                             )}
                             {balance.exchange_rates && item.bill.currency && item.bill.currency !== 'RON'
-                              ? (effectiveRemaining * (balance.exchange_rates.RON) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
-                              : effectiveRemaining.toFixed(2)
+                              ? (remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[item.bill.currency as keyof typeof balance.exchange_rates] || 1)).toFixed(2)
+                              : remaining.toFixed(2)
                             } RON
                           </span>
                         </div>
@@ -1062,25 +1062,25 @@ export default function RenterView() {
                 <div className="flex justify-end items-baseline gap-1">
                   <p className={`text-xl sm:text-2xl font-bold tabular-nums ${
                     balanceBills.reduce((sum, b) => {
-                      const effectiveRemaining = getEffectiveRemaining(b);
+                      const remaining = Math.max(0, b.remaining);
                       const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                        ? (effectiveRemaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                        : effectiveRemaining;
+                        ? (remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                        : remaining;
                       return sum + ronValue;
                     }, 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     {balanceBills
                       .reduce((sum, b) => {
-                        const effectiveRemaining = getEffectiveRemaining(b);
+                        const remaining = Math.max(0, b.remaining);
                         const ronValue = balance.exchange_rates && b.bill.currency && b.bill.currency !== 'RON'
-                          ? (effectiveRemaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
-                          : effectiveRemaining;
+                          ? (remaining * (balance.exchange_rates.RON || 4.97) / (balance.exchange_rates[b.bill.currency as keyof typeof balance.exchange_rates] || 1))
+                          : remaining;
                         return sum + ronValue;
                       }, 0)
                       .toFixed(2)}
                   </p>
                   <p className={`text-base sm:text-lg font-medium ${
-                    balanceBills.reduce((sum, b) => sum + getEffectiveRemaining(b), 0) > 0 ? 'text-amber-400' : 'text-green-400'
+                    balanceBills.reduce((sum, b) => sum + Math.max(0, b.remaining), 0) > 0 ? 'text-amber-400' : 'text-green-400'
                   }`}>
                     RON
                   </p>
