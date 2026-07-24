@@ -1005,45 +1005,8 @@ export default function RenterView() {
             return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
           });
           
-          // Filter bills for balance calculation:
-          // 1. All UNPAID bills with due date this month
-          // 2. PLUS unpaid bills from future months that are within warning days period
-          const warningDays = info?.rent_warning_days ?? 5;
-          const cutoffDate = new Date();
-          cutoffDate.setDate(cutoffDate.getDate() + warningDays);
-          cutoffDate.setHours(23, 59, 59, 999); // End of the cutoff day
-          
-          // Start of current month for comparison
-          const startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
-          startOfCurrentMonth.setHours(0, 0, 0, 0);
-          
-          // End of current month
-          const endOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0);
-          endOfCurrentMonth.setHours(23, 59, 59, 999);
-          
-          const balanceBills = bills.filter(b => {
-            // Only include unpaid bills in balance
-            if (b.bill.status === 'paid') return false;
-            
-            const dueDate = new Date(b.bill.due_date);
-            
-            // Include all unpaid bills from this month
-            if (dueDate >= startOfCurrentMonth && dueDate <= endOfCurrentMonth) {
-              return true;
-            }
-            
-            // Include unpaid bills from future months if within warning days
-            if (dueDate > endOfCurrentMonth && dueDate <= cutoffDate) {
-              return true;
-            }
-            
-            // Include overdue bills from past months
-            if (dueDate < startOfCurrentMonth) {
-              return true;
-            }
-            
-            return false;
-          });
+          // Balance should include all unpaid bills, regardless of due month.
+          const balanceBills = bills.filter(b => b.bill.status !== 'paid');
 
           return (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4">
@@ -1072,7 +1035,7 @@ export default function RenterView() {
               <CardContent className="pt-3 sm:pt-4 px-2 sm:px-4 pb-3 sm:pb-4">
                 <p className="text-slate-400 text-xs sm:text-sm mb-1 sm:mb-2">{t('renter.balance')}</p>
                 
-                {/* Bills breakdown inside balance card - bills with non-zero effective remaining within warning days */}
+                {/* Bills breakdown inside balance card - all unpaid bills with non-zero effective remaining */}
                 {balanceBills.filter(b => getEffectiveRemaining(b) !== 0).length > 0 && (
                   <div className="mb-2 space-y-0 text-xs">
                     {balanceBills.filter(b => getEffectiveRemaining(b) !== 0).map((item) => {
