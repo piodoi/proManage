@@ -467,6 +467,7 @@ class BillCreate(BaseModel):
     extraction_pattern_id: Optional[str] = None
     contract_id: Optional[str] = None
     property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id
+    pdf_data_base64: Optional[str] = None  # Optional PDF proof file encoded as base64
 
 
 class BillUpdate(BaseModel):
@@ -483,6 +484,7 @@ class BillUpdate(BaseModel):
     payment_details: Optional[Union[str, dict]] = None
     status: Optional[BillStatus] = None
     property_supplier_id: Optional[str] = None  # Reference to PropertySupplier.id
+    pdf_data_base64: Optional[str] = None  # Optional PDF proof file encoded as base64
 
 
 class PaymentNotificationCreate(BaseModel):

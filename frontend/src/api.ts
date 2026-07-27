@@ -671,6 +671,7 @@ export type BillCreate = {
   iban?: string;
   bill_number?: string;
   property_supplier_id?: string;  // Reference to PropertySupplier.id
+  pdf_data_base64?: string;  // Optional PDF proof file encoded as base64
 };
 
 export type BillUpdate = {
@@ -684,6 +685,7 @@ export type BillUpdate = {
   bill_number?: string;
   status?: 'pending' | 'paid' | 'overdue';
   property_supplier_id?: string;  // Reference to PropertySupplier.id
+  pdf_data_base64?: string;  // Optional PDF proof file encoded as base64
 };
 
 export type Payment = {

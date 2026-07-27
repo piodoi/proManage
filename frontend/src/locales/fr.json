@@ -270,7 +270,10 @@
     "directDebit": "Prélèvement automatique",
     "noDescription": "Pas de description",
     "downloadPdf": "Télécharger le PDF",
-    "pdfAvailable": "PDF disponible"
+    "pdfAvailable": "PDF disponible",
+    "pdfProof": "Preuve PDF (optionnel)",
+    "pdfOnlyAllowed": "Seuls les fichiers PDF sont autorisés",
+    "pdfSelected": "Sélectionné : {name}"
   },
   "summary": {
     "summary": "Résumé",

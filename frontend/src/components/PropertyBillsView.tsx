@@ -131,6 +131,7 @@ export default function PropertyBillsView({
   const [parsingPdf, setParsingPdf] = useState(false);
   const [pdfResult, setPdfResult] = useState<ExtractionResult | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);  // Store PDF file for saving
+  const [manualProofPdf, setManualProofPdf] = useState<File | null>(null);
   const [showBillConfirm, setShowBillConfirm] = useState(false);
   const [duplicateConflict, setDuplicateConflict] = useState<{
     billNumber: string;
@@ -361,6 +362,16 @@ export default function PropertyBillsView({
     restoreScroll();
   };
 
+  const encodeFileToBase64 = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  };
+
   const handleSaveBill = async () => {
     if (!token) return;
     if (!billForm.amount) {
@@ -389,6 +400,10 @@ export default function PropertyBillsView({
         property_supplier_id: billForm.property_supplier_id || undefined,
       };
 
+      if (manualProofPdf) {
+        billData.pdf_data_base64 = await encodeFileToBase64(manualProofPdf);
+      }
+
       // For create, include property_id and renter_id
       // For update, include renter_id (null for all/property, or specific renter_id)
       if (editingBill) {
@@ -404,6 +419,7 @@ export default function PropertyBillsView({
       
       setShowBillForm(false);
       setEditingBill(null);
+      setManualProofPdf(null);
       const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
       setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || getDefaultCurrency(), due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
       if (onBillsChange) {
@@ -665,6 +681,7 @@ export default function PropertyBillsView({
               setShowBillForm(open);
               if (!open) {
                 setEditingBill(null);
+                setManualProofPdf(null);
                 const defaultRenterId = renters.length === 1 ? renters[0].id : 'all';
                 setBillForm({ renter_id: defaultRenterId, bill_type: 'other', property_supplier_id: '', description: '', amount: '', currency: preferences.bill_currency || getDefaultCurrency(), due_date: new Date().toISOString().split('T')[0], status: 'pending', bill_number: '' });
               }
@@ -810,6 +827,31 @@ export default function PropertyBillsView({
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">{t('bill.pdfProof')}</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={(e) => {
+                        const selected = e.target.files?.[0] || null;
+                        if (selected && selected.type && selected.type !== 'application/pdf') {
+                          handleError(new Error(t('bill.pdfOnlyAllowed')));
+                          e.currentTarget.value = '';
+                          return;
+                        }
+                        setManualProofPdf(selected);
+                      }}
+                      className="bg-slate-700 border-slate-600 text-slate-100 file:bg-slate-600 file:text-slate-100 file:border-0"
+                    />
+                    {manualProofPdf && (
+                      <p className="text-xs text-emerald-400 mt-1">
+                        {t('bill.pdfSelected', { name: manualProofPdf.name })}
+                      </p>
+                    )}
+                    {!manualProofPdf && editingBill?.has_pdf && (
+                      <p className="text-xs text-slate-400 mt-1">{t('bill.pdfAvailable')}</p>
+                    )}
                   </div>
                   <Button onClick={handleSaveBill} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!billForm.amount}>
                     {editingBill ? t('bill.editBill') : t('bill.addBill')}

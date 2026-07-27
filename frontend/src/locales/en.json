@@ -262,7 +262,10 @@
     "directDebit": "Direct Debit",
     "noDescription": "No description",
     "downloadPdf": "Download PDF",
-    "pdfAvailable": "PDF available"
+    "pdfAvailable": "PDF available",
+    "pdfProof": "PDF Proof (optional)",
+    "pdfOnlyAllowed": "Only PDF files are allowed",
+    "pdfSelected": "Selected: {name}"
   },
   "summary": {
     "summary": "Summary",

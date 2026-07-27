@@ -284,7 +284,10 @@
     "directDebit": "Debit Direct",
     "noDescription": "Fără descriere",
     "downloadPdf": "Descarcă PDF",
-    "pdfAvailable": "PDF disponibil"
+    "pdfAvailable": "PDF disponibil",
+    "pdfProof": "Dovadă PDF (opțional)",
+    "pdfOnlyAllowed": "Sunt permise doar fișiere PDF",
+    "pdfSelected": "Selectat: {name}"
   },
   "summary": {
     "summary": "Rezumat",

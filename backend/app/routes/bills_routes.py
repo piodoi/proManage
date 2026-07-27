@@ -95,6 +95,26 @@ def bill_to_dict_with_pdf(bill: Bill, user_id: str) -> dict:
     return bill_dict
 
 
+def decode_pdf_base64_or_400(pdf_data_base64: str) -> bytes:
+    """Decode and validate PDF payload from base64, raising HTTP 400 on invalid input."""
+    try:
+        pdf_data = base64.b64decode(pdf_data_base64, validate=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid pdf_data_base64 payload") from exc
+
+    if not pdf_data:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty")
+
+    max_size_bytes = 15 * 1024 * 1024
+    if len(pdf_data) > max_size_bytes:
+        raise HTTPException(status_code=400, detail="PDF is too large (max 15MB)")
+
+    if not pdf_data.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Invalid PDF file")
+
+    return pdf_data
+
+
 async def notify_renters_about_bill(bill: Bill, property_name: str):
     """Send email notifications to renters who have opted in for the property."""
     if not is_email_configured():
@@ -202,6 +222,12 @@ async def create_bill(data: BillCreate, background_tasks: BackgroundTasks, curre
         property_supplier_id=data.property_supplier_id,
     )
     db.save_bill(bill)
+
+    # Optional manual proof PDF attached through the existing create payload.
+    if data.pdf_data_base64:
+        pdf_data = decode_pdf_base64_or_400(data.pdf_data_base64)
+        save_bill_pdf(current_user.user_id, bill.id, pdf_data)
+        logger.info("[Bill PDF] Saved proof PDF for bill %s", bill.id)
     
     # Send email notifications to opted-in renters
     background_tasks.add_task(schedule_bill_notification, bill, prop.name)
@@ -267,6 +293,13 @@ async def update_bill(
     if data.property_supplier_id is not None:
         bill.property_supplier_id = data.property_supplier_id
     db.save_bill(bill)
+
+    # Optional manual proof PDF attached through the existing update payload.
+    if data.pdf_data_base64:
+        pdf_data = decode_pdf_base64_or_400(data.pdf_data_base64)
+        save_bill_pdf(current_user.user_id, bill.id, pdf_data)
+        logger.info("[Bill PDF] Updated proof PDF for bill %s", bill.id)
+
     return bill
 
 
