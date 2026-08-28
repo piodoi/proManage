@@ -50,6 +50,7 @@ export default function AllPropertiesSyncDialog({
   const [propertiesWithRentersCount, setPropertiesWithRentersCount] = useState(0);
   const [totalRentersCount, setTotalRentersCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<string>('');
+  const [hasNewBills, setHasNewBills] = useState(false);
   const discoveredBillsRef = useRef<DiscoveredBill[]>([]);
 
   // Load counts when dialog opens
@@ -65,6 +66,7 @@ export default function AllPropertiesSyncDialog({
       setSavingBills(false);
       setTotalRentBillsGenerated(0);
       setSyncProgress('');
+      setHasNewBills(false);
       discoveredBillsRef.current = [];
     }
   }, [open, token, properties]);
@@ -153,6 +155,9 @@ export default function AllPropertiesSyncDialog({
       if (refreshRentBills) {
         const { count, bills: rentBills } = await generateRentBills();
         setTotalRentBillsGenerated(count);
+        if (count > 0) {
+          setHasNewBills(true);
+        }
         allDiscoveredBills.push(...rentBills);
       }
 
@@ -302,9 +307,10 @@ export default function AllPropertiesSyncDialog({
 
         const saveResult = await response.json();
         const savedBillIds = new Set<string>(saveResult.saved_discovered_bill_ids || []);
+        const savedBillsCount = savedBillIds.size;
         const emailIdsToDelete = getEmailIdsReadyForDeletion(savedBillIds);
 
-        handleClose();
+        handleClose(hasNewBills || savedBillsCount > 0);
 
         if (emailIdsToDelete.length > 0) {
           console.log(`[Email Delete] Deleting ${emailIdsToDelete.length} emails after confirmed bill save`);
@@ -317,9 +323,8 @@ export default function AllPropertiesSyncDialog({
             });
         }
       } else {
-        handleClose();
+        handleClose(hasNewBills);
       }
-      onSuccess();
     } catch (err) {
       setSavingBills(false);
       onError(err instanceof Error ? err.message : 'Failed to save bills');
@@ -348,15 +353,21 @@ export default function AllPropertiesSyncDialog({
     return emailIdsToDelete;
   };
 
-  const handleClose = () => {
+  const handleClose = (shouldRefresh = false) => {
+    if (shouldRefresh) {
+      onSuccess();
+    }
     onOpenChange(false);
   };
 
-  const handleDialogOpenChange = () => {
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      return;
+    }
     if (syncing) {
       return; // Don't allow closing while syncing
     }
-    handleClose();
+    handleClose(hasNewBills);
   };
 
   return (
@@ -441,7 +452,7 @@ export default function AllPropertiesSyncDialog({
               <div className="flex justify-end pt-2 border-t border-slate-700 gap-2">
                 <Button
                   variant="outline"
-                  onClick={handleClose}
+                  onClick={() => handleClose(hasNewBills)}
                   className="bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600"
                 >
                   {t('common.cancel')}
@@ -578,7 +589,7 @@ export default function AllPropertiesSyncDialog({
                 </Button>
                 {discoveredBills.filter(b => b.source === 'email').length === 0 ? (
                   <Button
-                    onClick={handleClose}
+                    onClick={() => handleClose(hasNewBills)}
                     className="bg-emerald-600 hover:bg-emerald-700"
                   >
                     {t('common.close')}

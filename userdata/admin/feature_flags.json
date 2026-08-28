@@ -1,7 +1,7 @@
 {
-  "payOnline": false,
-  "barcodeExtraction": false,
-  "facebookLogin": true,
+  "payOnline": true,
+  "barcodeExtraction": true,
+  "facebookLogin": false,
   "demoLogin": false,
   "usBuild": false
 }
