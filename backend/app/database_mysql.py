@@ -47,6 +47,7 @@ class MySQLDatabase:
         )
         self._ensure_user_marketing_unsubscribed_column()
         self._ensure_renter_security_deposit_column()
+        self._ensure_renter_is_active_column()
         print(f"[Database] MySQL engine initialized: {database_url.split('@')[1] if '@' in database_url else 'localhost'}")
 
     def _ensure_user_marketing_unsubscribed_column(self) -> None:
@@ -64,6 +65,14 @@ class MySQLDatabase:
                 conn.execute(text("ALTER TABLE renters ADD COLUMN security_deposit FLOAT NULL AFTER rent_amount"))
                 conn.commit()
                 logger.info("[Database] Added renters.security_deposit column")
+
+    def _ensure_renter_is_active_column(self) -> None:
+        with self.engine.connect() as conn:
+            result = conn.execute(text("SHOW COLUMNS FROM renters LIKE 'is_active'"))
+            if result.fetchone() is None:
+                conn.execute(text("ALTER TABLE renters ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE"))
+                conn.commit()
+                logger.info("[Database] Added renters.is_active column")
     
     # ==================== USER OPERATIONS ====================
     
@@ -243,13 +252,19 @@ class MySQLDatabase:
     
     # ==================== RENTER OPERATIONS ====================
     
-    def get_renters_by_property(self, property_id: str) -> List[Renter]:
+    def get_renters_by_property(self, property_id: str, include_inactive: bool = False) -> List[Renter]:
         """Get all renters for a property"""
         with self.engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT * FROM renters WHERE property_id = :property_id ORDER BY name"),
-                {"property_id": property_id}
-            )
+            if include_inactive:
+                result = conn.execute(
+                    text("SELECT * FROM renters WHERE property_id = :property_id ORDER BY name"),
+                    {"property_id": property_id}
+                )
+            else:
+                result = conn.execute(
+                    text("SELECT * FROM renters WHERE property_id = :property_id AND is_active = TRUE ORDER BY name"),
+                    {"property_id": property_id}
+                )
             renters = []
             for row in result:
                 start_date_value = None
@@ -287,6 +302,7 @@ class MySQLDatabase:
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
                     email_notifications=email_notifications,
+                    is_active=bool(getattr(row, 'is_active', True)),
                     has_account=bool(getattr(row, 'password_hash', None)),
                     created_at=row.created_at.isoformat() if row.created_at else None
                 ))
@@ -335,6 +351,7 @@ class MySQLDatabase:
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
                     email_notifications=email_notifications,
+                    is_active=bool(getattr(row, 'is_active', True)),
                     has_account=bool(getattr(row, 'password_hash', None)),
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
@@ -344,7 +361,7 @@ class MySQLDatabase:
         """Get renter by access token"""
         with self.engine.connect() as conn:
             result = conn.execute(
-                text("SELECT * FROM renters WHERE access_token = :token"),
+                text("SELECT * FROM renters WHERE access_token = :token AND is_active = TRUE"),
                 {"token": access_token}
             )
             row = result.fetchone()
@@ -383,6 +400,7 @@ class MySQLDatabase:
                     password_hash=getattr(row, 'password_hash', None),
                     language=getattr(row, 'language', 'ro') or 'ro',
                     email_notifications=email_notifications,
+                    is_active=bool(getattr(row, 'is_active', True)),
                     has_account=bool(getattr(row, 'password_hash', None)),
                     created_at=row.created_at.isoformat() if row.created_at else None
                 )
@@ -396,11 +414,11 @@ class MySQLDatabase:
                     INSERT INTO renters (
                         id, property_id, name, email, phone, rent_day,
                         start_contract_date, rent_amount, security_deposit, rent_currency, credit, credit_currency, access_token,
-                        password_hash, language, email_notifications, created_at
+                        password_hash, language, email_notifications, is_active, created_at
                     ) VALUES (
                         :id, :property_id, :name, :email, :phone, :rent_day,
                         :start_contract_date, :rent_amount, :security_deposit, :rent_currency, :credit, :credit_currency, :access_token,
-                        :password_hash, :language, :email_notifications, :created_at
+                        :password_hash, :language, :email_notifications, :is_active, :created_at
                     )
                 """),
                 {
@@ -420,6 +438,7 @@ class MySQLDatabase:
                     "password_hash": renter.password_hash,
                     "language": renter.language or 'ro',
                     "email_notifications": renter.email_notifications or False,
+                    "is_active": renter.is_active,
                     "created_at": renter.created_at or datetime.now().isoformat()
                 }
             )
@@ -441,10 +460,10 @@ class MySQLDatabase:
         return self.get_renter_by_id(renter_id)
     
     def delete_renter(self, renter_id: str) -> bool:
-        """Delete renter"""
+        """Soft-delete renter (keep history)"""
         with self.engine.connect() as conn:
             conn.execute(
-                text("DELETE FROM renters WHERE id = :id"),
+                text("UPDATE renters SET is_active = FALSE WHERE id = :id"),
                 {"id": renter_id}
             )
             conn.commit()

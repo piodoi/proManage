@@ -59,6 +59,7 @@ CREATE TABLE renters (
     credit FLOAT NOT NULL DEFAULT 0,
     credit_currency VARCHAR(10) NOT NULL DEFAULT 'RON',
     access_token VARCHAR(36) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
     INDEX idx_renters_property (property_id),

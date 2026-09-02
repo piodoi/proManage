@@ -1,6 +1,6 @@
 """Public renter routes (token-based access)."""
 import os
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -18,6 +18,42 @@ router = APIRouter(prefix="/renter", tags=["renter-public"])
 class RenterLogin(BaseModel):
     """For renter to login with password"""
     password: str
+
+
+def _coerce_to_date(value) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        parsed_value = value.strip().replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(parsed_value).date()
+        except ValueError:
+            try:
+                return date.fromisoformat(parsed_value)
+            except ValueError:
+                return None
+    return None
+
+
+def _is_bill_visible_for_renter(bill: Bill, renter) -> bool:
+    # Keep existing assignment logic.
+    if not (bill.renter_id is None or bill.renter_id == 'all' or bill.renter_id == renter.id):
+        return False
+
+    # Hide bills older than the renter contract start date.
+    renter_start_date = _coerce_to_date(getattr(renter, "start_contract_date", None))
+    if renter_start_date is None:
+        return True
+
+    bill_due_date = _coerce_to_date(getattr(bill, "due_date", None))
+    if bill_due_date is None:
+        return True
+
+    return bill_due_date >= renter_start_date
 
 
 def calculate_bill_status(bill: Bill) -> Bill:
@@ -107,9 +143,7 @@ async def renter_bills(token: str):
     
     all_bills = db.list_bills(property_id=renter.property_id)
     
-    # Filter bills: include if renter_id is None, 'all', or matches this renter
-    # Only filter out bills with a specific renter_id that doesn't match
-    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
+    bills = [b for b in all_bills if _is_bill_visible_for_renter(b, renter)]
     
     # Get property to find landlord_id for PDF path lookup
     prop = db.get_property(renter.property_id)
@@ -236,8 +270,7 @@ async def renter_balance(token: str):
     
     all_bills = db.list_bills(property_id=renter.property_id)
     
-    # Filter bills: include if renter_id is None, 'all', or matches this renter
-    bills = [b for b in all_bills if b.renter_id is None or b.renter_id == 'all' or b.renter_id == renter.id]
+    bills = [b for b in all_bills if _is_bill_visible_for_renter(b, renter)]
     
     total_due_original = 0.0
     total_paid_original = 0.0

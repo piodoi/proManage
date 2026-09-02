@@ -46,7 +46,7 @@ if IS_MYSQL and '+pymysql' not in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace('mysql://', 'mysql+pymysql://', 1)
 
 # Initialize the appropriate typed database
-_db_impl = None
+_db_impl: Any = None
 
 if IS_MYSQL:
     from app.database_mysql import MySQLDatabase
@@ -71,7 +71,9 @@ class Database:
     """
     
     def __init__(self):
-        self._impl = _db_impl
+        self._impl: Any = _db_impl
+        if self._impl is None:
+            raise RuntimeError("Database implementation was not initialized")
         
         # Verify database schema
         if IS_MYSQL:
@@ -79,7 +81,8 @@ class Database:
                 from sqlalchemy import text
                 with self._impl.engine.connect() as conn:
                     result = conn.execute(text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()"))
-                    table_count = result.fetchone()[0]
+                    row = result.fetchone()
+                    table_count = row[0] if row else 0
                     print(f"[Database] MySQL: {table_count} tables found")
                     if table_count == 0:
                         print("[Database] WARNING: No tables found!")
@@ -95,7 +98,8 @@ class Database:
                 from sqlalchemy import text
                 with self._impl.engine.connect() as conn:
                     result = conn.execute(text("SELECT COUNT(*) FROM sqlite_master WHERE type='table'"))
-                    table_count = result.fetchone()[0]
+                    row = result.fetchone()
+                    table_count = row[0] if row else 0
                     print(f"[Database] SQLite: {table_count} tables found")
                     if table_count == 0:
                         print("[Database] WARNING: No tables found!")
@@ -219,13 +223,16 @@ class Database:
     def get_renter_by_token(self, token: str) -> Optional[Renter]:
         return self._impl.get_renter_by_token(token)
     
-    def list_renters(self, property_id: Optional[str] = None) -> List[Renter]:
+    def list_renters(self, property_id: Optional[str] = None, include_inactive: bool = False) -> List[Renter]:
         if property_id:
-            return self._impl.get_renters_by_property(property_id)
+            return self._impl.get_renters_by_property(property_id, include_inactive=include_inactive)
         else:
             from sqlalchemy import text
             with self._impl.engine.connect() as conn:
-                result = conn.execute(text("SELECT * FROM renters ORDER BY name"))
+                if include_inactive:
+                    result = conn.execute(text("SELECT * FROM renters ORDER BY name"))
+                else:
+                    result = conn.execute(text("SELECT * FROM renters WHERE is_active = 1 ORDER BY name"))
                 renters = []
                 for row in result:
                     start_date_value = None
@@ -250,6 +257,7 @@ class Database:
                         credit=float(getattr(row, 'credit', 0) or 0),
                         credit_currency=getattr(row, 'credit_currency', None) or getattr(row, 'rent_currency', None) or 'RON',
                         access_token=row.access_token,
+                        is_active=bool(getattr(row, 'is_active', 1)),
                         created_at=row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
                     ))
                 return renters
@@ -258,7 +266,7 @@ class Database:
         existing = self._impl.get_renter_by_id(renter.id)
         if existing:
             updates = {}
-            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'security_deposit', 'rent_currency', 'password_hash', 'language', 'email_notifications', 'credit', 'credit_currency']:
+            for field in ['name', 'email', 'phone', 'rent_day', 'start_contract_date', 'rent_amount', 'security_deposit', 'rent_currency', 'password_hash', 'language', 'email_notifications', 'credit', 'credit_currency', 'is_active']:
                 if getattr(renter, field) != getattr(existing, field):
                     updates[field] = getattr(renter, field)
             if updates:

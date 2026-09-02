@@ -1,5 +1,6 @@
 """Renter management routes."""
 from datetime import datetime
+from fastapi import Query
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from app.models import (
@@ -109,13 +110,17 @@ async def _apply_renter_funds(
 
 
 @router.get("/properties/{property_id}/renters")
-async def list_renters(property_id: str, current_user: TokenData = Depends(require_landlord)):
+async def list_renters(
+    property_id: str,
+    include_inactive: bool = Query(False),
+    current_user: TokenData = Depends(require_landlord),
+):
     prop = db.get_property(property_id)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    return db.list_renters(property_id=property_id)
+    return db.list_renters(property_id=property_id, include_inactive=include_inactive)
 
 
 @router.post("/properties/{property_id}/renters", status_code=status.HTTP_201_CREATED)
@@ -284,8 +289,12 @@ async def delete_renter(renter_id: str, current_user: TokenData = Depends(requir
         raise HTTPException(status_code=404, detail="Property not found")
     if current_user.role != UserRole.ADMIN and prop.landlord_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    db.delete_renter(renter_id)
-    return {"status": "deleted"}
+    if not getattr(renter, "is_active", True):
+        return {"status": "already_inactive"}
+
+    renter.is_active = False
+    db.save_renter(renter)
+    return {"status": "inactivated"}
 
 
 @router.get("/renters/{renter_id}/link")

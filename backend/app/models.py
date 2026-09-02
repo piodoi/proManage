@@ -250,6 +250,7 @@ class Renter(BaseModel):
     email_notifications: bool = False  # Whether to receive email notifications for new bills
     credit: float = 0.0
     credit_currency: str = "RON"
+    is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -429,6 +430,7 @@ class RenterUpdate(BaseModel):
     rent_currency: Optional[str] = None  # Currency for rent: "EUR", "RON", or "USD"
     password: Optional[str] = None  # Plain password (will be hashed) - landlord can update password
     language: Optional[str] = None  # Language preference: "en" or "ro"
+    is_active: Optional[bool] = None
 
 
 class RenterPaymentCreate(BaseModel):
