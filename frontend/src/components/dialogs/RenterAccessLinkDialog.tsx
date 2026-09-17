@@ -135,38 +135,15 @@ export default function RenterAccessLinkDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-800 border-slate-700 max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">{t('renter.accessLinkTitle')}</DialogTitle>
+          <DialogTitle className="text-slate-100">{t('renter.communicateWithRenterTitle')}</DialogTitle>
           <DialogDescription className="text-slate-400 sr-only">
-            {t('renter.accessLinkTitle')}
+            {t('renter.communicateWithRenterTitle')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-slate-400 text-sm">
-            {t('renter.accessLinkDescription')}
+            {t('renter.communicateWithRenterDescription')}
           </p>
-          <div className="flex gap-2">
-            <Input
-              readOnly
-              value={renterLink ? `${window.location.origin}/renter/${renterLink.token}` : ''}
-              className="bg-slate-700 border-slate-600 text-slate-100"
-            />
-            <Button
-              onClick={handleCopyLink}
-              variant="outline"
-              className="border-slate-600"
-              title={t('common.copy')}
-            >
-              <Copy className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => renterLink && window.open(`/renter/${renterLink.token}`, '_blank')}
-              variant="outline"
-              className="border-slate-600"
-              title={t('common.open')}
-            >
-              <ExternalLink className="w-4 h-4" />
-            </Button>
-          </div>
           
           {/* Pending Bills Section */}
           {pendingBills.length > 0 && (
@@ -266,6 +243,30 @@ export default function RenterAccessLinkDialog({
                   title={t('renter.copyMessage') || t('common.copy')}
                 >
                   <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={renterLink ? `${window.location.origin}/renter/${renterLink.token}` : ''}
+                  className="bg-slate-700 border-slate-600 text-slate-100"
+                />
+                <Button
+                  onClick={handleCopyLink}
+                  variant="outline"
+                  className="border-slate-600"
+                  title={t('common.copy')}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+                <Button
+                  onClick={() => renterLink && window.open(`/renter/${renterLink.token}`, '_blank')}
+                  variant="outline"
+                  className="border-slate-600"
+                  title={t('common.open')}
+                >
+                  <ExternalLink className="w-4 h-4" />
                 </Button>
               </div>
             </div>

@@ -3,7 +3,7 @@ import { api, Property, Renter, Bill, SubscriptionStatus } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDateWithPreferences } from '../lib/utils';
-import { ExternalLink, Trash2, Pencil, Factory, Banknote } from 'lucide-react';
+import { ExternalLink, Trash2, Pencil, Factory, Banknote, MessageCircle } from 'lucide-react';
 import PropertyBillsView from './PropertyBillsView';
 import RenterDialog from './dialogs/RenterDialog';
 import RenterAccessLinkDialog from './dialogs/RenterAccessLinkDialog';
@@ -68,12 +68,28 @@ export default function PropertyCard({
     );
   };
 
-  const handleGetRenterLink = async (renterId: string) => {
+  const getRenterLinkUrl = (tokenValue: string) => `${window.location.origin}/renter/${tokenValue}`;
+
+  const fetchRenterLink = async (renterId: string) => {
     if (!token) return;
+    const link = await api.renters.getLink(token, renterId);
+    const renter = renters.find(r => r.id === renterId) || null;
+    return { token: link.access_token, link: link.link, renter };
+  };
+
+  const openRenterCommunication = async (renterId: string) => {
     try {
-      const link = await api.renters.getLink(token, renterId);
-      const renter = renters.find(r => r.id === renterId) || null;
-      setRenterLink({ token: link.access_token, link: link.link, renter });
+      const link = await fetchRenterLink(renterId);
+      setRenterLink(link);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('errors.generic'));
+    }
+  };
+
+  const openRenterLinkDirectly = async (renterId: string) => {
+    try {
+      const link = await fetchRenterLink(renterId);
+      window.open(getRenterLinkUrl(link.token), '_blank', 'noopener,noreferrer');
     } catch (err) {
       onError(err instanceof Error ? err.message : t('errors.generic'));
     }
@@ -285,6 +301,14 @@ export default function PropertyCard({
                       </Button>
                       <Button
                         size="sm"
+                        onClick={() => openRenterCommunication(renter.id)}
+                        className="bg-slate-700 text-cyan-400 hover:bg-slate-600 hover:text-cyan-300 border border-slate-600 h-6 px-2 w-6"
+                        title={t('renter.communicateWithRenterTitle')}
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
                         onClick={() => openEditRenter(renter)}
                         className="bg-slate-700 text-slate-100 hover:bg-slate-600 hover:text-white border border-slate-600 h-6 px-2 w-6"
                         title={t('renter.editRenter')}
@@ -293,9 +317,9 @@ export default function PropertyCard({
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => handleGetRenterLink(renter.id)}
+                        onClick={() => openRenterLinkDirectly(renter.id)}
                         className="bg-slate-700 text-emerald-400 hover:bg-slate-600 hover:text-emerald-300 border border-slate-600 h-6 px-2 w-6"
-                        title={t('renter.getLink')}
+                        title={t('renter.accessLink')}
                       >
                         <ExternalLink className="w-3 h-3" />
                       </Button>
