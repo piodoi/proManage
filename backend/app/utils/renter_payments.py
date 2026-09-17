@@ -63,7 +63,7 @@ def get_prioritized_renter_bills(
     def sort_key(bill: Bill) -> Tuple[datetime, int, int, str]:
         due_date, bill_id = _bill_due_sort_key(bill)
         renter_specific_rank = 0 if bill.renter_id == renter_id else 1
-        rent_rank = 0 if bill.bill_type == BillType.RENT else 1
+        rent_rank = 0 if bill.bill_type != BillType.RENT else 1
         return due_date, renter_specific_rank, rent_rank, bill_id
 
     return sorted(eligible, key=sort_key)
